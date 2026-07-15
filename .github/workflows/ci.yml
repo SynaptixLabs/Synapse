@@ -89,3 +89,51 @@ jobs:
             tests/screenshots/
             frontend/playwright-report/
           if-no-files-found: ignore
+
+  # ========================
+  # Explorer E2E — real Chromium against a fixture vault. Opt-in: set repo variable
+  # ENABLE_E2E_CI = "true" (Settings → Actions → Variables). Kept out of the always-on
+  # path because it needs a browser download + a live stack (~2-3 min).
+  # ========================
+  e2e:
+    name: Explorer E2E (real Chromium, fixture vault)
+    if: vars.ENABLE_E2E_CI == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SYNAPSE_VAULT_PATH: ${{ github.workspace }}/data/vault
+      SYNAPSE_SOURCE_REPOS: ${{ github.workspace }}/backend/tests/fixtures/repo_a,${{ github.workspace }}/backend/tests/fixtures/repo_b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Backend deps + fixture ingest
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/pip install -q -r backend/requirements.txt
+          cd backend && .venv/bin/python -m synapse ingest
+      - name: Frontend deps + Chromium
+        run: |
+          (cd frontend && npm ci)
+          npm i --no-save playwright                       # at the REPO ROOT — the specs resolve it from tests/e2e upward
+          npx playwright install --with-deps chromium
+      - name: Start the stack
+        run: |
+          cd backend && nohup .venv/bin/python -m uvicorn app.main:app --port 8000 > /tmp/be.log 2>&1 &
+          cd frontend && nohup npx vite --port 5173 --logLevel warn > /tmp/fe.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:8000/health > /dev/null && curl -sf http://localhost:5173 > /dev/null && break; sleep 1; done
+      - name: Run E2E suites
+        run: |
+          node tests/e2e/sprint02_explorer.spec.mjs
+          node tests/e2e/sprint01_wiki_popup.spec.mjs
+          node tests/e2e/sprint01_dashboard.spec.mjs
+      - name: Upload E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: explorer-e2e-evidence
+          path: tests/screenshots/
+          if-no-files-found: ignore

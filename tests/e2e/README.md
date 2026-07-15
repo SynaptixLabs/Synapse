@@ -13,5 +13,12 @@ node tests/e2e/sprint01_wiki_popup.spec.mjs              # wiki popup: wikilink 
 ```
 
 Both scripts exit non-zero on failure and drop screenshots into `tests/screenshots/`.
-They run against the LIVE dev stack (they exercise the founder's actual acceptance path);
-wiring a fixture-vault variant into CI behind a flag is sprint-2 hygiene work.
+They run against the LIVE dev stack (the founder's actual acceptance path). They are
+vault-agnostic: `E2E_FILTER` (default `alpha` — a note that exists in the committed fixture
+repos, and therefore also in any vault that ingested this repo) picks the note used for the
+filter/navigation steps.
+
+**CI:** the `e2e` job in `.github/workflows/ci.yml` runs all three specs against a FIXTURE
+vault (repo_a + repo_b) with real Chromium. Opt-in via repo variable `ENABLE_E2E_CI=true` —
+kept off the always-on path because it needs a browser download + a live stack (~2–3 min).
+Screenshots are uploaded as the `explorer-e2e-evidence` artifact.

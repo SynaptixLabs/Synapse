@@ -11,7 +11,8 @@ await page.waitForFunction(() => document.getElementById('st-notes').textContent
 await page.waitForTimeout(2500); // let the force sim settle
 
 // filter ↔ graph sync
-await page.fill('#filter', 'agent constitution');
+const FILTER = process.env.E2E_FILTER ?? 'alpha';   // 'alpha' exists in fixture AND real vaults
+await page.fill('#filter', FILTER);
 await page.waitForFunction(() => window.__synapse.graph().hasMatch === true);
 await page.press('#filter', 'Enter');                      // opens best match in the reader
 await page.waitForFunction(() => document.getElementById('reader-crumb').textContent.includes('/'));
@@ -53,6 +54,14 @@ await page.click('.lhs .strip');
 await page.waitForFunction(() => document.body.dataset.lhs === 'open');
 
 await page.screenshot({ path: 'tests/screenshots/explorer-desktop.png' });
+
+// multi-viewport sweep (sprint DoD: 1024 / 1280 / 1920 + mobile below)
+for (const w of [1024, 1280, 1920]) {
+  await page.setViewportSize({ width: w, height: 850 });
+  await page.waitForTimeout(400);
+  if (!(await page.locator('#graph').isVisible())) { console.error(`graph not visible @${w}`); process.exit(1); }
+  await page.screenshot({ path: `tests/screenshots/explorer-${w}.png` });
+}
 
 // mobile: panels become overlays, closed by default
 const mob = await browser.newPage({ viewport: { width: 390, height: 844 } });

@@ -26,7 +26,7 @@ await page.keyboard.press('Escape');
 await page.waitForFunction(() => !document.getElementById('overlay').classList.contains('open'));
 
 // Notes browser → popup
-await page.fill('#filter', 'agent constitution');
+await page.fill('#filter', process.env.E2E_FILTER ?? 'alpha');
 await page.locator('#notelist div').first().click();
 await page.waitForSelector('#overlay.open');
 const agentsH1 = await page.locator('#wiki-article h1').first().textContent();
@@ -41,5 +41,5 @@ await page.screenshot({ path: '/home/avido/Synaptix-Labs/projects/synapse/tests/
 
 console.log(JSON.stringify({ idxCrumb, wikilinksInIndex: wlCount, noteCrumb, h1Rendered, infobox, agentsH1 }));
 await browser.close();
-const ok = idxCrumb.includes('Index') && wlCount > 50 && noteCrumb.includes('/') && h1Rendered >= 1 && infobox === 1;
+const ok = idxCrumb.includes('Index') && wlCount >= 4 && noteCrumb.includes('/') && h1Rendered >= 1 && infobox === 1;
 process.exit(ok ? 0 : 1);

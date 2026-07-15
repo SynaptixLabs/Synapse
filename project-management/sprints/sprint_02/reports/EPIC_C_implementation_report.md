@@ -35,5 +35,6 @@
 
 ## Open (before sprint close)
 
-- Founder acceptance script (8 steps) — awaiting the founder run.
-- CI wiring for the E2E suite behind a flag (sprint-2 hygiene item).
+- Founder acceptance script (8 steps) — awaiting the founder run. Everything else is done:
+  CI wiring shipped (`e2e` job, opt-in via `ENABLE_E2E_CI=true`, fixture vault, evidence
+  artifact), specs vault-agnostic + multi-viewport (1024/1280/1920 + 390).

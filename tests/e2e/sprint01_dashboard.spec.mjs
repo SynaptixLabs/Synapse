@@ -19,24 +19,29 @@ await page.waitForFunction(() => document.getElementById('s6').classList.contain
 await page.waitForFunction(() => document.querySelectorAll('#kpis .kpi').length >= 4);
 const kpiNotes = await page.locator('#kpis .kpi b').first().textContent();
 
-// Notes browser: filter + open a Hebrew note
+// Notes browser: filter + open a note in the WIKI POPUP (post-popup dashboard)
 await page.fill('#filter', 'hebrew');
 await page.waitForTimeout(200);
 const anyNote = await page.locator('#notelist div').count();
-await page.fill('#filter', 'AGENTS');
+await page.fill('#filter', process.env.E2E_FILTER ?? 'alpha');
+await page.waitForTimeout(200);
 await page.locator('#notelist div').first().click();
-await page.waitForFunction(() => document.getElementById('doc').textContent.length > 100);
+await page.waitForSelector('#overlay.open', { timeout: 10000 });
+await page.waitForFunction(() => document.getElementById('wiki-article').textContent.length > 80);
+const docTitle = await page.locator('#wiki-crumb').textContent();
+await page.keyboard.press('Escape');
 
-// Index view
+// Index view opens in the popup
 await page.click('text=View Index.md');
-await page.waitForFunction(() => document.getElementById('doc-title').textContent.includes('Index'));
+await page.waitForFunction(() => document.getElementById('wiki-crumb').textContent.includes('Index'));
+await page.keyboard.press('Escape');
 
-await page.screenshot({ path: '/home/avido/Synaptix-Labs/projects/synapse/tests/screenshots/dashboard-acceptance-desktop.png', fullPage: true });
+await page.screenshot({ path: 'tests/screenshots/dashboard-acceptance-desktop.png', fullPage: true });
 await page.setViewportSize({ width: 390, height: 844 });
-await page.screenshot({ path: '/home/avido/Synaptix-Labs/projects/synapse/tests/screenshots/dashboard-acceptance-mobile.png' });
+await page.screenshot({ path: 'tests/screenshots/dashboard-acceptance-mobile.png' });
 
 const report = await page.locator('#report table tr').count();
 console.log(JSON.stringify({ kpiNotes, reportRows: report, filteredNotes: anyNote,
   s1: await page.locator('#s1').textContent(), s2: await page.locator('#s2').textContent(),
-  s6: await page.locator('#s6').textContent(), docTitle: await page.locator('#doc-title').textContent() }));
+  s6: await page.locator('#s6').textContent(), docTitle }));
 await browser.close();
