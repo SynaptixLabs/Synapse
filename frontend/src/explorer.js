@@ -26,6 +26,7 @@ const graph = createGraph($('graph'), {
   onNodeClick: (id) => reader.openNote(id),
 });
 window.__synapse = { graph: () => graph.state(), counts: () => ({ nodes: nodes.length, edges: edges.length }) };
+window.resetLayout = () => { graph.reset(); setMsg('layout reset — all pins released'); };
 
 // ── data ────────────────────────────────────────────────────────────────────
 async function refresh() {

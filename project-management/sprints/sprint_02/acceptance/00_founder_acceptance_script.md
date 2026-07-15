@@ -27,6 +27,16 @@ cd <your-clone-of-Synapse>
 
 ## Verdict
 
-- **Result:** PASS / FAIL (strike one)
-- **Date:** &nbsp;
-- **Notes / findings:** &nbsp;
+- **Result:** ✅ **PASS** — accepted via live founder testing (four feedback rounds executed
+  against the running explorer; the in-UI checklist tracked steps throughout)
+- **Date:** 2026-07-15
+- **Findings raised during acceptance (ALL fixed + E2E-verified before close):**
+  1. Drag handles unclear → grip pills, wide hit area, dblclick reset (kit REV 2.1)
+  2. RHS panel clipped the graph → per-frame compounding reflow; graph slides with the panel
+     edge both directions (REV 2.2/2.3 root-cause)
+  3. Graph not immersive enough / color rationale unclear → hue=repo, brightness/size=degree,
+     hull territories, curved edges, LOD labels, dblclick zoom (REV 2.2)
+  4. Sticky nodes / clusters not separable / no persistent focus → drag=place&pin (+⟲ reset,
+     right-click release), hub-only gravity, click-focus with empty-click defocus (REV 2.3)
+
+Close ordered by the founder: "then Janus — create a report + design review + close sprint".

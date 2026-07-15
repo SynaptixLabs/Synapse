@@ -71,6 +71,27 @@ await page.mouse.move(rs.x - 120, rs.y + rs.height / 2, { steps: 5 });
 await page.mouse.up();
 await page.fill('#filter', 'readme'); await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
 await page.fill('#filter', 'beta');   await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
+// pin + focus (REV 2.3): drag a node → it pins; click empty canvas → defocus; reset clears
+const cbox = await page.locator('#graph').boundingBox();
+// find a node to drag: probe a grid of points until the cursor turns 'pointer'
+let hit = null;
+for (let gx = 0.3; gx <= 0.7 && !hit; gx += 0.05) for (let gy = 0.3; gy <= 0.7 && !hit; gy += 0.05) {
+  await page.mouse.move(cbox.x + cbox.width * gx, cbox.y + cbox.height * gy);
+  if (await page.evaluate(() => document.getElementById('graph').style.cursor) === 'pointer')
+    hit = { x: cbox.x + cbox.width * gx, y: cbox.y + cbox.height * gy };
+}
+if (!hit) { console.error('no node found to drag'); process.exit(1); }
+await page.mouse.move(hit.x, hit.y); await page.mouse.down();
+await page.mouse.move(hit.x + 60, hit.y + 40, { steps: 4 }); await page.mouse.up();
+await page.waitForFunction(() => window.__synapse.graph().pinned.length >= 1);
+// click empty corner → defocus
+await page.mouse.click(cbox.x + 20, cbox.y + cbox.height - 20);
+await page.waitForFunction(() => window.__synapse.graph().focus === null);
+// reset layout releases pins
+await page.click('text=⟲ reset layout');
+await page.waitForFunction(() => window.__synapse.graph().pinned.length === 0);
+await page.waitForTimeout(1200);
+
 await page.click('text=✓ Acceptance — sprint 2');
 await page.waitForSelector('#accept.open');
 await page.waitForFunction(() =>

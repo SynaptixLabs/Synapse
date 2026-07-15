@@ -50,8 +50,8 @@ own machine and vault. No gate closes on assertion.
 | Sprint | Codename | You get | API keys | Status |
 |---|---|---|---|---|
 | [01](project-management/sprints/sprint_01/index.md) | **The Brain** | `synapse ingest` your repos → readable vault + derived graph + `Index.md`; acceptance dashboard with wiki-article popup + interactive repo-colored graph | none | ✅ closed (founder PASS) |
-| [02](project-management/sprints/sprint_02/index.md) | **The Explorer** | the dedicated explorer page: side panel, filter↔graph sync, unresolved-links list | none | 🟢 active |
-| [03](project-management/sprints/sprint_03/index.md) | **The Twist** | distill any node/subtree (Anthropic) + see it as an image (gpt-image-1); POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | ⚪ planned |
+| [02](project-management/sprints/sprint_02/index.md) | **The Explorer** | explorer page: accordion panels, glossary, immersive placeable graph (pin/focus), wiki reading panel | none | ✅ closed (founder PASS) |
+| [03](project-management/sprints/sprint_03/index.md) | **The Twist** | distill any node/subtree (Anthropic) + see it as an image (gpt-image-1); POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | 🟢 active |
 
 Product truth: [`project-management/0k_PRD.md`](project-management/0k_PRD.md) ·
 architecture: [`project-management/01_ARCHITECTURE.md`](project-management/01_ARCHITECTURE.md) ·

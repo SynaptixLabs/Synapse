@@ -3,7 +3,7 @@
 > **Graph node.** Up: [`../00_index.md`](../00_index.md). Down: [`todo/`](todo/) ·
 > [`acceptance/`](acceptance/00_founder_acceptance_script.md).
 
-- **Status:** ⚪ Planned (opens when sprint 02 records founder PASS)
+- **Status:** 🟢 Active (opened 2026-07-15 on sprint-02 founder PASS)
 - **Owner:** `cpto` (JANUS) · implementation: `dev` (CORE)
 - **Goal:** The two-model add-on works end-to-end from the explorer: select a node — or a whole
   subtree — and (1) **Distill**: a grounded summary with citations, saved back to the vault as an

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Sprint 02 — The Explorer (closed 2026-07-15, founder acceptance PASS, grade 4.6)
+- Explorer as the root page: accordion panels (grip-pill resizers, dblclick reset, persisted,
+  mobile overlays), LHS menu + AI panel (sprint-3 slots), glossary drawer (repo/edge toggles +
+  actionable unresolved list), filter↔graph live sync, docked wiki reading panel.
+- Immersive graph: hue=repo · brightness/size=connectedness · per-repo hull territories ·
+  curved edges · LOD labels · dblclick zoom · reflow-not-clip on panel changes.
+- Placeable brain: drag=place&pin (right-click releases, ⟲ reset), separable clusters
+  (hub-only gravity), persistent click-focus (node/cluster; empty-click defocuses).
+- In-UI acceptance checklist (auto-PASS + manual ticks); vault-agnostic multi-viewport E2E;
+  opt-in CI e2e job with screenshot artifact.
+
 ### Sprint 01 — The Brain (closed 2026-07-15, founder acceptance PASS)
 - `modules/ingest`: repos → vault notes (provenance frontmatter, byte-verbatim bodies,
   idempotent, ignore-list, vault-self-exclusion).

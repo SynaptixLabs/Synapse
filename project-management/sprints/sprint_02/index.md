@@ -3,8 +3,9 @@
 > **Graph node.** Up: [`../00_index.md`](../00_index.md). Down: [`todo/`](todo/) ·
 > [`acceptance/`](acceptance/00_founder_acceptance_script.md).
 
-- **Status:** 🟢 Active (opened 2026-07-15 on sprint-01 founder PASS; Epic C re-scoped — part
-  shipped early during sprint-01 acceptance, see the epic card)
+- **Status:** ✅ **CLOSED 2026-07-15** — founder acceptance PASS (live-testing, 4 rounds all
+  fixed) · grade 4.6 · [closing report](reports/SPRINT_02_REPORT.md) ·
+  [design review](reviews/2026-07-15_design_review_sprint02_explorer.md)
 - **Owner:** `cpto` (JANUS) · design: `ux-design` (ARIA) · implementation: `dev` (CORE)
 - **Goal:** The graph from sprint 01 becomes explorable: an interactive graph view in the
   frontend (pan / zoom / click), a node panel showing the note's content and neighbors, and a

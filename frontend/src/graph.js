@@ -8,8 +8,9 @@
 export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const ctx = canvas.getContext('2d');
   let nodes = [], edges = [];
-  let sim = { p: new Map(), alpha: 0, hover: null, drag: null, view: { x: 0, y: 0, k: 1 }, moved: false, lastW: 0 };
+  let sim = { p: new Map(), alpha: 0, hover: null, focus: null, drag: null, view: { x: 0, y: 0, k: 1 }, moved: false, lastW: 0 };
   let repoHue = new Map();
+  const pinned = new Set();                   // dragged nodes/hubs STAY where you put them
   const hiddenEdges = new Set(['sibling']);   // grouping is shown as hulls, not spaghetti
   const hiddenRepos = new Set();
   let matchSet = null;   // Set of note ids matching the filter (null = no filter)
@@ -68,9 +69,12 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
     }
     const w = W(), h = H();
-    for (const [, p] of sim.p) {
+    for (const [id, p] of sim.p) {
       if (sim.drag && p === sim.drag.p) continue;
-      p.vx += (w / 2 - p.x) * 0.0015; p.vy += (h / 2 - p.y) * 0.004;
+      if (pinned.has(id)) { p.vx = 0; p.vy = 0; continue; }   // pinned = immovable anchor
+      // only HUBS feel canvas-centering — notes orbit their hub (sibling springs), so a
+      // dragged-away cluster STAYS apart instead of being herded back to the middle
+      if (id.startsWith('repo:')) { p.vx += (w / 2 - p.x) * 0.002; p.vy += (h / 2 - p.y) * 0.005; }
       if (p.x < 24) p.vx += (24 - p.x) * 0.04; if (p.x > w - 24) p.vx -= (p.x - (w - 24)) * 0.04;
       if (p.y < 24) p.vy += (24 - p.y) * 0.04; if (p.y > h - 24) p.vy -= (p.y - (h - 24)) * 0.04;
       p.x += p.vx * sim.alpha; p.y += p.vy * sim.alpha; p.vx *= 0.8; p.vy *= 0.8;
@@ -87,6 +91,13 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (e.src === id) set.add(e.dst);
       if (e.dst === id) set.add(e.src);
     }
+    return set;
+  }
+
+  /** Clicking a hub focuses its WHOLE cluster (all notes of that repo + the hub). */
+  function clusterSet(repo) {
+    const set = new Set([`repo:${repo}`]);
+    for (const n of nodes) if (n.kind === 'note' && n.repo === repo) set.add(n.id);
     return set;
   }
 
@@ -147,7 +158,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     sim.lastW = W();
     ctx.setTransform(dpr * sim.view.k, 0, 0, dpr * sim.view.k, dpr * sim.view.x, dpr * sim.view.y);
     ctx.clearRect(-sim.view.x / sim.view.k, -sim.view.y / sim.view.k, canvas.width / (dpr * sim.view.k), canvas.height / (dpr * sim.view.k));
-    const hood = sim.hover ? neighborsOf(sim.hover) : null;
+    // hover-highlight is transient; CLICK-focus persists until you click empty canvas
+    const focusSet = sim.focus
+      ? (sim.focus.startsWith('repo:') ? clusterSet(sim.focus.slice(5)) : neighborsOf(sim.focus))
+      : null;
+    const hood = sim.hover ? neighborsOf(sim.hover) : focusSet;
 
     drawHulls();   // soft per-repo blobs — the grouping layer
 
@@ -189,8 +204,17 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       ctx.globalAlpha = dim ? 0.1 : 1;
       ctx.fillStyle = noteColor(n);
       if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
-      ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 + Math.min(deg, 12) * 0.55, 0, 7); ctx.fill();
+      const r = 2.2 + Math.min(deg, 12) * 0.55;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
       ctx.shadowBlur = 0;
+      if (pinned.has(n.id) && !dim) {   // pinned marker: thin white ring
+        ctx.strokeStyle = 'rgba(230,230,230,0.65)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.5, 0, 7); ctx.stroke();
+      }
+      if (sim.focus === n.id) {         // the focused node: accent ring
+        ctx.strokeStyle = '#e6e6e6'; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 4.5, 0, 7); ctx.stroke();
+      }
       // labels: hovered + small neighborhoods always; hubs-of-the-brain when zoomed in (LOD)
       const label = sim.hover === n.id || (hood?.has(n.id) && hood.size < 14) ||
                     (!hood && sim.view.k >= 1.4 && deg >= 6);
@@ -256,8 +280,21 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     if (n) kick(0.3);
   });
   addEventListener('mouseup', () => {
-    if (sim.drag && !sim.moved && sim.drag.id && !sim.drag.id.startsWith('repo:')) onNodeClick?.(sim.drag.id);
+    if (!sim.drag) return;
+    if (sim.moved && sim.drag.id) {
+      pinned.add(sim.drag.id);           // you placed it — it STAYS (right-click to release)
+    } else if (!sim.moved) {
+      if (sim.drag.id?.startsWith('repo:')) sim.focus = sim.drag.id;         // hub → focus cluster
+      else if (sim.drag.id) { sim.focus = sim.drag.id; onNodeClick?.(sim.drag.id); }
+      else sim.focus = null;             // clicked empty canvas → defocus
+      draw();
+    }
     sim.drag = null;
+  });
+  canvas.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault();                 // right-click a pinned node/hub = release it
+    const n = nodeAt(toWorld(ev));
+    if (n && pinned.has(n.id)) { pinned.delete(n.id); kick(0.4); }
   });
   canvas.addEventListener('dblclick', (ev) => {
     const n = nodeAt(toWorld(ev));
@@ -294,10 +331,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     setData,
     redraw: draw,
     reflow,
+    reset() { pinned.clear(); sim.focus = null; setData(nodes, edges); },   // fresh layout, all pins released
     setMatch(set) { matchSet = set; draw(); },
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
-    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet }),
+    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus }),
   };
 }

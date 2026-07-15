@@ -58,6 +58,15 @@ the top bar instead of permanently spending screen width.
 > - **Repo hubs are draggable rings — dragging a hub carries its children** (rigid move, the
 >   physics re-settles). Clicking a hub does not open a note.
 
+> **REV 2.3 (founder live-testing, round 3 — placeable brain):**
+> - **Drag = place & pin.** A dragged node/hub STAYS where you put it (thin white ring marks
+>   pinned); right-click releases one; the **⟲ reset layout** button releases all + re-lays out.
+> - **Clusters are separable:** canvas-centering applies to hubs only — notes orbit their hub,
+>   so a dragged-away cluster stays apart instead of being herded back to the middle.
+> - **Click = persistent focus.** Clicking a note focuses its neighborhood (accent ring on the
+>   origin); clicking a hub focuses its whole cluster; clicking empty canvas defocuses. Hover
+>   remains a transient preview on top.
+
 ## The accordion rule (binding, REV 2)
 
 Every panel (LHS, reading panel — and the glossary drawer) supports three states:
