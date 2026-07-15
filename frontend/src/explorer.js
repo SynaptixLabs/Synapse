@@ -54,6 +54,15 @@ function setMsg(m, bad = false) {
   if (m) setTimeout(() => { if (el.textContent === m) el.textContent = ''; }, 6000);
 }
 
+window.runRebuild = async () => {
+  setMsg('rebuilding graph + Index from the vault…');
+  try {
+    const st = await api('/rebuild', { method: 'POST' });
+    setMsg(`rebuilt: ${st.notes} notes · ${st.edges_total} edges · ${st.unresolved_links} unresolved`);
+    await refresh();
+  } catch (e) { setMsg('rebuild failed: ' + e.message, true); }
+};
+
 window.runIngest = async () => {
   setMsg('ingesting…');
   try {
