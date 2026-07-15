@@ -118,15 +118,28 @@
     </footer>
 
     <script type="module">
-      const API = 'http://localhost:8000/api/v1';
+      // Talk to the backend on the SAME host the page was loaded from — so access via
+      // localhost AND via a direct IP (e.g. the WSL address on Windows) both just work.
+      const HOST = location.hostname || 'localhost';
+      const API = `http://${HOST}:8000/api/v1`;
       let nodes = [], edges = [], lastStats = null, ingests = 0;
 
       const $ = (id) => document.getElementById(id);
       const setBadge = (id, state, label) => { const b = $(id); b.textContent = label ?? state; b.className = 'badge ' + state; };
       window.manual = (cb, id) => { const b = $(id); b.className = 'badge ' + (cb.checked ? 'pass' : ''); };
 
+      // Honest fetch: non-2xx surfaces the server's `detail` (or status), never a raw TypeError.
+      async function api(path, opts) {
+        let res;
+        try { res = await fetch(`${API}${path}`, opts); }
+        catch { throw new Error(`backend unreachable at ${API} — is ./start.sh running on this host?`); }
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail || `${res.status} ${res.statusText} on ${path} — wrong/old backend build?`);
+        return body;
+      }
+
       async function health() {
-        try { const d = await (await fetch('http://localhost:8000/health')).json();
+        try { const d = await (await fetch(`http://${HOST}:8000/health`)).json();
           $('health').textContent = `${d.status} (build ${d.build_stamp})`; $('health').dataset.ok = 'true';
         } catch { $('health').textContent = 'down — run ./start.sh'; $('health').dataset.ok = 'false'; }
       }
@@ -134,8 +147,9 @@
       window.runIngest = async () => {
         const btn = $('btn-ingest'); btn.disabled = true; $('action-msg').textContent = 'ingesting…';
         try {
-          const rep = await (await fetch(`${API}/ingest`, { method: 'POST' })).json();
-          await fetch(`${API}/rebuild`, { method: 'POST' });
+          const rep = await api('/ingest', { method: 'POST' });
+          if (!rep.repos) throw new Error('unexpected ingest response (old backend build?) — restart ./start.sh and hard-refresh');
+          await api('/rebuild', { method: 'POST' });
           ingests++;
           const t = rep.totals;
           $('report').innerHTML = `<table><tr><th>repo</th><th>found</th><th>written</th><th>unchanged</th><th>skipped</th></tr>` +
@@ -146,30 +160,30 @@
           if (ingests >= 2 && t.notes_written === 0 && t.unchanged === t.files_found && t.files_found > 0) setBadge('s2', 'pass', 'PASS');
           else if (ingests === 1) setBadge('s2', 'wait', 'run again');
           await refresh();
-        } catch (e) { $('action-msg').textContent = 'ingest failed: ' + e; }
+        } catch (e) { $('action-msg').textContent = 'ingest failed: ' + e.message; }
         btn.disabled = false;
       };
 
       window.freshRebuild = async () => {
         const btn = $('btn-fresh'); btn.disabled = true;
         try {
-          const before = lastStats ?? await (await fetch(`${API}/stats`)).json();
-          const after = await (await fetch(`${API}/rebuild?fresh=true`, { method: 'POST' })).json();
+          const before = lastStats ?? await api('/stats');
+          const after = await api('/rebuild?fresh=true', { method: 'POST' });
           const same = JSON.stringify(before) === JSON.stringify(after);
           setBadge('s6', same ? 'pass' : 'bad', same ? 'PASS' : 'MISMATCH');
           $('action-msg').textContent = same
             ? 'graph.json deleted → rebuilt from the vault alone → stats identical ✓'
             : 'MISMATCH — stats changed after fresh rebuild (file a finding!)';
           await refresh();
-        } catch (e) { $('action-msg').textContent = 'rebuild failed: ' + e; }
+        } catch (e) { $('action-msg').textContent = 'rebuild failed: ' + e.message; }
         btn.disabled = false;
       };
 
       async function refresh() {
         try {
-          const g = await (await fetch(`${API}/graph`)).json();
+          const g = await api('/graph');
           nodes = g.nodes; edges = g.edges;
-          lastStats = await (await fetch(`${API}/stats`)).json();
+          lastStats = await api('/stats');
           const s = lastStats;
           $('kpis').innerHTML =
             `<div class="kpi"><b>${s.notes}</b><span>notes</span></div>` +
@@ -191,17 +205,19 @@
       };
 
       window.openNote = async (id) => {
-        const n = await (await fetch(`${API}/note/${encodeURIComponent(id)}`)).json();
-        $('doc-title').textContent = `${n.repo} / ${n.source_path}`;
-        $('doc').textContent = n.body;
+        try {
+          const n = await api(`/note/${encodeURIComponent(id)}`);
+          $('doc-title').textContent = `${n.repo} / ${n.source_path}`;
+          $('doc').textContent = n.body;
+        } catch (e) { $('doc').textContent = e.message; }
       };
 
       window.loadIndex = async () => {
         try {
-          const d = await (await fetch(`${API}/index`)).json();
+          const d = await api('/index');
           $('doc-title').textContent = 'Index.md — the front door';
           $('doc').textContent = d.markdown;
-        } catch { $('doc').textContent = 'No Index yet — run ingest first.'; }
+        } catch (e) { $('doc').textContent = e.message; }
       };
 
       // ── graph preview: repo-clustered static layout, hover tooltips ──
