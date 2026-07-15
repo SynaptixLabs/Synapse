@@ -22,6 +22,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const REVEAL_K = 1.5;
   let statics = [];        // [{ n, dx, dy }] — deterministic halo offset from the repo hub
   let staticsDrawn = 0;    // last-frame count (exposed via state() for honest verification)
+  let layerCounts = {};    // last-frame per-layer draw counts (edges/labels) — state() too
 
   const W = () => canvas.clientWidth, H = () => canvas.clientHeight || 340;
   // Beyond the POC budget (~2k nodes) the O(n²) physics + full edge draw would freeze the tab:
@@ -207,13 +208,20 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     drawHulls();   // soft per-repo blobs — the grouping layer
 
     // map-engine LOD discipline: symbols and text keep a ~constant SCREEN size while the
-    // world zooms underneath, and labels declutter on a screen-space grid (no label soup).
+    // world zooms underneath, labels declutter on a screen-space grid (no label soup), and
+    // every z-layer has a HARD per-frame budget (founder ruling) + viewport culling.
     const K = sim.view.k;
+    const BUDGET = { edges: 3500, labels: 80, statics: 800 };
+    let edgesDrawn = 0, labelsDrawn = 0;
+    const vMinX = -sim.view.x / K, vMinY = -sim.view.y / K;
+    const vMaxX = vMinX + W() / K, vMaxY = vMinY + H() / K;
+    const inView = (x, y, m = 70) => x > vMinX - m && x < vMaxX + m && y > vMinY - m && y < vMaxY + m;
     const labelCells = new Set();
     const labelFits = (x, y) => {
+      if (labelsDrawn >= BUDGET.labels) return false;
       const cell = (((x * K + sim.view.x) / 160) | 0) + ':' + (((y * K + sim.view.y) / 30) | 0);
       if (labelCells.has(cell)) return false;
-      labelCells.add(cell); return true;
+      labelCells.add(cell); labelsDrawn++; return true;
     };
     // zooming IN keeps symbols at constant screen size (map convention); zooming OUT only
     // softens shrink so the brain stays visible from afar
@@ -224,25 +232,35 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13 };
     ctx.lineWidth = 0.75 / Math.sqrt(K);
     const bigMode = big();
+    const straight = edges.length > 2000;   // dense brains: straight lines (~2× cheaper strokes)
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
       const lit0 = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
       if (bigMode && !lit0 && e.type !== 'wikilink' && sim.view.k < 1.2) continue;
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
+      if (!lit0) {
+        if (!inView(a.x, a.y) && !inView(b.x, b.y)) continue;   // off-screen — skip
+        if (edgesDrawn >= BUDGET.edges) continue;               // layer budget
+        edgesDrawn++;
+      }
       const lit = lit0;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
       ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (BASE[e.type] ?? 0.3) * Math.min(1, 240 / d);
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      const bow = Math.min(d * 0.12, 22) * (e.src < e.dst ? 1 : -1);
       ctx.beginPath(); ctx.moveTo(a.x, a.y);
-      ctx.quadraticCurveTo(mx - dy / d * bow, my + dx / d * bow, b.x, b.y);
+      if (straight) ctx.lineTo(b.x, b.y);
+      else {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const bow = Math.min(d * 0.12, 22) * (e.src < e.dst ? 1 : -1);
+        ctx.quadraticCurveTo(mx - dy / d * bow, my + dx / d * bow, b.x, b.y);
+      }
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
 
     for (const n of nodes) {
       const p = sim.p.get(n.id); if (!p || !visibleNode(n)) continue;
+      if (n.kind !== 'repo' && !inView(p.x, p.y) && sim.focus !== n.id) continue;   // culled
       if (n.kind === 'repo') {
         // the draggable hub: glowing ring + label (drag it — its children come along)
         ctx.globalAlpha = hood ? 0.4 : 0.95;
@@ -297,15 +315,13 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     // ── the reveal layer: past REVEAL_K the long tail fades in around its repo hub ──
     staticsDrawn = 0;
     if (statics.length && sim.view.k >= REVEAL_K) {
-      const minX = -sim.view.x / sim.view.k, minY = -sim.view.y / sim.view.k;
-      const maxX = minX + W() / sim.view.k, maxY = minY + H() / sim.view.k;
       const t = Math.min(1, (sim.view.k - REVEAL_K) / 0.8);   // fade in over ~one zoom stop
       ctx.globalAlpha = 0.3 * t;
       for (const s of statics) {
         if (hiddenRepos.has(s.n.repo) || sim.p.has(s.n.id)) continue;
         const hub = sim.p.get(`repo:${s.n.repo}`); if (!hub) continue;
         const x = hub.x + s.dx, y = hub.y + s.dy;
-        if (x < minX || x > maxX || y < minY || y > maxY) continue;
+        if (!inView(x, y, 0)) continue;
         const ds = 2.4 / sim.view.k;   // constant screen size, smaller than the living nodes
         ctx.fillStyle = `hsl(${hue(s.n.repo)} 45% 50%)`;
         ctx.fillRect(x - ds / 2, y - ds / 2, ds, ds);
@@ -315,10 +331,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
           ctx.fillText(s.n.title.slice(0, 34), x, y - 8 / sim.view.k);
           ctx.globalAlpha = 0.3 * t;
         }
-        if (++staticsDrawn >= 2000) break;   // per-frame budget — honesty over spectacle
+        if (++staticsDrawn >= BUDGET.statics) break;   // layer budget — honesty over spectacle
       }
       ctx.globalAlpha = 1;
     }
+    layerCounts = { edges: edgesDrawn, labels: labelsDrawn };
     if (infoEl) infoEl.textContent = big() ? 'large brain: simplified rendering (zoom in for detail)' :
       `${nodes.filter(n => n.kind === 'note' && visibleNode(n)).length} notes · ${edges.filter(visibleEdge).length} edges shown · hue = repo · brightness/size = connectedness`;
   }
@@ -458,6 +475,6 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
-    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, statics: statics.length, staticsDrawn, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }) }),
+    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }) }),
   };
 }

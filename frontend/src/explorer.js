@@ -91,12 +91,13 @@ function renderResults() {
   const box = $('sresults');
   if (!q) { box.classList.remove('open'); box.innerHTML = ''; selIdx = -1; return; }
   const colors = graph.repoColors();
+  const grpOf = vRepoOf();
   const hits = matchList(q).slice(0, 12);
   box.innerHTML = hits.length
     ? hits.map((n, i) =>
         `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${esc(n.id)}">
-           <span class="dot" style="background:${colors.get(n.repo)}"></span>
-           <span>${esc(n.title)}</span><small>${esc(n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
+           <span class="dot" style="background:${colors.get(grpOf.get(n.id) ?? n.repo)}"></span>
+           <span>${esc(n.title)}</span><small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
     : `<div class="r" style="color:var(--dim)">no notes match “${esc(q)}”</div>`;
   box.classList.add('open');
 }
@@ -123,35 +124,65 @@ document.addEventListener('click', (ev) => {
 // neighbors into the picture.
 const WINDOW_CAP = 1500;
 let winIds = null;   // Set of displayed ids · null = the whole brain fits the budget
+let vNodes = [], vEdges = [];   // the DISPLAY view (grouped); search/reader keep the originals
+
+// A huge single source (e.g. the whole-workspace root) is not one cluster — split it into
+// its top-level folders as first-class groups: each gets its own hub, hue, hull and a
+// hide/show toggle in the glossary (founder ask). Display-only: ids, search and wiki
+// resolution stay on the original fields.
+const GROUP_SPLIT = 1500;
+function groupView() {
+  const counts = {};
+  for (const n of nodes) if (n.kind === 'note') counts[n.repo] = (counts[n.repo] ?? 0) + 1;
+  const split = new Set(Object.keys(counts).filter(r => counts[r] > GROUP_SPLIT));
+  if (!split.size) return { vnodes: nodes, vedges: edges };
+  const groups = new Set();
+  const vnotes = nodes.filter(n => n.kind === 'note').map(n => {
+    const g = split.has(n.repo)
+      ? `${n.repo} / ${n.source_path.includes('/') ? n.source_path.split('/')[0] : '·root'}`
+      : n.repo;
+    groups.add(g);
+    return { ...n, repo: g };
+  });
+  const vhubs = [...groups].sort().map(g => ({
+    id: `repo:${g}`, kind: 'repo', title: g.includes(' / ') ? g.split(' / ')[1] : g,
+    repo: g, source_path: '', in_degree: 0, out_degree: 0, unresolved: [],
+  }));
+  const vedges = edges.filter(e => e.type !== 'sibling')
+    .concat(vnotes.map(n => ({ src: n.id, dst: `repo:${n.repo}`, type: 'sibling' })));
+  return { vnodes: [...vnotes, ...vhubs], vedges };
+}
+let _vRepo = null;   // cached id → display-group map (rebuilt per refresh)
+const vRepoOf = () => (_vRepo ??= new Map(vNodes.filter(n => n.kind === 'note').map(n => [n.id, n.repo])));
 
 function windowed() {
-  const notes = nodes.filter(n => n.kind === 'note');
-  if (notes.length <= WINDOW_CAP) { winIds = null; return { n: nodes, e: edges }; }
-  const keep = new Set(nodes.filter(n => n.kind === 'repo').map(n => n.id));
+  const notes = vNodes.filter(n => n.kind === 'note');
+  if (notes.length <= WINDOW_CAP) { winIds = null; return { n: vNodes, e: vEdges }; }
+  const keep = new Set(vNodes.filter(n => n.kind === 'repo').map(n => n.id));
   for (const n of notes) if (n.repo === '✦ summaries') keep.add(n.id);   // user artifacts always shown
   const ranked = notes.filter(n => n.repo !== '✦ summaries')
     .sort((a, b) => (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree));
   for (const n of ranked.slice(0, WINDOW_CAP)) keep.add(n.id);
   winIds = keep;
-  return { n: nodes.filter(x => keep.has(x.id)), e: edges.filter(x => keep.has(x.src) && keep.has(x.dst)) };
+  return { n: vNodes.filter(x => keep.has(x.id)), e: vEdges.filter(x => keep.has(x.src) && keep.has(x.dst)) };
 }
 
 /** The long tail goes to the graph's semantic-zoom reveal layer (D-8): static dots around
  *  their repo hub, visible past zoom 1.5, clickable — a click promotes them into the window. */
 function sendStatics() {
-  graph.setStatics(winIds ? nodes.filter(x => x.kind === 'note' && !winIds.has(x.id)) : []);
+  graph.setStatics(winIds ? vNodes.filter(x => x.kind === 'note' && !winIds.has(x.id)) : []);
 }
 
 /** Opening a note outside the window pulls it (+ direct neighbors) into the graph. */
 function pullIntoWindow(id) {
-  if (!winIds || winIds.has(id) || !nodes.some(x => x.id === id)) return;
+  if (!winIds || winIds.has(id) || !vNodes.some(x => x.id === id)) return;
   winIds.add(id);
-  for (const e of edges) {
+  for (const e of vEdges) {
     if (e.type === 'sibling') continue;
     if (e.src === id) winIds.add(e.dst);
     if (e.dst === id) winIds.add(e.src);
   }
-  graph.setData(nodes.filter(x => winIds.has(x.id)), edges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
+  graph.setData(vNodes.filter(x => winIds.has(x.id)), vEdges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
   sendStatics();
 }
 
@@ -160,7 +191,9 @@ async function refresh() {
   try {
     const g = await api('/graph');
     nodes = g.nodes; edges = g.edges;
-    ns = buildNamespace(nodes);
+    ns = buildNamespace(nodes);            // wiki resolution on the ORIGINAL fields
+    ({ vnodes: vNodes, vedges: vEdges } = groupView());
+    _vRepo = null;
     stats = await api('/stats');
     $('empty').style.display = 'none';
     const view = windowed();
@@ -397,9 +430,9 @@ $('sources').addEventListener('click', async (ev) => {
 function buildDrawer() {
   const colors = graph.repoColors();
   const repoCounts = {};
-  for (const n of nodes) if (n.kind === 'note') repoCounts[n.repo] = (repoCounts[n.repo] ?? 0) + 1;
+  for (const n of vNodes) if (n.kind === 'note') repoCounts[n.repo] = (repoCounts[n.repo] ?? 0) + 1;
   const unresolved = [];
-  for (const n of nodes) if (n.kind === 'note') for (const u of n.unresolved) unresolved.push({ u, n });
+  for (const n of vNodes) if (n.kind === 'note') for (const u of n.unresolved) unresolved.push({ u, n });
   const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', sibling: '#2c3342' };
   $('drawer').innerHTML =
     `<h4>Repos (click toggles)</h4>` +
