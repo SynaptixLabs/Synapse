@@ -1,27 +1,30 @@
-# Sprint 01 — Founder acceptance script
+# Sprint 01 — Founder acceptance script (UI-driven)
 
 > Run this **after** dev acceptance is recorded (`../reports/`, `../reviews/` — GBU APPROVE).
-> No API keys needed. Expected time: ~10 minutes. Record your result at the bottom.
+> No API keys needed. Expected time: ~10 minutes. **Everything happens in the dashboard** —
+> the acceptance checklist at the top of the page tracks you live (steps 1, 2, 6 auto-PASS;
+> steps 3–5 are your judgment, tick them in the UI). CLI twins exist for every action
+> (`./synapse ingest · rebuild · stats`) if you prefer a terminal double-check.
 
 ## Setup (once)
 
 ```bash
 cd <your-clone-of-Synapse>
 ./start.sh setup                     # Windows: .\start.cmd -Setup
-# then edit backend/.env → set SYNAPSE_SOURCE_REPOS to two of YOUR real repos, e.g.:
-# SYNAPSE_SOURCE_REPOS=/home/avido/Synaptix-Labs/projects/scaffold,/home/avido/Synaptix-Labs/projects/synapse
+# backend/.env → SYNAPSE_SOURCE_REPOS = two of YOUR real repos (comma-separated paths)
+./start.sh                           # open http://localhost:5173
 ```
 
-## The script
+## The script (in the dashboard)
 
 | # | Do | Expect | PASS/FAIL |
 |---|---|---|---|
-| 1 | `./synapse ingest` | Completes; prints an honest report (repos scanned, found/written/unchanged/skipped) and rebuilds the graph + Index | |
-| 2 | Run `./synapse ingest` **again** | Same totals, everything reported `unchanged` — nothing duplicated | |
-| 3 | Open `data/vault/notes/` in your editor | One readable note per source `.md`; frontmatter shows the right repo + path; Hebrew/UTF-8 content intact | |
-| 4 | Open `data/vault/Index.md` | Every note listed, grouped by repo; header counts match step 1; top-connected looks believable | |
-| 5 | `./synapse stats` | Node/edge counts; pick any 3 notes you know well — their listed links match the real files | |
-| 6 | `rm data/vault/graph.json && ./synapse rebuild && ./synapse stats` | Identical stats — the graph regenerated from the vault alone | |
+| 1 | Click **Run ingest** | Honest per-repo report table (found / written / unchanged / skipped); checklist step 1 goes PASS | |
+| 2 | Click **Run ingest** again | Same totals, all `unchanged`, 0 written — step 2 goes PASS | |
+| 3 | In **Notes browser**, open 3 notes you know (incl. a Hebrew one if you have it) | Viewer shows the real content, right repo/path in the title — tick step 3 | |
+| 4 | Click **View Index.md** | Every note listed, grouped by repo; header counts match the report — tick step 4 | |
+| 5 | Check **Stats** + hover the **Graph preview** | Counts believable; top-connected are the notes you'd expect; spot-check 3 nodes' links — tick step 5 | |
+| 6 | Click **Fresh rebuild (invariance proof)** | "graph.json deleted → rebuilt from the vault alone → stats identical ✓"; step 6 goes PASS | |
 
 ## Verdict
 

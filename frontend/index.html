@@ -3,85 +3,266 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SYNAPSE — a second brain for your repos. Index scattered markdown into a wikilinked knowledge graph; summarize any node or subtree and see it rendered as an image. MIT, by SynaptixLabs." />
-    <title>SYNAPSE · a second brain for your repos</title>
+    <meta name="description" content="SYNAPSE — a second brain for your repos. Sprint-1 acceptance dashboard: run ingest, inspect the vault, prove the graph." />
+    <title>SYNAPSE · brain dashboard</title>
     <style>
       :root {
-        --bg: #0f1115; --panel: #161a22; --border: #262c38;
-        --text: #e6e6e6; --dim: #9aa3b2; --accent: #7c9eff; --ok: #4ade80; --bad: #f87171;
+        --bg:#0f1115; --panel:#161a22; --panel2:#131720; --border:#262c38;
+        --text:#e6e6e6; --dim:#9aa3b2; --accent:#7c9eff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
       }
-      * { box-sizing: border-box; }
-      body {
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-        background: radial-gradient(1200px 600px at 70% -10%, #1a2030 0%, var(--bg) 55%);
-        color: var(--text); margin: 0; min-height: 100vh;
-        display: grid; place-items: center; padding: 2rem 1rem;
-      }
-      main { max-width: 720px; width: 100%; text-align: center; }
-      .eyebrow { letter-spacing: 0.22em; font-size: 0.72rem; color: var(--dim); text-transform: uppercase; }
-      h1 { font-size: clamp(2rem, 6vw, 3rem); margin: 0.35em 0 0.2em; letter-spacing: 0.06em; }
-      h1 .dot { color: var(--accent); }
-      .tagline { font-size: 1.1rem; color: var(--text); margin: 0 0 0.4em; }
-      .sub { color: var(--dim); line-height: 1.55; margin: 0 auto 1.6em; max-width: 56ch; }
-      .sub code { background: var(--panel); border: 1px solid var(--border); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
-      .links { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.8rem; }
-      .links a {
-        display: block; padding: 0.7rem 1.1rem; min-width: 10.5rem;
-        background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-        color: var(--text); text-decoration: none; transition: border-color 0.15s, transform 0.15s;
-      }
-      .links a:hover { border-color: var(--accent); transform: translateY(-1px); }
-      .links a small { display: block; color: var(--dim); margin-top: 0.15rem; font-size: 0.75rem; }
-      .loop { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
-      .loop span { font-size: 0.8rem; color: var(--dim); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.8rem; }
-      .loop b { color: var(--text); font-weight: 600; }
-      footer { color: var(--dim); font-size: 0.85rem; }
-      footer code { background: var(--panel); border: 1px solid var(--border); padding: 0.1em 0.35em; border-radius: 4px; }
-      #health[data-ok="true"] { color: var(--ok); }
-      #health[data-ok="false"] { color: var(--bad); }
+      * { box-sizing:border-box; }
+      body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); margin:0; padding:1.2rem; }
+      header { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+      header h1 { font-size:1.4rem; margin:0; letter-spacing:0.05em; }
+      header h1 .dot { color:var(--accent); }
+      header .tag { color:var(--dim); }
+      header .health { margin-left:auto; font-size:0.85rem; color:var(--dim); }
+      #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
+      .grid { display:grid; gap:0.9rem; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:start; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:0.9rem 1rem; }
+      .card h2 { font-size:0.8rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--dim); margin:0 0 0.6rem; }
+      .actions { display:flex; gap:0.6rem; flex-wrap:wrap; }
+      button { background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:0.55rem 1rem; font-weight:600; cursor:pointer; }
+      button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+      button:disabled { opacity:0.5; cursor:wait; }
+      table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+      th,td { text-align:left; padding:0.3rem 0.45rem; border-bottom:1px solid var(--border); }
+      th { color:var(--dim); font-weight:500; }
+      td.num { text-align:right; font-variant-numeric:tabular-nums; }
+      .kpis { display:flex; gap:0.9rem; flex-wrap:wrap; }
+      .kpi { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:0.5rem 0.9rem; }
+      .kpi b { display:block; font-size:1.3rem; } .kpi span { color:var(--dim); font-size:0.75rem; }
+      .check { list-style:none; padding:0; margin:0; font-size:0.9rem; }
+      .check li { display:flex; gap:0.5rem; padding:0.28rem 0; align-items:baseline; }
+      .badge { min-width:4.2rem; text-align:center; font-size:0.72rem; border-radius:999px; padding:0.1rem 0.5rem; border:1px solid var(--border); color:var(--dim); }
+      .badge.pass { background:rgba(74,222,128,.12); color:var(--ok); border-color:rgba(74,222,128,.4); }
+      .badge.wait { color:var(--warn); }
+      canvas { width:100%; height:340px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; }
+      #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:9; max-width:40ch; }
+      input[type=text] { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.5rem 0.7rem; margin-bottom:0.5rem; }
+      #notelist { max-height:250px; overflow:auto; font-size:0.85rem; }
+      #notelist div { padding:0.22rem 0.3rem; cursor:pointer; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #notelist div:hover { background:var(--panel2); color:var(--accent); }
+      pre.doc { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:0.8rem; max-height:340px; overflow:auto; white-space:pre-wrap; font-size:0.82rem; line-height:1.45; unicode-bidi:plaintext; }
+      .muted { color:var(--dim); font-size:0.82rem; }
+      .legend { display:flex; gap:1rem; font-size:0.75rem; color:var(--dim); margin-top:0.4rem; }
+      .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; border-radius:2px; }
+      footer { color:var(--dim); font-size:0.78rem; margin-top:1rem; }
+      a { color:var(--accent); }
     </style>
   </head>
   <body>
-    <main>
-      <p class="eyebrow">SynaptixLabs · Second-Brain Demo · MIT</p>
+    <header>
       <h1>SYNAPSE<span class="dot">.</span></h1>
-      <p class="tagline">A second brain for your repos.</p>
-      <p class="sub">
-        Index the markdown scattered across your repositories into one wikilinked knowledge graph —
-        then point at any node (or a whole subtree), let one model <em>distill</em> it, and a second
-        model <em>render</em> the idea as an image. The vault is the source of truth; the graph is derived.
-      </p>
+      <span class="tag">a second brain for your repos — sprint-1 acceptance dashboard</span>
+      <span class="health">backend: <span id="health">checking…</span></span>
+    </header>
 
-      <nav class="links" aria-label="Project links">
-        <a href="https://github.com/SynaptixLabs/Synapse">GitHub<small>github.com/SynaptixLabs/Synapse</small></a>
-        <a href="https://synaptixlabs.ai">SynaptixLabs<small>synaptixlabs.ai</small></a>
-        <a href="https://github.com/SynaptixLabs/scaffold">Built on scaffold<small>one agent brain, every CLI</small></a>
-      </nav>
+    <div class="grid">
+      <section class="card" style="grid-column:1/-1">
+        <h2>Acceptance — sprint 01 · The Brain</h2>
+        <ul class="check" id="checklist">
+          <li><span class="badge" id="s1">todo</span> <span><b>Ingest works.</b> Run ingest → an honest report (found / written / unchanged / skipped) per repo.</span></li>
+          <li><span class="badge" id="s2">todo</span> <span><b>Idempotent.</b> Run ingest again → everything <code>unchanged</code>, nothing duplicated.</span></li>
+          <li><span class="badge" id="s3"><input type="checkbox" onchange="manual(this,'s3')"></span> <span><b>Vault readable.</b> Open notes below — right repo/path, Hebrew/UTF-8 intact.</span></li>
+          <li><span class="badge" id="s4"><input type="checkbox" onchange="manual(this,'s4')"></span> <span><b>Index is the front door.</b> View the Index — every note listed, counts honest.</span></li>
+          <li><span class="badge" id="s5"><input type="checkbox" onchange="manual(this,'s5')"></span> <span><b>Graph honest.</b> Stats + preview match reality (spot-check 3 notes you know).</span></li>
+          <li><span class="badge" id="s6">todo</span> <span><b>Vault is the truth.</b> Fresh rebuild (deletes graph.json first) → identical stats.</span></li>
+        </ul>
+      </section>
 
-      <div class="loop" aria-label="The loop">
-        <span><b>Ingest</b> — repos' markdown → vault</span>
-        <span><b>Graph</b> — docs = nodes, links = edges</span>
-        <span><b>Distill</b> — summarize node/subtree</span>
-        <span><b>Render</b> — the summary, as an image</span>
-      </div>
+      <section class="card">
+        <h2>Actions</h2>
+        <div class="actions">
+          <button id="btn-ingest" onclick="runIngest()">Run ingest</button>
+          <button id="btn-fresh" class="secondary" onclick="freshRebuild()">Fresh rebuild (invariance proof)</button>
+          <button class="secondary" onclick="loadIndex()">View Index.md</button>
+        </div>
+        <p class="muted" id="action-msg" style="min-height:1.2em"></p>
+        <div id="report"></div>
+      </section>
 
-      <footer>
-        <p>Backend health: <span id="health">checking…</span></p>
-        <p>Started via <code>./start.sh</code> — the graph explorer lands here as sprint 1 ships.</p>
-      </footer>
-    </main>
+      <section class="card">
+        <h2>Stats</h2>
+        <div class="kpis" id="kpis"><span class="muted">No graph yet — run ingest.</span></div>
+        <div id="top" style="margin-top:0.6rem"></div>
+      </section>
+
+      <section class="card" style="grid-column:1/-1">
+        <h2>Graph preview <span style="text-transform:none;letter-spacing:0">(the interactive explorer ships in sprint 2)</span></h2>
+        <canvas id="graph"></canvas>
+        <div class="legend">
+          <span><i style="background:#7c9eff"></i>wikilink</span>
+          <span><i style="background:#9aa3b2"></i>relative</span>
+          <span><i style="background:#3a4152"></i>repo grouping</span>
+          <span id="graphinfo"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Notes browser</h2>
+        <input type="text" id="filter" placeholder="filter notes…" oninput="renderList()" />
+        <div id="notelist"><span class="muted">No graph yet.</span></div>
+      </section>
+
+      <section class="card">
+        <h2 id="doc-title">Note viewer</h2>
+        <pre class="doc" id="doc">Click a note (or “View Index.md”).</pre>
+      </section>
+    </div>
+
+    <div id="tooltip"></div>
+    <footer>
+      Vault: <code>data/vault/</code> · CLI twin: <code>./synapse ingest · rebuild · stats</code> ·
+      <a href="https://github.com/SynaptixLabs/Synapse">GitHub</a> · MIT · started via <code>./start.sh</code>
+    </footer>
+
     <script type="module">
-      const el = document.getElementById('health');
-      try {
-        // Template default: backend on :8000 (see start.sh DEFAULT_PORT).
-        const r = await fetch('http://localhost:8000/health');
-        const d = await r.json();
-        el.textContent = `${d.status} (build ${d.build_stamp})`;
-        el.dataset.ok = 'true';
-      } catch {
-        el.textContent = 'backend down';
-        el.dataset.ok = 'false';
+      const API = 'http://localhost:8000/api/v1';
+      let nodes = [], edges = [], lastStats = null, ingests = 0;
+
+      const $ = (id) => document.getElementById(id);
+      const setBadge = (id, state, label) => { const b = $(id); b.textContent = label ?? state; b.className = 'badge ' + state; };
+      window.manual = (cb, id) => { const b = $(id); b.className = 'badge ' + (cb.checked ? 'pass' : ''); };
+
+      async function health() {
+        try { const d = await (await fetch('http://localhost:8000/health')).json();
+          $('health').textContent = `${d.status} (build ${d.build_stamp})`; $('health').dataset.ok = 'true';
+        } catch { $('health').textContent = 'down — run ./start.sh'; $('health').dataset.ok = 'false'; }
       }
+
+      window.runIngest = async () => {
+        const btn = $('btn-ingest'); btn.disabled = true; $('action-msg').textContent = 'ingesting…';
+        try {
+          const rep = await (await fetch(`${API}/ingest`, { method: 'POST' })).json();
+          await fetch(`${API}/rebuild`, { method: 'POST' });
+          ingests++;
+          const t = rep.totals;
+          $('report').innerHTML = `<table><tr><th>repo</th><th>found</th><th>written</th><th>unchanged</th><th>skipped</th></tr>` +
+            rep.repos.map(r => `<tr><td>${r.repo}</td><td class="num">${r.files_found}</td><td class="num">${r.notes_written}</td><td class="num">${r.unchanged}</td><td class="num">${r.skipped}</td></tr>`).join('') +
+            `<tr><th>TOTAL</th><th class="num">${t.files_found}</th><th class="num">${t.notes_written}</th><th class="num">${t.unchanged}</th><th class="num">${t.skipped}</th></tr></table>`;
+          $('action-msg').textContent = '';
+          if (t.files_found > 0) setBadge('s1', 'pass', 'PASS');
+          if (ingests >= 2 && t.notes_written === 0 && t.unchanged === t.files_found && t.files_found > 0) setBadge('s2', 'pass', 'PASS');
+          else if (ingests === 1) setBadge('s2', 'wait', 'run again');
+          await refresh();
+        } catch (e) { $('action-msg').textContent = 'ingest failed: ' + e; }
+        btn.disabled = false;
+      };
+
+      window.freshRebuild = async () => {
+        const btn = $('btn-fresh'); btn.disabled = true;
+        try {
+          const before = lastStats ?? await (await fetch(`${API}/stats`)).json();
+          const after = await (await fetch(`${API}/rebuild?fresh=true`, { method: 'POST' })).json();
+          const same = JSON.stringify(before) === JSON.stringify(after);
+          setBadge('s6', same ? 'pass' : 'bad', same ? 'PASS' : 'MISMATCH');
+          $('action-msg').textContent = same
+            ? 'graph.json deleted → rebuilt from the vault alone → stats identical ✓'
+            : 'MISMATCH — stats changed after fresh rebuild (file a finding!)';
+          await refresh();
+        } catch (e) { $('action-msg').textContent = 'rebuild failed: ' + e; }
+        btn.disabled = false;
+      };
+
+      async function refresh() {
+        try {
+          const g = await (await fetch(`${API}/graph`)).json();
+          nodes = g.nodes; edges = g.edges;
+          lastStats = await (await fetch(`${API}/stats`)).json();
+          const s = lastStats;
+          $('kpis').innerHTML =
+            `<div class="kpi"><b>${s.notes}</b><span>notes</span></div>` +
+            `<div class="kpi"><b>${s.repos}</b><span>repos</span></div>` +
+            Object.entries(s.edges_by_type).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('') +
+            `<div class="kpi"><b>${s.unresolved_links}</b><span>unresolved</span></div>`;
+          $('top').innerHTML = '<span class="muted">Top connected:</span> ' +
+            s.top_connected.map(t => `<div class="muted">· <a href="#" onclick="openNote('${t.id}');return false">${t.title}</a> — ${t.degree} links</div>`).join('');
+          renderList(); drawGraph();
+        } catch { /* no graph yet */ }
+      }
+
+      window.renderList = () => {
+        const q = $('filter').value.toLowerCase();
+        const list = nodes.filter(n => n.kind === 'note' && (n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)));
+        $('notelist').innerHTML = list.slice(0, 400).map(n =>
+          `<div onclick="openNote('${n.id}')" title="${n.id}">${n.title} <span class="muted">· ${n.repo}</span></div>`).join('')
+          || '<span class="muted">no matches</span>';
+      };
+
+      window.openNote = async (id) => {
+        const n = await (await fetch(`${API}/note/${encodeURIComponent(id)}`)).json();
+        $('doc-title').textContent = `${n.repo} / ${n.source_path}`;
+        $('doc').textContent = n.body;
+      };
+
+      window.loadIndex = async () => {
+        try {
+          const d = await (await fetch(`${API}/index`)).json();
+          $('doc-title').textContent = 'Index.md — the front door';
+          $('doc').textContent = d.markdown;
+        } catch { $('doc').textContent = 'No Index yet — run ingest first.'; }
+      };
+
+      // ── graph preview: repo-clustered static layout, hover tooltips ──
+      const EDGE_COLOR = { wikilink: '#7c9eff', relative: '#9aa3b2', sibling: '#3a4152' };
+      let placed = [];
+      function drawGraph() {
+        const cv = $('graph'), ctx = cv.getContext('2d');
+        const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = 340 * devicePixelRatio;
+        ctx.clearRect(0, 0, W, H);
+        const repos = nodes.filter(n => n.kind === 'repo');
+        const notes = nodes.filter(n => n.kind === 'note');
+        if (!notes.length) return;
+        const centers = {};
+        repos.forEach((r, i) => { centers[r.id] = { x: W * (i + 1) / (repos.length + 1), y: H / 2 }; });
+        placed = [];
+        const byRepo = {};
+        notes.forEach(n => (byRepo[n.repo] ??= []).push(n));
+        for (const [repo, list] of Object.entries(byRepo)) {
+          const c = centers[`repo:${repo}`] ?? { x: W / 2, y: H / 2 };
+          list.forEach((n, i) => {
+            const ring = 1 + Math.floor(i / 24), a = (i % 24) / 24 * 2 * Math.PI + ring * 0.35;
+            const r = ring * Math.min(W / (4.6 * (repos.length || 1)), 62 * devicePixelRatio);
+            placed.push({ ...n, x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) });
+          });
+        }
+        const pos = Object.fromEntries(placed.map(p => [p.id, p]));
+        repos.forEach(r => { const c = centers[r.id]; pos[r.id] = { ...r, x: c.x, y: c.y }; });
+        ctx.lineWidth = devicePixelRatio * 0.7;
+        for (const e of edges) {
+          const a = pos[e.src], b = pos[e.dst]; if (!a || !b) continue;
+          ctx.strokeStyle = EDGE_COLOR[e.type] ?? '#333';
+          ctx.globalAlpha = e.type === 'sibling' ? 0.16 : 0.55;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        for (const p of placed) {
+          const deg = p.in_degree + p.out_degree;
+          ctx.fillStyle = deg > 6 ? '#7c9eff' : '#c8cfdd';
+          ctx.beginPath(); ctx.arc(p.x, p.y, (2 + Math.min(deg, 10) * 0.5) * devicePixelRatio, 0, 7); ctx.fill();
+        }
+        for (const r of repos) {
+          const c = centers[r.id];
+          ctx.fillStyle = '#e6e6e6'; ctx.font = `${12 * devicePixelRatio}px system-ui`;
+          ctx.textAlign = 'center'; ctx.fillText(r.title, c.x, c.y - 8 * devicePixelRatio);
+        }
+        $('graphinfo').textContent = `${notes.length} notes · ${edges.length} edges`;
+      }
+      $('graph').addEventListener('mousemove', (ev) => {
+        const rect = $('graph').getBoundingClientRect();
+        const x = (ev.clientX - rect.left) * devicePixelRatio, y = (ev.clientY - rect.top) * devicePixelRatio;
+        let best = null, bd = 12 * devicePixelRatio;
+        for (const p of placed) { const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = p; } }
+        const t = $('tooltip');
+        if (best) { t.style.display = 'block'; t.style.left = ev.clientX + 12 + 'px'; t.style.top = ev.clientY + 12 + 'px';
+          t.textContent = `${best.title} · ${best.repo} · ${best.in_degree + best.out_degree} links`; }
+        else t.style.display = 'none';
+      });
+      $('graph').addEventListener('mouseleave', () => { $('tooltip').style.display = 'none'; });
+      addEventListener('resize', drawGraph);
+
+      health(); refresh();
     </script>
   </body>
 </html>

@@ -136,6 +136,24 @@ class GraphService:
             return None
         return json.loads(self.graph_file.read_text(encoding="utf-8"))
 
+    def read_note(self, note_id: str) -> dict | None:
+        """One vault note, split into frontmatter fields + body (for viewers)."""
+        path = self.notes_dir / note_id
+        if not path.is_file() or path.parent.resolve() != self.notes_dir.resolve():
+            return None   # unknown id or a path-traversal attempt
+        text = path.read_text(encoding="utf-8", errors="replace")
+        fm = _FM_RE.match(text)
+        fields = dict(_FM_FIELD_RE.findall(fm.group(1))) if fm else {}
+        return {
+            "id": note_id,
+            "repo": fields.get("source_repo", ""),
+            "source_path": fields.get("source_path", ""),
+            "body": text[fm.end():] if fm else text,
+        }
+
+    def read_index(self) -> str | None:
+        return self.index_file.read_text(encoding="utf-8") if self.index_file.is_file() else None
+
     def _render_index(self, g: Graph) -> str:
         s = g.stats()
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")

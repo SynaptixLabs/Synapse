@@ -44,3 +44,25 @@ def test_ingest_then_graph_roundtrip(client):
 
     stats = client.get("/api/v1/stats").json()
     assert stats["edges_by_type"]["wikilink"] == 3
+
+
+def test_note_and_index_endpoints(client):
+    client.post("/api/v1/ingest")
+    client.post("/api/v1/rebuild")
+
+    note = client.get("/api/v1/note/repo_a__hebrew.md").json()
+    assert note["repo"] == "repo_a"
+    assert "מסמך בעברית" in note["body"]          # UTF-8 through the API too
+
+    assert client.get("/api/v1/note/no_such.md").status_code == 404
+    assert client.get("/api/v1/note/..%2F..%2Fetc%2Fpasswd").status_code == 404
+
+    index = client.get("/api/v1/index").json()
+    assert "[[repo_b__beta.md]]" in index["markdown"]
+
+
+def test_fresh_rebuild_is_invariant_via_api(client):
+    client.post("/api/v1/ingest")
+    first = client.post("/api/v1/rebuild").json()
+    fresh = client.post("/api/v1/rebuild?fresh=true").json()
+    assert first == fresh                          # the UI's invariance-proof contract
