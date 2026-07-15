@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="synaptix-scaffold — a tool-agnostic template for running a team of AI coding agents. One brain, every CLI. Open source (MIT) by SynaptixLabs." />
+    <title>synaptix-scaffold · SynaptixLabs</title>
+    <style>
+      :root {
+        --bg: #0f1115; --panel: #161a22; --border: #262c38;
+        --text: #e6e6e6; --dim: #9aa3b2; --accent: #7c9eff; --ok: #4ade80; --bad: #f87171;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(1200px 600px at 70% -10%, #1a2030 0%, var(--bg) 55%);
+        color: var(--text); margin: 0; min-height: 100vh;
+        display: grid; place-items: center; padding: 2rem 1rem;
+      }
+      main { max-width: 720px; width: 100%; text-align: center; }
+      .eyebrow { letter-spacing: 0.22em; font-size: 0.72rem; color: var(--dim); text-transform: uppercase; }
+      h1 { font-size: clamp(2rem, 6vw, 3rem); margin: 0.35em 0 0.2em; }
+      h1 .dot { color: var(--accent); }
+      .tagline { font-size: 1.1rem; color: var(--text); margin: 0 0 0.4em; }
+      .sub { color: var(--dim); line-height: 1.55; margin: 0 auto 1.6em; max-width: 56ch; }
+      .sub code { background: var(--panel); border: 1px solid var(--border); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.9em; }
+      .links { display: flex; gap: 0.8rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.8rem; }
+      .links a {
+        display: block; padding: 0.7rem 1.1rem; min-width: 10.5rem;
+        background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+        color: var(--text); text-decoration: none; transition: border-color 0.15s, transform 0.15s;
+      }
+      .links a:hover { border-color: var(--accent); transform: translateY(-1px); }
+      .links a small { display: block; color: var(--dim); margin-top: 0.15rem; font-size: 0.75rem; }
+      .agents { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+      .agents span { font-size: 0.8rem; color: var(--dim); background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 0.3rem 0.8rem; }
+      .agents b { color: var(--text); font-weight: 600; }
+      footer { color: var(--dim); font-size: 0.85rem; }
+      footer code { background: var(--panel); border: 1px solid var(--border); padding: 0.1em 0.35em; border-radius: 4px; }
+      #health[data-ok="true"] { color: var(--ok); }
+      #health[data-ok="false"] { color: var(--bad); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">SynaptixLabs · Open Source (MIT)</p>
+      <h1>synaptix<span class="dot">-</span>scaffold</h1>
+      <p class="tagline">One brain, every CLI.</p>
+      <p class="sub">
+        A tool-agnostic template for running a team of AI coding agents. Define your agents, roles,
+        and rules once in <code>.claude/</code> — Claude Code, Codex, Cursor, Gemini CLI, Devin, and
+        every <code>AGENTS.md</code>-aware tool inherit them. A CI drift guard keeps the surfaces honest.
+      </p>
+
+      <nav class="links" aria-label="Project links">
+        <a href="https://github.com/SynaptixLabs/scaffold">GitHub<small>github.com/SynaptixLabs/scaffold</small></a>
+        <a href="https://synaptixlabs.ai">SynaptixLabs<small>synaptixlabs.ai</small></a>
+        <a href="https://agents.md">AGENTS.md standard<small>agents.md</small></a>
+      </nav>
+
+      <div class="agents" aria-label="Example agents">
+        <span><b>JANUS</b> · cpto — scope, review, release gate</span>
+        <span><b>ARIA</b> · ux-design — design kit, accessibility</span>
+        <span><b>CORE</b> · dev — implement, reuse-first, tests</span>
+      </div>
+
+      <footer>
+        <p>Backend health: <span id="health">checking…</span></p>
+        <p>Started via <code>./start.sh</code> — this page is the template placeholder; replace it with your app.</p>
+      </footer>
+    </main>
+    <script type="module">
+      const el = document.getElementById('health');
+      try {
+        // Template default: backend on :8000 (see start.sh DEFAULT_PORT).
+        const r = await fetch('http://localhost:8000/health');
+        const d = await r.json();
+        el.textContent = `${d.status} (build ${d.build_stamp})`;
+        el.dataset.ok = 'true';
+      } catch {
+        el.textContent = 'backend down';
+        el.dataset.ok = 'false';
+      }
+    </script>
+  </body>
+</html>

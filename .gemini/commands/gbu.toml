@@ -1,0 +1,9 @@
+description = "Run a Good/Bad/Ugly review + verdict (APPROVE / APPROVE WITH CONDITIONS / REVISE / REJECT)."
+prompt = """
+Act as the `cpto` class (persona JANUS). Read `.claude/skills/design-review-gbu/SKILL.md` and run
+that process on the target. Verify evidence exists for every run-dependent claim; for user-visible
+work require real-Chromium E2E, not request.get(). Save the report under
+`project-management/sprints/sprint_<N>/reviews/`.
+
+Target: {{args}}
+"""

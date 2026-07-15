@@ -1,0 +1,32 @@
+---
+description: Base rule — this repo's agent architecture and the always-on P0 guardrails.
+alwaysApply: true
+---
+
+# Agent architecture (always on)
+
+This repo's agent behavior is **canonical in `.claude/`**; every tool surface (`AGENTS.md`, this
+`.cursor/rules/`, `.agents/skills/`, `.gemini/`) is a **thin adapter that points there**. The
+full constitution is **`AGENTS.md`** — read it for the class/persona model and routing. Do not
+restate doctrine in adapter files; change behavior in `.claude/`.
+
+**Load the project's own context first.** This is a template; a real project's specifics live in
+its `README.md` files + `project-management/` (PRD, decisions, active sprint) — not in these agent
+files. Missing/unclear context ⇒ stop and ask. (`.claude/policies/project-context.md`)
+
+## Guardrails (P0 — binding on every change)
+
+- **Reuse-first.** Search before you build: USE › EXTEND › BUILD (+ one line justifying new).
+  (`.claude/policies/reuse-first.md`)
+- **Verify the real user runtime.** A change isn't done until it's checked on the surface a real
+  user touches — for **web**, Playwright with a real browser (`page.goto()` + visibility asserts +
+  screenshots), **never** `request.get()`. (`.claude/policies/e2e-doctrine.md`)
+- **No gate closes on assertion.** "Done" needs evidence (tests, screenshots, a passing gate).
+- **Honest status.** Report what actually happened; don't round "partly done" up to "done".
+- **Plan before you sprawl** (>2 files ⇒ short plan first). **Escalate one-way doors** to the human owner.
+- **Docs live under `project-management/`**; commit/push only when asked; never commit secrets.
+
+## Acting in a role
+
+`act as <class>` / `act as <PERSONA>` — a persona is-a class and binds it first; **class always
+wins**. See `10-roles.mdc` and `AGENTS.md` §3.

@@ -1,0 +1,19 @@
+---
+description: Verify against the real user runtime. Enforced when editing tests or a user-visible change.
+globs: ["**/*.spec.ts", "**/*.e2e.ts", "**/*.test.ts", "**/tests/**", "**/e2e/**", "**/*_test.py", "**/test_*.py"]
+---
+
+# Verify the real runtime — full doctrine: `.claude/policies/e2e-doctrine.md`
+
+A change isn't done until it's verified against the **real user runtime**, not a proxy. For a **web**
+project that means Playwright driving a **real Chromium browser** (`page.goto()`) — **never**
+`request.get()`/`request.post()`, which prove the server responded but can't see a missing button,
+broken layout, empty section, or any visual regression.
+
+Web E2E must: `page.goto()` → assert **visibility** (`toBeVisible()`, `toHaveCount()`) → click and
+assert results → assert real data renders → screenshot each state → cover multiple viewports.
+Setup: `npx playwright install chromium`.
+
+If you're about to write `request.get()` as "the E2E": **stop, use `page.goto()`.** For a non-web
+runtime (CLI, library, mobile), verify the real surface instead — see the policy for the profile
+table. This rule is a reminder; the binding text is `.claude/policies/e2e-doctrine.md`.

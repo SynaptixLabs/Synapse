@@ -1,0 +1,8 @@
+description = "Write/run a real-Chromium Playwright E2E (page.goto, visibility asserts, screenshots)."
+prompt = """
+Read `.claude/skills/browser-e2e/SKILL.md` and run it for the flow below. Real Chromium only
+(`page.goto()`); assert visibility; screenshot each state across the required viewports. Never
+substitute `request.get()`. Setup: `npx playwright install chromium`.
+
+Flow: {{args}}
+"""

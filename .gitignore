@@ -1,0 +1,137 @@
+# Windsurf Project Template - .gitignore
+
+# ========================
+# Environment & Secrets
+# ========================
+# SAFE to commit: .env.example, .env.development, .env.staging, .env.production (shape only, no real values)
+# NEVER commit: .env, .env.local, .env.*.local (real values)
+.env
+.env.local
+.env.*.local
+# Uncomment below to also ignore the per-env shape files if your workflow uses secrets managers exclusively
+# .env.development
+# .env.staging
+# .env.production
+*.pem
+*.key
+*.secret
+
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# ========================
+# Node.js / Frontend
+# ========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+dist/
+.next/
+out/
+.nuxt/
+.cache/
+.parcel-cache/
+.turbo/
+
+# ========================
+# IDEs & Editors
+# ========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ========================
+# Testing
+# ========================
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+test-results/
+
+# ========================
+# Build & Deploy
+# ========================
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# ========================
+# Database
+# ========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ========================
+# Agent CLI adapters — commit the shared config, ignore personal/local overrides
+# ========================
+# Canonical brain (.claude/) + adapters (AGENTS.md .agents/skills/ .cursor/ .gemini/) ARE committed.
+.claude/settings.local.json      # personal Claude Code overrides (example: settings.local.json.example)
+.gemini/oauth_creds.json         # Gemini CLI local credentials, if any
+# E2E screenshots are per-run evidence: keep the folder, upload from CI, don't commit stale PNGs.
+tests/screenshots/*.png
+!tests/screenshots/.gitkeep
+
+# ========================
+# Project Specific
+# ========================
+# Add project-specific ignores below

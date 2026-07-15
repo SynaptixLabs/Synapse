@@ -1,0 +1,6 @@
+{
+  "//": "Gemini CLI project settings for the scaffold. Loads BOTH GEMINI.md and AGENTS.md as hierarchical context so the canonical brain (.claude/) is always in scope. Custom commands live in .gemini/commands/*.toml.",
+  "context": {
+    "fileName": ["GEMINI.md", "AGENTS.md"]
+  }
+}

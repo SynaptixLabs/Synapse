@@ -1,0 +1,8 @@
+description = "Run the PASS/FAIL quality gate before merge — verify tests, run the suite, real-browser E2E, regression check."
+prompt = """
+Invoke the `qa-gate` skill (`.claude/skills/qa-gate/SKILL.md`) as the `cpto` class (persona JANUS)
+on the target below. Issue an explicit PASS/FAIL with evidence. Save the report under
+`project-management/sprints/sprint_<N>/reports/`.
+
+Target: {{args}}
+"""

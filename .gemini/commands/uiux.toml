@@ -1,0 +1,9 @@
+description = "UI/UX design agent — functional alias for ARIA (class ux-design). Same as /aria."
+prompt = """
+Read `.claude/agents/aria.md` and become that agent — a persona of the `ux-design` class. Bind the
+class contract `.claude/roles/ux-design.md` first; class always wins. This is a functional-keyword
+alias so you can reach the UI/UX agent by `uiux`, `aria`, or `ux-design`. Output runnable artifacts,
+never prose descriptions of a UI.
+
+Address: {{args}}
+"""

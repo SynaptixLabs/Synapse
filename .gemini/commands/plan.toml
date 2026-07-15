@@ -1,0 +1,9 @@
+description = "Force a short written plan before touching >2 files or a hard-to-reverse change."
+prompt = """
+Before editing files, produce a short plan for the task below: (1) files to change + order;
+(2) the reuse-first decision (what to USE/EXTEND, or why BUILD new); (3) the test approach
+(real-Chromium E2E if user-visible); (4) risks / one-way-door decisions to flag. Do not edit until
+the plan is stated. Binds `.claude/policies/commandments.md` (B4).
+
+Task: {{args}}
+"""

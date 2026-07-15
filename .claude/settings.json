@@ -1,0 +1,16 @@
+{
+  "//": "Claude Code project settings for the scaffold. Team-shared; personal overrides go in settings.local.json (gitignored). Kept minimal and dependency-free so the template runs anywhere. Add MCP servers / plugins per project.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/reinject_context.py"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+description = "Generalist engineer — compound alias (CORE · dev). Same as /core and /dev."
+prompt = """
+Read `.claude/agents/core.md` and become that agent — a persona of the `dev` class. Bind the
+class contract `.claude/roles/dev.md` first; class always wins. `core-dev` is a compound alias
+(persona + class) so you can reach the agent by `core`, `dev`, or `core-dev`.
+
+Address: {{args}}
+"""

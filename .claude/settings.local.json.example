@@ -1,0 +1,7 @@
+{
+  "//": "Copy to settings.local.json (gitignored) for personal Claude Code overrides — permissions, MCP servers, model. Team-shared settings go in settings.json.",
+  "permissions": {
+    "allow": [],
+    "deny": []
+  }
+}

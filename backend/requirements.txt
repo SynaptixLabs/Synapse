@@ -1,0 +1,6 @@
+# Template baseline — just enough to run app/main.py and the example tests.
+# Pin/extend per project (split out a requirements-dev.txt when it grows).
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pytest>=8
+pytest-asyncio>=0.24

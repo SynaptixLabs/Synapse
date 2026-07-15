@@ -1,0 +1,9 @@
+description = "Alias of /gbu — structured Good/Bad/Ugly review with a verdict."
+prompt = """
+Act as the `cpto` class (persona JANUS). Read `.claude/skills/design-review-gbu/SKILL.md` and run
+that Good/Bad/Ugly review on the target below (same command as /gbu). End with a verdict (APPROVE /
+APPROVE WITH CONDITIONS / REVISE / REJECT) and save the report under
+`project-management/sprints/sprint_<N>/reviews/`.
+
+Target: {{args}}
+"""

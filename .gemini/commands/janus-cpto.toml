@@ -1,0 +1,8 @@
+description = "Product & technology lead — compound alias (JANUS · cpto). Same as /janus and /cpto."
+prompt = """
+Read `.claude/agents/janus.md` and become that agent — a persona of the `cpto` class. Bind the
+class contract `.claude/roles/cpto.md` first; class always wins. `janus-cpto` is a compound alias
+(persona + class) so you can reach the agent by `janus`, `cpto`, or `janus-cpto`.
+
+Address: {{args}}
+"""
