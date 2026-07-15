@@ -1,0 +1,108 @@
+<!doctype html>
+<!-- STATIC DESIGN MOCK — the explorer kit (sprint 02, Epic C). Not wired; founder-eyeball gate.
+     CORE implements this 1:1 per KIT.md. Data shown is a faithful snapshot of the real vault. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SYNAPSE · explorer — design kit</title>
+<style>
+  :root { --bg:#0f1115; --panel:#161a22; --panel2:#131720; --border:#262c38; --text:#e6e6e6;
+          --dim:#9aa3b2; --accent:#7c9eff; --ok:#4ade80; --scaffold:hsl(0 65% 62%); --synapse:hsl(137.5 65% 62%); }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+  .topbar { display:flex; align-items:center; gap:1rem; padding:0.6rem 1rem; border-bottom:1px solid var(--border); background:var(--panel); }
+  .topbar b { letter-spacing:0.05em; } .topbar b i { color:var(--accent); font-style:normal; }
+  .topbar input { flex:1; max-width:520px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.5rem 0.8rem; }
+  .topbar .acts { margin-left:auto; display:flex; gap:0.5rem; align-items:center; font-size:0.85rem; color:var(--dim); }
+  .topbar button { background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.4rem 0.9rem; cursor:pointer; }
+  main { flex:1; display:grid; grid-template-columns:220px 1fr 440px; min-height:0; }
+  .rail { border-right:1px solid var(--border); background:var(--panel); padding:0.8rem; font-size:0.82rem; overflow:auto; }
+  .rail h4 { font-size:0.68rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin:0.9rem 0 0.4rem; }
+  .rail h4:first-child { margin-top:0; }
+  .rail .row { display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.3rem; border-radius:6px; cursor:pointer; }
+  .rail .row:hover { background:var(--panel2); }
+  .dot { width:10px; height:10px; border-radius:50%; }
+  .toggle { margin-left:auto; color:var(--ok); font-size:0.7rem; }
+  .unres { color:#f87171; font-family:ui-monospace,monospace; font-size:0.75rem; }
+  .unres small { color:var(--dim); font-family:system-ui; display:block; }
+  .canvas { position:relative; background:radial-gradient(600px 300px at 50% 40%, #141926 0%, var(--bg) 70%); overflow:hidden; }
+  .canvas .hint { position:absolute; bottom:10px; left:12px; color:var(--dim); font-size:0.75rem; }
+  /* mock nodes */
+  .n { position:absolute; border-radius:50%; }
+  .n.sc { background:var(--scaffold); } .n.sy { background:var(--synapse); }
+  .lbl { position:absolute; color:var(--text); font-size:11px; }
+  svg.edges { position:absolute; inset:0; width:100%; height:100%; }
+  /* reading panel = the KB wiki paper */
+  .reader { border-left:1px solid var(--border); background:#fff; color:#202122; display:flex; flex-direction:column; min-height:0;
+            font-family:'Linux Libertine',Georgia,'Times New Roman',serif; }
+  .reader-top { background:#f0eee6; border-bottom:1px solid #a2a9b1; padding:7px 12px; font-family:sans-serif; font-size:12px; color:#54595d; display:flex; gap:10px; align-items:center; }
+  .reader-top .x { margin-left:auto; border:1px solid #a2a9b1; border-radius:4px; padding:1px 8px; cursor:pointer; }
+  .reader-body { padding:16px 20px; overflow:auto; font-size:14px; line-height:1.55; }
+  .reader-body h1 { font-size:22px; font-weight:400; border-bottom:1px solid #a2a9b1; padding-bottom:5px; margin-bottom:8px; }
+  .reader-body a { color:#0645ad; text-decoration:none; } .reader-body a.red { color:#ba0000; }
+  .ibox { float:right; width:170px; background:#f0eee6; border:1px solid #a2a9b1; margin:0 0 10px 14px; padding:8px; font-family:sans-serif; font-size:10.5px; }
+  .ibox dt { font-weight:700; color:#54595d; text-transform:uppercase; font-size:9px; margin-top:5px; }
+  .ibox dd { margin:1px 0 0; word-break:break-all; }
+  .statusbar { border-top:1px solid var(--border); background:var(--panel); padding:0.35rem 1rem; font-size:0.75rem; color:var(--dim); display:flex; gap:1.4rem; }
+  .kitnote { position:fixed; bottom:34px; right:10px; background:#fbbf24; color:#3a2c00; font:700 11px sans-serif; padding:3px 10px; border-radius:999px; z-index:9; }
+</style>
+</head>
+<body>
+  <span class="kitnote">DESIGN KIT — static mock</span>
+  <div class="topbar">
+    <b>SYNAPSE<i>.</i></b>
+    <input placeholder="/  filter notes… (Enter opens best match)" value="agent constitution" />
+    <div class="acts"><button>⟳ Ingest</button><button>☰ Index</button><span>backend: <span style="color:var(--ok)">ok</span></span></div>
+  </div>
+  <main>
+    <aside class="rail">
+      <h4>Repos</h4>
+      <div class="row"><span class="dot" style="background:var(--scaffold)"></span> scaffold <span class="toggle">86</span></div>
+      <div class="row"><span class="dot" style="background:var(--synapse)"></span> synapse <span class="toggle">106</span></div>
+      <h4>Edges (click = toggle)</h4>
+      <div class="row"><span class="dot" style="background:#7c9eff;border-radius:2px;height:3px"></span> wikilink <span class="toggle">on</span></div>
+      <div class="row"><span class="dot" style="background:#8b93a6;border-radius:2px;height:3px"></span> relative <span class="toggle">on</span></div>
+      <div class="row"><span class="dot" style="background:#2c3342;border-radius:2px;height:3px"></span> repo grouping <span class="toggle">dim</span></div>
+      <h4>Unresolved (5)</h4>
+      <div class="row unres">[[Ghost Concept]]<small>in scaffold / docs/alpha.md</small></div>
+      <div class="row unres">[[harness-v2]]<small>in synapse / 0k_PRD.md</small></div>
+      <div class="row unres">missing/nothing.md<small>in scaffold / beta.md</small></div>
+    </aside>
+    <section class="canvas">
+      <svg class="edges">
+        <line x1="26%" y1="42%" x2="40%" y2="55%" stroke="#8b93a6" stroke-opacity="0.4"/>
+        <line x1="26%" y1="42%" x2="30%" y2="28%" stroke="#8b93a6" stroke-opacity="0.4"/>
+        <line x1="40%" y1="55%" x2="62%" y2="48%" stroke="#7c9eff" stroke-opacity="0.8"/>
+        <line x1="62%" y1="48%" x2="72%" y2="30%" stroke="#8b93a6" stroke-opacity="0.4"/>
+        <line x1="62%" y1="48%" x2="70%" y2="62%" stroke="#8b93a6" stroke-opacity="0.4"/>
+        <line x1="30%" y1="28%" x2="40%" y2="55%" stroke="#8b93a6" stroke-opacity="0.3"/>
+      </svg>
+      <span class="n sc" style="left:26%; top:42%; width:14px; height:14px; box-shadow:0 0 0 3px rgba(255,255,255,.25)"></span>
+      <span class="lbl" style="left:23%; top:37%">AGENTS.md — agent constitution</span>
+      <span class="n sc" style="left:30%; top:28%; width:9px; height:9px"></span>
+      <span class="n sc" style="left:40%; top:55%; width:12px; height:12px"></span>
+      <span class="n sy" style="left:62%; top:48%; width:13px; height:13px"></span>
+      <span class="n sy" style="left:72%; top:30%; width:8px; height:8px"></span>
+      <span class="n sy" style="left:70%; top:62%; width:10px; height:10px"></span>
+      <span class="lbl" style="left:60%; top:43%; color:var(--dim)">synapse cluster…</span>
+      <span class="hint">drag nodes · wheel zooms · click opens in the panel · filter dims non-matches (selected node ringed)</span>
+    </section>
+    <aside class="reader">
+      <div class="reader-top"><span>← back</span><span>scaffold / AGENTS.md</span><span class="x">✕ collapse</span></div>
+      <div class="reader-body">
+        <div class="ibox"><b style="font-size:11px">Note</b><dl>
+          <dt>Repo</dt><dd>scaffold</dd><dt>Source</dt><dd>AGENTS.md</dd>
+          <dt>Links</dt><dd>9 in · 5 out</dd></dl></div>
+        <h1>AGENTS.md — agent constitution</h1>
+        <p>The open, cross-tool instruction file for this repo. It is a <b>thin spine</b>: the
+        binding contracts live in <a>.claude/</a>, and this file points there…</p>
+        <p>Routing: <a>the L1 router</a> · doctrine: <a>policies/00_index</a> · related:
+        <a class="red" title="no note yet">[[harness-v2]]</a></p>
+        <p style="color:#54595d;font-family:sans-serif;font-size:11px">⌨ / focus filter · Esc collapse · ← back</p>
+      </div>
+    </aside>
+  </main>
+  <div class="statusbar"><span>192 notes</span><span>480 edges</span><span style="color:#f87171">5 unresolved</span><span style="margin-left:auto">vault: data/vault/</span></div>
+</body>
+</html>
