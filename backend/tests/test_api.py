@@ -39,7 +39,7 @@ def test_ingest_then_graph_roundtrip(client):
     assert rebuild["notes"] == 4
 
     graph = client.get("/api/v1/graph").json()
-    assert graph["schema_version"] == 1
+    assert graph["schema_version"] == 2
     assert len([n for n in graph["nodes"] if n["kind"] == "note"]) == 4
 
     stats = client.get("/api/v1/stats").json()

@@ -167,7 +167,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     drawHulls();   // soft per-repo blobs — the grouping layer
 
     // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
-    const EDGE = { wikilink: '#7c9eff', relative: '#7e8798', sibling: '#2c3342' };
+    const EDGE = { wikilink: '#7c9eff', relative: '#7e8798', pathref: '#4ec9b0', sibling: '#2c3342' };
     ctx.lineWidth = 0.75;
     for (const e of edges) {
       if (!visibleEdge(e)) continue;

@@ -55,6 +55,11 @@ class TestGraphBuild:
         assert (BETA, "repo:repo_b") in siblings
         assert len(siblings) == 4                # linear, one per note — never a clique
 
+    def test_pathref_backticked_pointers_become_edges(self, graph):
+        edges = {(e.src, e.dst) for e in graph.edges if e.type == "pathref"}
+        assert (ALPHA, HEBREW) in edges            # `../hebrew.md` in a code span
+        assert not any("http" in d for _, d in edges)
+
     def test_unresolved_links_recorded_not_dropped(self, graph):
         assert "[[Ghost Concept]]" in graph.nodes[ALPHA].unresolved
         assert "missing/nothing.md" in graph.nodes[BETA].unresolved
@@ -78,7 +83,7 @@ class TestRebuildInvariance:
     def test_schema_versioned(self, vault):
         service = GraphService(vault)
         service.rebuild()
-        assert json.loads(service.graph_file.read_text(encoding="utf-8"))["schema_version"] == 1
+        assert json.loads(service.graph_file.read_text(encoding="utf-8"))["schema_version"] == 2
 
 
 class TestIndexAndStats:
@@ -94,6 +99,6 @@ class TestIndexAndStats:
     def test_stats_match_reality(self, graph):
         s = graph.stats()
         assert s["notes"] == 4 and s["repos"] == 2
-        assert s["edges_by_type"] == {"relative": 2, "sibling": 4, "wikilink": 3}
+        assert s["edges_by_type"] == {"pathref": 1, "relative": 2, "sibling": 4, "wikilink": 3}
         assert s["unresolved_links"] == 2
         assert s["top_connected"][0]["id"] == ALPHA   # the hub of the fixture brain

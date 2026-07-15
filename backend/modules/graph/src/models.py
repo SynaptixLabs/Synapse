@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2   # v2 (D-5): + `pathref` edges — backticked `*.md` pointers (adapter convention)
 
 
 @dataclass
@@ -33,7 +33,7 @@ class Node:
 class Edge:
     src: str
     dst: str
-    type: str                   # wikilink | relative | sibling
+    type: str                   # wikilink | relative | pathref | sibling
 
     def to_dict(self) -> dict:
         return {"src": self.src, "dst": self.dst, "type": self.type}

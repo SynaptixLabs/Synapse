@@ -89,7 +89,7 @@ function buildDrawer() {
   for (const n of nodes) if (n.kind === 'note') repoCounts[n.repo] = (repoCounts[n.repo] ?? 0) + 1;
   const unresolved = [];
   for (const n of nodes) if (n.kind === 'note') for (const u of n.unresolved) unresolved.push({ u, n });
-  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', sibling: '#2c3342' };
+  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', sibling: '#2c3342' };
   $('drawer').innerHTML =
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
@@ -97,7 +97,7 @@ function buildDrawer() {
     `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
     Object.entries(EDGE).map(([t, c]) => {
       const off = graph.state().hiddenEdges.includes(t);
-      const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t;
+      const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t === 'pathref' ? 'path reference (`code` pointers)' : t;
       return `<div class="row ${off ? 'off' : ''}" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${name} <span class="tg">${off ? 'off' : 'on'}</span></div>`;
     }).join('') +
     `<h4>Unresolved (${unresolved.length}) — click opens the note</h4>` +

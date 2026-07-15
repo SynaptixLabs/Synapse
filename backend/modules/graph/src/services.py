@@ -23,6 +23,9 @@ _FM_FIELD_RE = re.compile(r"^synapse\.(source_repo|source_path):\s*(.+?)\s*$", r
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 _MDLINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+?\.md)(?:#[^)]*)?\)")
+# backticked path pointers: `../roles/cpto.md`, `.claude/policies/commandments.md` — the
+# thin-adapter convention (agents point at contracts as code paths, not hyperlinks)
+_CODEPATH_RE = re.compile(r"`([^`\s]+?\.md)`")
 
 
 class GraphService:
@@ -113,6 +116,18 @@ class GraphService:
                     g.edges.add(Edge(src=n["id"], dst=dst, type="relative"))
                 elif dst is None and not m.group(1).startswith(("http://", "https://")):
                     node.unresolved.append(m.group(1))
+            # pathref (D-5): backticked `*.md` pointers — resolved note-relative, then
+            # repo-root-relative (both conventions exist in adapter files). Unresolvable code
+            # mentions are NOT recorded as unresolved: code often quotes hypothetical paths.
+            for m in _CODEPATH_RE.finditer(n["body"]):
+                token = m.group(1)
+                # strip only leading `./` sequences — a bare lstrip('./') would eat the dot
+                # of dot-directories like `.claude/...`
+                root_tok = re.sub(r"^(?:\./)+", "", token)
+                dst = self._resolve_relative(n, token, exact) \
+                    or exact.get(f"{n['repo']}/{root_tok}".lower())
+                if dst and dst != n["id"]:
+                    g.edges.add(Edge(src=n["id"], dst=dst, type="pathref"))
 
         for e in g.edges:
             if e.type != "sibling":
