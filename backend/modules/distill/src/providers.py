@@ -43,6 +43,7 @@ class MockSummarizer(Summarizer):
             first = next((ln.strip() for ln in n.body.splitlines()
                           if ln.strip() and not ln.strip().startswith(("#", "---", ">"))), "(no prose)")
             lines.append(f"- **{n.title}** — {first[:140]} (vault: {n.note_id})")
+        lines += ["", f"Image: a tidy constellation of {len(notes)} luminous index cards on a dark desk, soft focus"]
         return GroundedSummary(markdown="\n".join(lines), model="mock-summarizer")
 
 
@@ -65,7 +66,10 @@ class AnthropicSummarizer(Summarizer):
             "using the ids given, exactly ONE id per parenthetical (repeat the parenthetical for "
             "multiple sources, never comma-join); if the sources cover only a narrow slice of the subject, say so "
             "in ONE closing line; if something is unclear, say so. Output clean markdown: a "
-            "one-paragraph essence first, then '## Key threads' bullets.\n\n"
+            "one-paragraph essence first, then '## Key threads' bullets.\n"
+            "Finish with ONE line starting exactly `Image:` — a single-sentence visual brief "
+            "(scene, mood, palette) that embodies THIS subject, drawn from its domain; the scene "
+            "must contain no text.\n\n"
             f"{corpus}"
         )
         client = anthropic.Anthropic(api_key=self._api_key)

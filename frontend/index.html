@@ -207,10 +207,10 @@
         <div class="ai">
           <h4 style="margin:0 0 0.3rem">AI</h4>
           <div class="muted">Chat — TBD</div>
-          <button class="aibtn" id="ai-distill" onclick="aiDistill('node')" disabled>✦ Distill this note</button>
-          <button class="aibtn" id="ai-distill-tree" onclick="aiDistill('subtree')" disabled>✧ Distill subtree (depth 2)</button>
+          <button class="aibtn" id="ai-distill" onclick="aiDistill('node')" disabled>✦ Distill (note + neighbors)</button>
+          <button class="aibtn" id="ai-distill-tree" onclick="aiDistill('subtree')" disabled>✧ Distill wider (depth 2)</button>
           <button class="aibtn" id="ai-render" onclick="aiRender()" disabled>▣ Render as image</button>
-          <button class="aibtn" id="distillsBtn" onclick="viewDistills()">✦ My distills</button>
+          <button class="aibtn" id="distillsBtn" onclick="toggleDistills()">✦ My distills</button>
           <div class="muted" id="ai-status" style="font-size:0.72rem;min-height:1em;margin-top:0.3rem">open a note to distill it</div>
         </div>
       </aside>
@@ -233,6 +233,7 @@
         </div>
         <div class="drawer" id="drawer"></div>
         <div class="drawer dock" id="sources"></div>
+        <div class="drawer dock" id="distills"></div>
         <div class="drawer accept" id="accept">
           <h4 style="display:flex">Acceptance — sprint 02 · The Explorer
             <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="resetAccept()" title="reset progress">↺ reset</span></h4>

@@ -102,26 +102,66 @@ function renderResults() {
   box.classList.add('open');
 }
 document.addEventListener('click', (ev) => {
-  if (!ev.target.closest('.searchwrap') && !ev.target.closest('#distillsBtn')) {
-    $('sresults').classList.remove('open'); selIdx = -1;
-  }
+  if (!ev.target.closest('.searchwrap')) { $('sresults').classList.remove('open'); selIdx = -1; }
 });
 
-// ── quick distills view: every ✦ summary, one click away (founder ask) ─────
-window.viewDistills = () => {
+// ── distills panel (founder: like Sources — a panel, not a popup): list every ✦ summary,
+//    click to read, checkbox one-or-many + bulk delete ───────────────────────
+window.toggleDistills = () => {
+  const el = $('distills');
+  el.classList.toggle('open');
+  if (el.classList.contains('open')) { $('sources').classList.remove('open'); buildDistills(); }
+};
+function buildDistills() {
   const list = nodes.filter(n => n.kind === 'note' && n.repo === '✦ summaries')
     .sort((a, b) => a.title.localeCompare(b.title));
-  const box = $('sresults');
-  const color = graph.repoColors().get('✦ summaries') ?? 'var(--dim)';
-  box.innerHTML = (list.length
-    ? list.map(n =>
-        `<div class="r" data-open="${esc(n.id)}">
-           <span class="dot" style="background:${color}"></span>
-           <span>✦ ${esc(n.title.replace(/^\s*S\s*—\s*/, ''))}</span><small>${n.in_degree + n.out_degree} links</small></div>`).join('')
-    : `<div class="r" style="color:var(--dim)">no distills yet — open a note and hit ✦ Distill</div>`)
-    + `<div class="r" style="color:var(--dim);font-size:0.75rem">${list.length} distill(s) in ✦ summaries — deletable from the reader (🗑)</div>`;
-  box.classList.add('open');
+  const rows = list.map(n => `
+    <div class="row">
+      <input type="checkbox" data-dsel="${esc(n.id)}" title="select for bulk delete" />
+      <span data-open-note="${esc(n.id)}" title="${esc(n.title)}"
+            style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✦ ${esc(n.title.replace(/^\s*S\s*—\s*/, ''))}</span>
+      <span class="rootcount">${n.in_degree + n.out_degree} links</span>
+    </div>`).join('');
+  $('distills').innerHTML =
+    `<h4 style="display:flex">✦ Distills — your summaries (${list.length})
+       <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="toggleDistills()">✕</span></h4>
+     <div class="srcbtns">
+       <button onclick="distillsSelectAll(true)">✓ Select all</button>
+       <button onclick="distillsSelectAll(false)">◻ Clear</button>
+       <button onclick="deleteSelectedDistills()" style="color:var(--bad)">🗑 Delete selected</button>
+     </div>` +
+    (rows || `<div class="row" style="color:var(--dim)">no distills yet — open a note and hit ✦ Distill</div>`) +
+    `<p style="color:var(--dim);font-size:0.72rem;margin-top:0.5rem">
+       Click a title to read it. Deleting removes the summary note AND its rendered image;
+       source notes are never touched.</p>`;
+}
+window.distillsSelectAll = (v) => {
+  $('distills').querySelectorAll('input[data-dsel]').forEach(cb => { cb.checked = v; });
 };
+window.deleteSelectedDistills = async () => {
+  const ids = [...$('distills').querySelectorAll('input[data-dsel]:checked')].map(cb => cb.dataset.dsel);
+  if (!ids.length) { setMsg('no distills selected', true); return; }
+  if (!(await appConfirm(`${ids.length} distill(s) will be deleted from the vault (rendered images included).`,
+                         { title: 'Delete distills?', ok: `Delete ${ids.length}`, danger: true }))) return;
+  let done = 0;
+  for (const id of ids) {
+    try { await api(`/note/${encodeURIComponent(id)}`, { method: 'DELETE' }); done++; }
+    catch (e) { setMsg(e.message, true); }
+  }
+  await api('/rebuild', { method: 'POST' });
+  if (ids.includes(currentOpenId)) {
+    currentOpenId = null; aiButtons(); updateDeleteBtn();
+    $('reader-crumb').textContent = 'nothing open';
+    $('reader-body').innerHTML = '<p class="reader-empty">Summary deleted.</p>';
+  }
+  await refresh();
+  buildDistills();
+  setMsg(`${done} distill(s) deleted + graph rebuilt`);
+};
+$('distills').addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-open-note]');
+  if (t) { window.__zoomNext = true; reader.openNote(t.dataset.openNote); }
+});
 
 // picking a search result = SINGLE selection: clear the multi-match, fly to the node
 document.addEventListener('click', (ev) => {
@@ -415,7 +455,7 @@ window.bulkRoots = async (enabled) => {
   setDirty(true);
   setMsg(enabled ? 'all roots enabled — Apply (ingest) to sync' : 'all roots disabled — Apply (ingest) will empty their notes');
 };
-window.toggleSources = () => { const el = $('sources'); el.classList.toggle('open'); if (el.classList.contains('open')) buildSources(); };
+window.toggleSources = () => { const el = $('sources'); el.classList.toggle('open'); if (el.classList.contains('open')) { $('distills').classList.remove('open'); buildSources(); } };
 window.addRoot = async (path) => {
   if (!path) return;
   try {
@@ -621,17 +661,20 @@ function aiButtons() {
 window.aiDistill = async (scope) => {
   if (!currentOpenId) return;
   const node = currentOpenId;
-  $('ai-status').textContent = scope === 'subtree' ? 'distilling the subtree…' : 'distilling…';
+  // KISS (founder): "Distill" = the note + its close relationships (depth 1);
+  // the ✧ button widens to depth 2. Pure single-note distill is API-only.
+  const depth = scope === 'subtree' ? 2 : 1;
+  $('ai-status').textContent = scope === 'subtree' ? 'distilling the subtree…' : 'distilling note + neighbors…';
   try {
     let out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ node_id: node, scope, depth: 2 }) });
+      body: JSON.stringify({ node_id: node, scope: 'subtree', depth }) });
     if (out.requires_confirmation) {
       if (!(await appConfirm(`This distillation is ~${out.tokens_est.toLocaleString()} tokens (confirmation gate: ${out.threshold.toLocaleString()}).`,
                              { title: 'Cost guard', ok: 'Spend it' }))) {
         $('ai-status').textContent = 'cancelled — nothing spent'; return;
       }
       out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ node_id: node, scope, depth: 2, confirm: true }) });
+        body: JSON.stringify({ node_id: node, scope: 'subtree', depth, confirm: true }) });
     }
     await api('/rebuild', { method: 'POST' });
     await refresh();

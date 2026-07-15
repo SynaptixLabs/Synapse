@@ -39,6 +39,13 @@ class TestRender:
         assert "no text" in prompt.lower()
         assert "(vault:" not in prompt              # citations stripped from themes
 
+    def test_distills_image_brief_drives_the_prompt(self, service):
+        """The distill's closing `Image:` line IS the visual brief — style + content linked."""
+        body = "# S — Dojo\n\nEssence.\n\n- a thread (vault: x.md)\n\nImage: a sunlit dojo floor, worn wood, morning haze\n"
+        prompt = service.derive_prompt(body)
+        assert prompt.startswith("a sunlit dojo floor")
+        assert "no text" in prompt.lower() and "(vault:" not in prompt
+
     def test_renders_png_into_media_and_embeds_it(self, service, vault, summary_id):
         out = service.render(summary_id)
         img = vault / out["image"]

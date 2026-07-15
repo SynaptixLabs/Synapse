@@ -30,6 +30,15 @@ class RenderService:
 
     def derive_prompt(self, body: str) -> str:
         title = next((ln[2:].strip() for ln in body.splitlines() if ln.startswith("# ")), "an idea")
+        # the distill authors its own image: its closing `Image:` line IS the visual brief —
+        # style and content borrowed straight from the summary (founder ruling, KISS)
+        brief = re.search(r"^Image:\s*(.+)$", body, re.MULTILINE)
+        if brief:
+            concept = re.sub(r"\(vault:[^)]*\)|\[\[|\]\]|\*\*", "", brief.group(1)).strip()[:500]
+            return (
+                f"{concept}. Subject: {title}. Cinematic light, rich color, depth of field. "
+                "Absolutely no text, letters, words or labels in the image."
+            )
         # the image must REFLECT THE SUBJECT (founder ruling) — feed the summary's essence
         # paragraph, not just bullets, and let the metaphor come from the domain instead of
         # forcing a generic constellation on everything
