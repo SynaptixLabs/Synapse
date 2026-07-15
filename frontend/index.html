@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SYNAPSE — a second brain for your repos. Sprint-1 acceptance dashboard: run ingest, inspect the vault, prove the graph." />
+    <meta name="description" content="SYNAPSE — a second brain for your repos. Sprint-1 acceptance dashboard: run ingest, read notes as wiki articles, prove the graph." />
     <title>SYNAPSE · brain dashboard</title>
     <style>
       :root {
@@ -40,15 +40,47 @@
       canvas { width:100%; height:340px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; }
       #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:9; max-width:40ch; }
       input[type=text] { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.5rem 0.7rem; margin-bottom:0.5rem; }
-      #notelist { max-height:250px; overflow:auto; font-size:0.85rem; }
+      #notelist { max-height:340px; overflow:auto; font-size:0.85rem; }
       #notelist div { padding:0.22rem 0.3rem; cursor:pointer; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
       #notelist div:hover { background:var(--panel2); color:var(--accent); }
-      pre.doc { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:0.8rem; max-height:340px; overflow:auto; white-space:pre-wrap; font-size:0.82rem; line-height:1.45; unicode-bidi:plaintext; }
       .muted { color:var(--dim); font-size:0.82rem; }
       .legend { display:flex; gap:1rem; font-size:0.75rem; color:var(--dim); margin-top:0.4rem; }
       .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; border-radius:2px; }
       footer { color:var(--dim); font-size:0.78rem; margin-top:1rem; }
       a { color:var(--accent); }
+
+      /* ── The wiki popup: a paper encyclopedia article over the dark app ──
+         Tokens borrowed from the org KB wiki (pilot-lab/KB/wiki/style.css). */
+      #overlay { position:fixed; inset:0; background:rgba(5,7,10,.62); display:none; place-items:center; z-index:50; padding:1.5rem 1rem; }
+      #overlay.open { display:grid; }
+      .wiki { background:#fff; color:#202122; width:min(920px,100%); max-height:92vh; overflow:auto;
+              border-radius:8px; box-shadow:0 18px 60px rgba(0,0,0,.5);
+              font-family:'Linux Libertine', Georgia, 'Times New Roman', serif; line-height:1.6; }
+      .wiki-top { position:sticky; top:0; background:#f0eee6; border-bottom:1px solid #a2a9b1;
+                  padding:8px 16px; font-family:sans-serif; font-size:13px; display:flex; gap:12px; align-items:center; z-index:2; }
+      .wiki-top .crumb { color:#54595d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .wiki-top button { margin-left:auto; background:none; border:1px solid #a2a9b1; color:#202122; border-radius:4px; padding:2px 10px; font-size:12px; }
+      .wiki-top .back { margin-left:0; }
+      .wiki-article { padding:20px 30px 26px; font-size:15px; }
+      .wiki-article h1 { font-size:28px; font-weight:400; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; overflow-wrap:anywhere; }
+      .wiki-article h2 { font-size:22px; font-weight:400; margin-top:26px; padding-bottom:4px; border-bottom:1px solid #eaecf0; }
+      .wiki-article h3 { font-size:17px; font-weight:700; margin-top:20px; }
+      .wiki-article a { color:#0645ad; text-decoration:none; }
+      .wiki-article a:hover { text-decoration:underline; }
+      .wiki-article a.wl-new { color:#ba0000; cursor:help; }
+      .wiki-article code { background:#f8f9fa; border:1px solid #eaecf0; border-radius:3px; padding:1px 5px; font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#202122; }
+      .wiki-article pre { background:#f8f9fa; border:1px solid #a2a9b1; border-radius:3px; padding:12px; overflow-x:auto; font-size:13px; }
+      .wiki-article pre code { border:none; background:none; padding:0; }
+      .wiki-article blockquote { border-left:4px solid #a2a9b1; background:#f8f9fa; color:#54595d; margin:12px 0; padding:4px 12px; }
+      .wiki-article table { border-collapse:collapse; margin:12px 0; font-size:14px; display:block; overflow-x:auto; max-width:100%; }
+      .wiki-article th, .wiki-article td { border:1px solid #a2a9b1; padding:6px 10px; text-align:left; vertical-align:top; }
+      .wiki-article th { background:#f0eee6; }
+      .wiki-article img { max-width:100%; }
+      .wiki-infobox { float:right; width:260px; background:#f0eee6; border:1px solid #a2a9b1; margin:0 0 16px 22px; padding:12px; font-family:sans-serif; font-size:12px; }
+      .wiki-infobox h3 { margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; font-size:13px; font-weight:700; }
+      .wiki-infobox dt { font-weight:700; margin-top:6px; color:#54595d; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; }
+      .wiki-infobox dd { margin:2px 0 0; word-wrap:break-word; }
+      @media (max-width:700px) { .wiki-infobox { float:none; width:auto; margin:0 0 14px; } .wiki-article { padding:16px; } }
     </style>
   </head>
   <body>
@@ -64,8 +96,8 @@
         <ul class="check" id="checklist">
           <li><span class="badge" id="s1">todo</span> <span><b>Ingest works.</b> Run ingest → an honest report (found / written / unchanged / skipped) per repo.</span></li>
           <li><span class="badge" id="s2">todo</span> <span><b>Idempotent.</b> Run ingest again → everything <code>unchanged</code>, nothing duplicated.</span></li>
-          <li><span class="badge" id="s3"><input type="checkbox" onchange="manual(this,'s3')"></span> <span><b>Vault readable.</b> Open notes below — right repo/path, Hebrew/UTF-8 intact.</span></li>
-          <li><span class="badge" id="s4"><input type="checkbox" onchange="manual(this,'s4')"></span> <span><b>Index is the front door.</b> View the Index — every note listed, counts honest.</span></li>
+          <li><span class="badge" id="s3"><input type="checkbox" onchange="manual(this,'s3')"></span> <span><b>Vault readable.</b> Open notes — a wiki-style article popup; right repo/path, Hebrew/UTF-8 intact, wikilinks navigate.</span></li>
+          <li><span class="badge" id="s4"><input type="checkbox" onchange="manual(this,'s4')"></span> <span><b>Index is the front door.</b> View the Index — every note listed, counts honest, entries clickable.</span></li>
           <li><span class="badge" id="s5"><input type="checkbox" onchange="manual(this,'s5')"></span> <span><b>Graph honest.</b> Stats + preview match reality (spot-check 3 notes you know).</span></li>
           <li><span class="badge" id="s6">todo</span> <span><b>Vault is the truth.</b> Fresh rebuild (deletes graph.json first) → identical stats.</span></li>
         </ul>
@@ -99,16 +131,23 @@
         </div>
       </section>
 
-      <section class="card">
-        <h2>Notes browser</h2>
+      <section class="card" style="grid-column:1/-1">
+        <h2>Notes browser <span style="text-transform:none;letter-spacing:0">— click a note to read it as a wiki article</span></h2>
         <input type="text" id="filter" placeholder="filter notes…" oninput="renderList()" />
         <div id="notelist"><span class="muted">No graph yet.</span></div>
       </section>
+    </div>
 
-      <section class="card">
-        <h2 id="doc-title">Note viewer</h2>
-        <pre class="doc" id="doc">Click a note (or “View Index.md”).</pre>
-      </section>
+    <!-- The wiki article popup -->
+    <div id="overlay">
+      <div class="wiki" role="dialog" aria-modal="true">
+        <div class="wiki-top">
+          <button class="back" id="wiki-back" onclick="wikiBack()" style="display:none">← back</button>
+          <span class="crumb" id="wiki-crumb"></span>
+          <button onclick="closeWiki()" aria-label="Close">✕ close</button>
+        </div>
+        <div class="wiki-article" id="wiki-article" dir="auto"></div>
+      </div>
     </div>
 
     <div id="tooltip"></div>
@@ -117,168 +156,6 @@
       <a href="https://github.com/SynaptixLabs/Synapse">GitHub</a> · MIT · started via <code>./start.sh</code>
     </footer>
 
-    <script type="module">
-      // Talk to the backend on the SAME host the page was loaded from — so access via
-      // localhost AND via a direct IP (e.g. the WSL address on Windows) both just work.
-      const HOST = location.hostname || 'localhost';
-      const API = `http://${HOST}:8000/api/v1`;
-      let nodes = [], edges = [], lastStats = null, ingests = 0;
-
-      const $ = (id) => document.getElementById(id);
-      const setBadge = (id, state, label) => { const b = $(id); b.textContent = label ?? state; b.className = 'badge ' + state; };
-      window.manual = (cb, id) => { const b = $(id); b.className = 'badge ' + (cb.checked ? 'pass' : ''); };
-
-      // Honest fetch: non-2xx surfaces the server's `detail` (or status), never a raw TypeError.
-      async function api(path, opts) {
-        let res;
-        try { res = await fetch(`${API}${path}`, opts); }
-        catch { throw new Error(`backend unreachable at ${API} — is ./start.sh running on this host?`); }
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.detail || `${res.status} ${res.statusText} on ${path} — wrong/old backend build?`);
-        return body;
-      }
-
-      async function health() {
-        try { const d = await (await fetch(`http://${HOST}:8000/health`)).json();
-          $('health').textContent = `${d.status} (build ${d.build_stamp})`; $('health').dataset.ok = 'true';
-        } catch { $('health').textContent = 'down — run ./start.sh'; $('health').dataset.ok = 'false'; }
-      }
-
-      window.runIngest = async () => {
-        const btn = $('btn-ingest'); btn.disabled = true; $('action-msg').textContent = 'ingesting…';
-        try {
-          const rep = await api('/ingest', { method: 'POST' });
-          if (!rep.repos) throw new Error('unexpected ingest response (old backend build?) — restart ./start.sh and hard-refresh');
-          await api('/rebuild', { method: 'POST' });
-          ingests++;
-          const t = rep.totals;
-          $('report').innerHTML = `<table><tr><th>repo</th><th>found</th><th>written</th><th>unchanged</th><th>skipped</th></tr>` +
-            rep.repos.map(r => `<tr><td>${r.repo}</td><td class="num">${r.files_found}</td><td class="num">${r.notes_written}</td><td class="num">${r.unchanged}</td><td class="num">${r.skipped}</td></tr>`).join('') +
-            `<tr><th>TOTAL</th><th class="num">${t.files_found}</th><th class="num">${t.notes_written}</th><th class="num">${t.unchanged}</th><th class="num">${t.skipped}</th></tr></table>`;
-          $('action-msg').textContent = '';
-          if (t.files_found > 0) setBadge('s1', 'pass', 'PASS');
-          if (ingests >= 2 && t.notes_written === 0 && t.unchanged === t.files_found && t.files_found > 0) setBadge('s2', 'pass', 'PASS');
-          else if (ingests === 1) setBadge('s2', 'wait', 'run again');
-          await refresh();
-        } catch (e) { $('action-msg').textContent = 'ingest failed: ' + e.message; }
-        btn.disabled = false;
-      };
-
-      window.freshRebuild = async () => {
-        const btn = $('btn-fresh'); btn.disabled = true;
-        try {
-          const before = lastStats ?? await api('/stats');
-          const after = await api('/rebuild?fresh=true', { method: 'POST' });
-          const same = JSON.stringify(before) === JSON.stringify(after);
-          setBadge('s6', same ? 'pass' : 'bad', same ? 'PASS' : 'MISMATCH');
-          $('action-msg').textContent = same
-            ? 'graph.json deleted → rebuilt from the vault alone → stats identical ✓'
-            : 'MISMATCH — stats changed after fresh rebuild (file a finding!)';
-          await refresh();
-        } catch (e) { $('action-msg').textContent = 'rebuild failed: ' + e.message; }
-        btn.disabled = false;
-      };
-
-      async function refresh() {
-        try {
-          const g = await api('/graph');
-          nodes = g.nodes; edges = g.edges;
-          lastStats = await api('/stats');
-          const s = lastStats;
-          $('kpis').innerHTML =
-            `<div class="kpi"><b>${s.notes}</b><span>notes</span></div>` +
-            `<div class="kpi"><b>${s.repos}</b><span>repos</span></div>` +
-            Object.entries(s.edges_by_type).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('') +
-            `<div class="kpi"><b>${s.unresolved_links}</b><span>unresolved</span></div>`;
-          $('top').innerHTML = '<span class="muted">Top connected:</span> ' +
-            s.top_connected.map(t => `<div class="muted">· <a href="#" onclick="openNote('${t.id}');return false">${t.title}</a> — ${t.degree} links</div>`).join('');
-          renderList(); drawGraph();
-        } catch { /* no graph yet */ }
-      }
-
-      window.renderList = () => {
-        const q = $('filter').value.toLowerCase();
-        const list = nodes.filter(n => n.kind === 'note' && (n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)));
-        $('notelist').innerHTML = list.slice(0, 400).map(n =>
-          `<div onclick="openNote('${n.id}')" title="${n.id}">${n.title} <span class="muted">· ${n.repo}</span></div>`).join('')
-          || '<span class="muted">no matches</span>';
-      };
-
-      window.openNote = async (id) => {
-        try {
-          const n = await api(`/note/${encodeURIComponent(id)}`);
-          $('doc-title').textContent = `${n.repo} / ${n.source_path}`;
-          $('doc').textContent = n.body;
-        } catch (e) { $('doc').textContent = e.message; }
-      };
-
-      window.loadIndex = async () => {
-        try {
-          const d = await api('/index');
-          $('doc-title').textContent = 'Index.md — the front door';
-          $('doc').textContent = d.markdown;
-        } catch (e) { $('doc').textContent = e.message; }
-      };
-
-      // ── graph preview: repo-clustered static layout, hover tooltips ──
-      const EDGE_COLOR = { wikilink: '#7c9eff', relative: '#9aa3b2', sibling: '#3a4152' };
-      let placed = [];
-      function drawGraph() {
-        const cv = $('graph'), ctx = cv.getContext('2d');
-        const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = 340 * devicePixelRatio;
-        ctx.clearRect(0, 0, W, H);
-        const repos = nodes.filter(n => n.kind === 'repo');
-        const notes = nodes.filter(n => n.kind === 'note');
-        if (!notes.length) return;
-        const centers = {};
-        repos.forEach((r, i) => { centers[r.id] = { x: W * (i + 1) / (repos.length + 1), y: H / 2 }; });
-        placed = [];
-        const byRepo = {};
-        notes.forEach(n => (byRepo[n.repo] ??= []).push(n));
-        for (const [repo, list] of Object.entries(byRepo)) {
-          const c = centers[`repo:${repo}`] ?? { x: W / 2, y: H / 2 };
-          list.forEach((n, i) => {
-            const ring = 1 + Math.floor(i / 24), a = (i % 24) / 24 * 2 * Math.PI + ring * 0.35;
-            const r = ring * Math.min(W / (4.6 * (repos.length || 1)), 62 * devicePixelRatio);
-            placed.push({ ...n, x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) });
-          });
-        }
-        const pos = Object.fromEntries(placed.map(p => [p.id, p]));
-        repos.forEach(r => { const c = centers[r.id]; pos[r.id] = { ...r, x: c.x, y: c.y }; });
-        ctx.lineWidth = devicePixelRatio * 0.7;
-        for (const e of edges) {
-          const a = pos[e.src], b = pos[e.dst]; if (!a || !b) continue;
-          ctx.strokeStyle = EDGE_COLOR[e.type] ?? '#333';
-          ctx.globalAlpha = e.type === 'sibling' ? 0.16 : 0.55;
-          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        for (const p of placed) {
-          const deg = p.in_degree + p.out_degree;
-          ctx.fillStyle = deg > 6 ? '#7c9eff' : '#c8cfdd';
-          ctx.beginPath(); ctx.arc(p.x, p.y, (2 + Math.min(deg, 10) * 0.5) * devicePixelRatio, 0, 7); ctx.fill();
-        }
-        for (const r of repos) {
-          const c = centers[r.id];
-          ctx.fillStyle = '#e6e6e6'; ctx.font = `${12 * devicePixelRatio}px system-ui`;
-          ctx.textAlign = 'center'; ctx.fillText(r.title, c.x, c.y - 8 * devicePixelRatio);
-        }
-        $('graphinfo').textContent = `${notes.length} notes · ${edges.length} edges`;
-      }
-      $('graph').addEventListener('mousemove', (ev) => {
-        const rect = $('graph').getBoundingClientRect();
-        const x = (ev.clientX - rect.left) * devicePixelRatio, y = (ev.clientY - rect.top) * devicePixelRatio;
-        let best = null, bd = 12 * devicePixelRatio;
-        for (const p of placed) { const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = p; } }
-        const t = $('tooltip');
-        if (best) { t.style.display = 'block'; t.style.left = ev.clientX + 12 + 'px'; t.style.top = ev.clientY + 12 + 'px';
-          t.textContent = `${best.title} · ${best.repo} · ${best.in_degree + best.out_degree} links`; }
-        else t.style.display = 'none';
-      });
-      $('graph').addEventListener('mouseleave', () => { $('tooltip').style.display = 'none'; });
-      addEventListener('resize', drawGraph);
-
-      health(); refresh();
-    </script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>
