@@ -74,14 +74,20 @@ class DistillService:
             for _ in range(depth):
                 if not frontier:
                     break   # exhausted — never keep scanning all edges for empty rings
-                nxt = []
+                out_ring, in_ring = [], []
                 for e in g.edges:
                     if e.type == "sibling":
                         continue
-                    for a, b in ((e.src, e.dst), (e.dst, e.src)):
-                        if a in frontier and b not in seen and b in g.nodes and g.nodes[b].kind == "note":
-                            seen.add(b); nxt.append(b)
-                nxt.sort()   # edges live in a set — sort so cap truncation is deterministic
+                    if e.src in frontier and e.dst not in seen and e.dst in g.nodes and g.nodes[e.dst].kind == "note":
+                        seen.add(e.dst); out_ring.append(e.dst)
+                    if e.dst in frontier and e.src not in seen and e.src in g.nodes and g.nodes[e.src].kind == "note":
+                        seen.add(e.src); in_ring.append(e.src)
+                # ring order = OUT-links first (what the subject POINTS TO — its definitions),
+                # then in-links (what points at it — echoes/references); each sorted for
+                # determinism. When the size cap cuts, it must starve the echo-adapters,
+                # never the subject's own contracts (founder repro: ARIA rendered as a
+                # doorway because her ux-design role note was truncated out).
+                nxt = sorted(out_ring) + sorted(in_ring)
                 frontier = nxt
                 wanted.extend(nxt)
         notes, budget, truncated = [], self.hard_cap_chars, False

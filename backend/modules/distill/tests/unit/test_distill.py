@@ -82,6 +82,26 @@ class TestDistill:
         with pytest.raises(GroundingError, match="NOT in the source set"):
             DistillService(vault, Hallucinator()).distill(ALPHA)
 
+    def test_truncation_starves_references_not_definitions(self, tmp_path):
+        """When the cap cuts, OUT-links (what the root points to) must survive over in-links
+        (what points at it) — founder repro: ARIA's role contract was truncated out while
+        alphabetically-earlier echo-adapters shipped."""
+        repo = tmp_path / "ringrepo"; repo.mkdir()
+        (repo / "root.md").write_text("# Root\n\npoints to [[zdef]]\n", encoding="utf-8")
+        (repo / "zdef.md").write_text("# zdef\n\nthe definition body\n", encoding="utf-8")
+        (repo / "a_ref.md").write_text("# a_ref\n\nreferences [[Root]]\n", encoding="utf-8")
+        v = tmp_path / "ringvault"
+        IngestService(v, IGNORE).ingest([repo])
+        svc = DistillService(v, MockSummarizer())
+        full, _ = svc.collect("ringrepo__root.md", "subtree", 1)
+        assert {n.note_id for n in full} == {"ringrepo__root.md", "ringrepo__zdef.md", "ringrepo__a_ref.md"}
+        zdef = next(n for n in full if n.note_id == "ringrepo__zdef.md")
+        svc.hard_cap_chars = len(full[0].body) + len(zdef.body) + 1   # room for root + ONE
+        cut, truncated = svc.collect("ringrepo__root.md", "subtree", 1)
+        assert truncated
+        # a_ref is alphabetically first (the old order shipped it) — the OUT-link must survive
+        assert [n.note_id for n in cut] == ["ringrepo__root.md", "ringrepo__zdef.md"]
+
     def test_citation_audit_tolerates_real_model_formats(self):
         """Live sonnet-5 comma-joins ids in one parenthetical, and note ids may contain
         parentheses (which truncate the regex match) — neither is a hallucination."""
