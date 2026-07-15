@@ -86,6 +86,14 @@ window.runRebuild = async () => {
 };
 
 window.runIngest = async () => {
+  try {
+    // safety: syncing with ZERO enabled roots empties every managed note — ask first
+    const roots = await api('/roots');
+    if (roots.length && roots.every(r => !r.enabled) &&
+        !window.confirm('All sources are deselected — running ingest will PRUNE every note from these repos (✦ summaries are kept). Continue?')) {
+      setMsg('ingest cancelled — nothing changed'); return;
+    }
+  } catch { /* roots unavailable → let ingest itself report */ }
   setMsg('ingesting…');
   try {
     const rep = await api('/ingest', { method: 'POST' });
