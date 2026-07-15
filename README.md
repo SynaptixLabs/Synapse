@@ -19,6 +19,8 @@ your brain knows.
 > every CLI). · Concept: natural20.com's
 > ["second brain / LLM wiki"](https://natural20.com/using-claude-code-to-setup-a-second-brain-aka-llm-wiki).
 
+![The SYNAPSE explorer — a 21,000-note whole-workspace brain, one colored constellation per project](docs/screenshots/explorer-hero.png)
+
 ## The loop
 
 ```
@@ -122,6 +124,14 @@ artifacts — the sync never touches them.
   the summary.
 - **✦ My distills** — panel listing all your summaries: read, or bulk-delete (removes the note
   + its image; sources are never touched).
+
+| The AI loop: a distilled note + its self-briefed image | Semantic zoom: the long tail reveals per cluster |
+|---|---|
+| ![A distill open in the reader with its rendered image](docs/screenshots/distill-render.png) | ![Zoomed into one source group — labels declutter, the long tail fades in](docs/screenshots/semantic-zoom.png) |
+
+| The distills panel: read, select, bulk-delete |
+|---|
+| ![The ✦ My distills panel over the graph](docs/screenshots/distills-panel.png) |
 
 ## CLI & API
 
