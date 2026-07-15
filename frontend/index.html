@@ -16,7 +16,14 @@
 
       .topbar { display:flex; align-items:center; gap:0.9rem; padding:0.55rem 1rem; border-bottom:1px solid var(--border); background:var(--panel); z-index:6; }
       .topbar b { letter-spacing:0.05em; } .topbar b i { color:var(--accent); font-style:normal; }
-      .topbar input { flex:1; max-width:480px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.45rem 0.8rem; }
+      .searchwrap { position:relative; flex:1; max-width:480px; }
+      .topbar input { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.45rem 0.8rem; }
+      #sresults { position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--panel); border:1px solid var(--border); border-radius:10px; box-shadow:0 14px 40px rgba(0,0,0,.55); z-index:30; display:none; max-height:55vh; overflow:auto; }
+      #sresults.open { display:block; }
+      #sresults .r { padding:0.45rem 0.7rem; cursor:pointer; display:flex; gap:0.6rem; align-items:baseline; font-size:0.86rem; }
+      #sresults .r:hover, #sresults .r.sel { background:var(--panel2); }
+      #sresults .r .dot { width:8px; height:8px; }
+      #sresults .r small { color:var(--dim); margin-left:auto; white-space:nowrap; }
       .mi { color:var(--dim); font-size:0.85rem; cursor:pointer; padding:0.3rem 0.6rem; border-radius:6px; background:none; border:none; font-family:inherit; }
       .mi:hover, .mi.open { background:var(--panel2); color:var(--text); }
       .topbar .right { margin-left:auto; display:flex; gap:0.3rem; align-items:center; font-size:0.85rem; color:var(--dim); }
@@ -138,7 +145,10 @@
     <div class="topbar">
       <button class="mi mobile-menu" onclick="toggleLhs()">☰</button>
       <b>SYNAPSE<i>.</i></b>
-      <input id="filter" placeholder="/  filter notes… (Enter opens best match)" autocomplete="off" />
+      <div class="searchwrap">
+        <input id="filter" placeholder="/  search notes… (results open here; Enter = top hit)" autocomplete="off" />
+        <div id="sresults"></div>
+      </div>
       <button class="mi" id="glossaryBtn" onclick="toggleDrawer()">Glossary ▾</button>
       <div class="right">
         <button class="mi" onclick="runIngest()">⟳ Ingest</button>
@@ -155,6 +165,7 @@
         <span class="item" onclick="toggleAccept()">✓ Acceptance — sprint 2</span>
         <a class="item" href="/dashboard.html">▦ Sprint-1 board</a>
         <span class="item" onclick="viewIndex()">☰ View Index</span>
+        <span class="item" onclick="toggleSources()">▤ Sources (roots)</span>
         <span class="item" onclick="runIngest()">⟳ Run ingest</span>
         <span class="item" onclick="runRebuild()">⟲ Rebuild graph</span>
         <a class="item" href="https://github.com/SynaptixLabs/Synapse" target="_blank" rel="noopener">⧉ GitHub</a>
@@ -185,6 +196,7 @@
           </div>
         </div>
         <div class="drawer" id="drawer"></div>
+        <div class="drawer accept" id="sources"></div>
         <div class="drawer accept" id="accept">
           <h4 style="display:flex">Acceptance — sprint 02 · The Explorer
             <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="resetAccept()" title="reset progress">↺ reset</span></h4>

@@ -51,8 +51,15 @@ def _is_placeholder(v: str | None) -> bool:
 @dataclass(frozen=True)
 class Settings:
     vault_path: Path
-    source_repos: tuple[Path, ...]
+    env_source_repos: tuple[Path, ...] = ()
     ignore_dirs: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_IGNORE_DIRS))
+
+    @property
+    def source_repos(self) -> tuple[Path, ...]:
+        """The EFFECTIVE roots: roots.json (UI-managed) > SYNAPSE_SOURCE_REPOS env > this repo
+        itself (a fresh clone ingests its own project by default)."""
+        from .roots import enabled_paths
+        return enabled_paths(self)
 
     # ── sprint-3 model seams (all env-driven; mocks by default in tests/CI) ──
     @property
@@ -108,12 +115,13 @@ def load_settings() -> Settings:
     """Read `backend/.env` + process env into a Settings snapshot (call-time, not import-time,
     so tests can point SYNAPSE_VAULT_PATH at tmp dirs)."""
     _load_dotenv(BACKEND_DIR / ".env")
-    repos = tuple(
+    env_repos = tuple(
         _resolve(p.strip())
         for p in os.environ.get("SYNAPSE_SOURCE_REPOS", "").split(",")
         if p.strip() and not p.strip().startswith("/path/to/")   # skip the .env.example stubs
     )
-    return Settings(
+    settings = Settings(
         vault_path=_resolve(os.environ.get("SYNAPSE_VAULT_PATH", "./data/vault")),
-        source_repos=repos,
+        env_source_repos=env_repos,
     )
+    return settings

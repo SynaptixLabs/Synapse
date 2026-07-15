@@ -89,3 +89,31 @@ def test_model_endpoints_fail_actionably_without_keys(client, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-REPLACE-ME")
     r = client.post("/api/v1/distill", json={"node_id": "x.md"})
     assert r.status_code == 400 and "ANTHROPIC_API_KEY" in r.json()["detail"]
+
+
+def test_roots_crud_with_prune(client, tmp_path, monkeypatch):
+    # starts from the env-seeded list (source: env)
+    roots = client.get("/api/v1/roots").json()
+    assert len(roots) == 2 and all(r["source"] == "env" for r in roots)
+
+    # add: validated; persists to roots.json (source flips to file)
+    assert client.post("/api/v1/roots", json={"path": "/nowhere/ghost"}).status_code == 400
+    extra = tmp_path / "repo_c"; extra.mkdir(); (extra / "solo.md").write_text("# Solo\n")
+    roots = client.post("/api/v1/roots", json={"path": str(extra)}).json()
+    assert len(roots) == 3 and all(r["source"] == "file" for r in roots)
+
+    # the new root ingests
+    rep = client.post("/api/v1/ingest").json()
+    assert any(r["repo"] == "repo_c" for r in rep["repos"])
+
+    # toggle: disabled roots are skipped by the next ingest
+    client.patch("/api/v1/roots", json={"path": str(extra)})
+    rep = client.post("/api/v1/ingest").json()
+    assert not any(r["repo"] == "repo_c" for r in rep["repos"])
+
+    # delete: root gone AND its notes pruned from the vault (no ghost nodes)
+    out = client.request("DELETE", "/api/v1/roots", json={"path": str(extra)}).json()
+    assert out["pruned_notes"] == 1
+    client.post("/api/v1/rebuild")
+    graph = client.get("/api/v1/graph").json()
+    assert not any(n["repo"] == "repo_c" for n in graph["nodes"])

@@ -28,6 +28,28 @@ const graph = createGraph($('graph'), {
 window.__synapse = { graph: () => graph.state(), counts: () => ({ nodes: nodes.length, edges: edges.length }) };
 window.resetLayout = () => { graph.reset(); setMsg('layout reset — all pins released'); };
 
+// ── search results dropdown (founder: dimming alone reads as "search doesn't work") ──
+let selIdx = -1;
+function renderResults() {
+  const q = $('filter').value.trim().toLowerCase();
+  const box = $('sresults');
+  if (!q) { box.classList.remove('open'); box.innerHTML = ''; selIdx = -1; return; }
+  const colors = graph.repoColors();
+  const hits = matchList(q)
+    .sort((a, b) => (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree))
+    .slice(0, 12);
+  box.innerHTML = hits.length
+    ? hits.map((n, i) =>
+        `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${n.id}">
+           <span class="dot" style="background:${colors.get(n.repo)}"></span>
+           <span>${n.title}</span><small>${n.repo} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
+    : `<div class="r" style="color:var(--dim)">no notes match “${q}”</div>`;
+  box.classList.add('open');
+}
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('.searchwrap')) { $('sresults').classList.remove('open'); selIdx = -1; }
+});
+
 // ── data ────────────────────────────────────────────────────────────────────
 async function refresh() {
   try {
@@ -81,14 +103,70 @@ const matchList = (q) => nodes.filter(n =>
 $('filter').addEventListener('input', () => {
   const q = $('filter').value.trim().toLowerCase();
   graph.setMatch(q ? new Set(matchList(q).map(n => n.id)) : null);
+  selIdx = -1;
+  renderResults();
 });
 $('filter').addEventListener('keydown', (ev) => {
+  const rows = [...$('sresults').querySelectorAll('.r[data-open]')];
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    selIdx = ev.key === 'ArrowDown' ? Math.min(selIdx + 1, rows.length - 1) : Math.max(selIdx - 1, 0);
+    rows.forEach((r, i) => r.classList.toggle('sel', i === selIdx));
+    rows[selIdx]?.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   if (ev.key !== 'Enter') return;
-  const q = $('filter').value.trim().toLowerCase();
-  if (!q) return;
-  const best = matchList(q).sort((a, b) =>
-    (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree))[0];
-  if (best) reader.openNote(best.id);
+  const target = rows[selIdx]?.dataset.open ?? rows[0]?.dataset.open;
+  if (target) { reader.openNote(target); $('sresults').classList.remove('open'); }
+});
+
+// ── sources (roots) CRUD drawer — D-6 ─────────────────────────────────────
+async function buildSources() {
+  try {
+    const roots = await api('/roots');
+    $('sources').innerHTML =
+      `<h4>Sources — the repos this brain ingests</h4>` +
+      roots.map(r => `
+        <div class="row" title="${r.path}">
+          <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="enable/disable" />
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.path}</span>
+          ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
+          <span class="tg" data-del-root="${r.path}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
+        </div>`).join('') +
+      `<div style="display:flex;gap:0.4rem;margin-top:0.6rem">
+         <input type="text" id="newroot" placeholder="/absolute/path/to/repo" style="flex:1" />
+         <button class="mi" style="border:1px solid var(--border)" onclick="addRoot()">+ Add</button>
+       </div>
+       <p style="color:var(--dim);font-size:0.72rem;margin-top:0.5rem">
+         Changes apply on the next <b>Run ingest</b>. Removing a root also prunes its notes
+         (no ghost nodes). Default when nothing is configured: this project itself.</p>`;
+  } catch (e) { $('sources').innerHTML = `<h4>Sources</h4><div class="row">${e.message}</div>`; }
+}
+window.toggleSources = () => { const el = $('sources'); el.classList.toggle('open'); if (el.classList.contains('open')) buildSources(); };
+window.addRoot = async () => {
+  const path = $('newroot').value.trim();
+  if (!path) return;
+  try {
+    await api('/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    await buildSources();
+    setMsg('root added — Run ingest to bring its notes in');
+  } catch (e) { setMsg(e.message, true); }
+};
+$('sources').addEventListener('click', async (ev) => {
+  const t = ev.target;
+  try {
+    if (t.dataset.toggleRoot) {
+      await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.toggleRoot }) });
+      setMsg('root toggled — Run ingest to apply');
+    } else if (t.dataset.delRoot) {
+      if (!window.confirm(`Remove this root and prune its notes from the vault?\n${t.dataset.delRoot}`)) return;
+      const out = await api('/roots', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.delRoot }) });
+      await buildSources();
+      await api('/rebuild', { method: 'POST' });
+      await refresh();
+      setMsg(`root removed · ${out.pruned_notes} note(s) pruned`);
+    }
+  } catch (e) { setMsg(e.message, true); }
 });
 
 // ── glossary drawer ────────────────────────────────────────────────────────
