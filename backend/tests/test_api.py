@@ -140,3 +140,19 @@ def test_bulk_toggle_and_fs_browse(client, tmp_path):
     names = [d["name"] for d in fs["dirs"]]
     assert "repo_a" in names and "repo_b" in names
     assert client.get("/api/v1/fs", params={"path": "/nowhere"}).status_code == 404
+
+
+def test_fs_complete_and_dot_folders(client, tmp_path):
+    # dot-folders are browsable (that's where knowledge lives); noise dirs are not
+    (tmp_path / ".claude").mkdir(); (tmp_path / ".git").mkdir(); (tmp_path / "docs").mkdir()
+    fs = client.get("/api/v1/fs", params={"path": str(tmp_path)}).json()
+    names = [d["name"] for d in fs["dirs"]]
+    assert ".claude" in names and "docs" in names and ".git" not in names
+
+    # path mode: prefix completion incl. dot-prefix
+    comp = client.get("/api/v1/fs/complete", params={"q": str(tmp_path) + "/.cl"}).json()
+    assert [c["name"] for c in comp["completions"]] == [".claude"]
+
+    # search mode: bare substring within base
+    comp = client.get("/api/v1/fs/complete", params={"q": "oc", "base": str(tmp_path)}).json()
+    assert [c["name"] for c in comp["completions"]] == ["docs"]

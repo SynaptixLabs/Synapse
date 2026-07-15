@@ -122,6 +122,17 @@
                      border-radius:0 14px 14px 0; border-left:none; box-shadow:14px 0 40px rgba(0,0,0,.45);
                      display:none; }
       .drawer.dock.open { display:block; }
+      /* in-app modal */
+      #appmodal { position:fixed; inset:0; background:rgba(5,7,10,.6); display:none; place-items:center; z-index:60; }
+      #appmodal.open { display:grid; }
+      .am-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:1.1rem 1.3rem; width:min(460px, 92vw); box-shadow:0 18px 60px rgba(0,0,0,.55); }
+      .am-card h4 { font-size:0.8rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin:0 0 0.6rem; }
+      .am-card p { font-size:0.92rem; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+      .am-btns { display:flex; gap:0.6rem; justify-content:flex-end; margin-top:1rem; }
+      .am-btns button { border-radius:8px; padding:0.5rem 1rem; font-weight:600; cursor:pointer; }
+      .am-cancel { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+      .am-ok { background:var(--accent); color:#0b0d12; border:0; }
+      .am-ok.danger { background:var(--bad); }
       .srcbtns { display:flex; gap:0.4rem; margin:0.2rem 0 0.5rem; }
       .srcbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:0.25rem 0.7rem; font-size:0.75rem; cursor:pointer; }
       .srcbtns button:hover { border-color:var(--accent); color:var(--accent); }
@@ -129,6 +140,11 @@
       .fsbar .cur { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; flex:1; color:var(--dim); }
       .fsls { max-height:34vh; overflow:auto; }
       .fsls .row .use { margin-left:auto; color:var(--accent); font-size:0.72rem; cursor:pointer; }
+      .fscompwrap { position:relative; flex:1; }
+      #fscomp { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--panel2); border:1px solid var(--border); border-radius:8px; z-index:12; display:none; max-height:32vh; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,.5); }
+      #fscomp.open { display:block; }
+      #fscomp .row { padding:0.35rem 0.55rem; font-size:0.78rem; }
+      #fscomp .row.sel { background:var(--panel); }
       .repo-badge { font-size:0.6rem; background:#12281a; color:#4ade80; border:1px solid #1d4029; padding:0 5px; border-radius:999px; }
       .check { list-style:none; padding:0; margin:0; font-size:0.84rem; }
       .check li { display:flex; gap:0.5rem; padding:0.3rem 0; align-items:baseline; }
@@ -242,6 +258,18 @@
         </div>
       </aside>
     </main>
+
+    <!-- in-app confirm modal (never the browser's native popup) -->
+    <div id="appmodal">
+      <div class="am-card" role="alertdialog" aria-modal="true">
+        <h4 id="am-title">Confirm</h4>
+        <p id="am-msg"></p>
+        <div class="am-btns">
+          <button class="am-cancel" id="am-cancel">Cancel</button>
+          <button class="am-ok" id="am-ok">Confirm</button>
+        </div>
+      </div>
+    </div>
 
     <div id="tooltip"></div>
     <div class="statusbar">

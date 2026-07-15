@@ -28,6 +28,34 @@ const graph = createGraph($('graph'), {
 window.__synapse = { graph: () => graph.state(), counts: () => ({ nodes: nodes.length, edges: edges.length }) };
 window.resetLayout = () => { graph.reset(); setMsg('layout reset — all pins released'); };
 
+/** In-app confirm (output doctrine: the APP's popup, never the browser's native dialog). */
+function appConfirm(msg, { title = 'Confirm', ok = 'Confirm', danger = false } = {}) {
+  return new Promise((resolve) => {
+    $('am-title').textContent = title;
+    $('am-msg').textContent = msg;
+    const okBtn = $('am-ok');
+    okBtn.textContent = ok;
+    okBtn.classList.toggle('danger', danger);
+    $('appmodal').classList.add('open');
+    const done = (v) => { $('appmodal').classList.remove('open'); cleanup(); resolve(v); };
+    const onOk = () => done(true);
+    const onCancel = () => done(false);
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+    const onOut = (e) => { if (e.target === $('appmodal')) done(false); };
+    function cleanup() {
+      okBtn.removeEventListener('click', onOk);
+      $('am-cancel').removeEventListener('click', onCancel);
+      document.removeEventListener('keydown', onKey, true);
+      $('appmodal').removeEventListener('click', onOut);
+    }
+    okBtn.addEventListener('click', onOk);
+    $('am-cancel').addEventListener('click', onCancel);
+    document.addEventListener('keydown', onKey, true);
+    $('appmodal').addEventListener('click', onOut);
+    okBtn.focus();
+  });
+}
+
 // ── search results dropdown (founder: dimming alone reads as "search doesn't work") ──
 let selIdx = -1;
 function renderResults() {
@@ -90,7 +118,8 @@ window.runIngest = async () => {
     // safety: syncing with ZERO enabled roots empties every managed note — ask first
     const roots = await api('/roots');
     if (roots.length && roots.every(r => !r.enabled) &&
-        !window.confirm('All sources are deselected — running ingest will PRUNE every note from these repos (✦ summaries are kept). Continue?')) {
+        !(await appConfirm('All sources are deselected — running ingest will prune EVERY note from these repos.\n✦ summaries are kept.',
+                           { title: 'Empty the brain?', ok: 'Prune everything', danger: true }))) {
       setMsg('ingest cancelled — nothing changed'); return;
     }
   } catch { /* roots unavailable → let ingest itself report */ }
@@ -149,7 +178,10 @@ async function buildSources() {
        </div>` + rows +
       `<h4>Add a root</h4>
        <div style="display:flex;gap:0.4rem">
-         <input type="text" id="newroot" placeholder="/absolute/path — or browse ↓" style="flex:1" />
+         <div class="fscompwrap">
+           <input type="text" id="newroot" placeholder="type a path (autocomplete) or a folder name (search) — or browse ↓" autocomplete="off" />
+           <div id="fscomp"></div>
+         </div>
          <button class="mi" style="border:1px solid var(--border)" onclick="addRoot()">+ Add</button>
        </div>
        <div class="fsbar"><span style="cursor:pointer" onclick="browseUp()" title="up one folder">⬆</span>
@@ -178,6 +210,46 @@ async function browseTo(path) {
     </div>`).join('') || '<div class="row" style="color:var(--dim)">no subfolders</div>';
 }
 window.browseUp = () => browseTo($('fscur').dataset.parent);
+
+// autocomplete: '/'-paths complete shell-style; bare names SEARCH the current browse folder
+let compT = null, compSel = -1;
+async function completeRoot() {
+  const q = $('newroot').value.trim();
+  const box = $('fscomp');
+  if (!q) { box.classList.remove('open'); return; }
+  const d = await api(`/fs/complete?q=${encodeURIComponent(q)}&base=${encodeURIComponent(fsPath ?? '')}`);
+  compSel = -1;
+  box.innerHTML = d.completions.map(c => `
+    <div class="row" data-comp="${c.path}">
+      <span>📁 ${c.path}</span>${c.is_repo ? '<span class="repo-badge">git repo</span>' : ''}
+      <span class="use" data-use-root="${c.path}">+ use</span>
+    </div>`).join('') || '<div class="row" style="color:var(--dim)">no matching folders</div>';
+  box.classList.add('open');
+}
+$('sources').addEventListener('input', (ev) => {
+  if (ev.target.id !== 'newroot') return;
+  clearTimeout(compT);
+  compT = setTimeout(completeRoot, 160);
+});
+$('sources').addEventListener('keydown', (ev) => {
+  if (ev.target.id !== 'newroot') return;
+  const rows = [...$('fscomp').querySelectorAll('.row[data-comp]')];
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    compSel = ev.key === 'ArrowDown' ? Math.min(compSel + 1, rows.length - 1) : Math.max(compSel - 1, 0);
+    rows.forEach((r, i) => r.classList.toggle('sel', i === compSel));
+    rows[compSel]?.scrollIntoView({ block: 'nearest' });
+  } else if (ev.key === 'Tab' && rows.length) {
+    ev.preventDefault();
+    $('newroot').value = rows[Math.max(compSel, 0)].dataset.comp + '/';
+    completeRoot();
+  } else if (ev.key === 'Enter') {
+    const pick = rows[compSel]?.dataset.comp ?? (rows.length === 1 ? rows[0].dataset.comp : null);
+    if (pick) addRoot(pick);
+  } else if (ev.key === 'Escape') {
+    $('fscomp').classList.remove('open');
+  }
+});
 window.bulkRoots = async (enabled) => {
   await api('/roots/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
   await buildSources();
@@ -196,14 +268,17 @@ window.addRoot = async (path) => {
 $('sources').addEventListener('click', async (ev) => {
   const t = ev.target;
   try {
-    if (t.dataset.useRoot) { await addRoot(t.dataset.useRoot); return; }
+    if (t.dataset.useRoot) { await addRoot(t.dataset.useRoot); $('fscomp')?.classList.remove('open'); return; }
+    const comp = t.closest('.row[data-comp]');
+    if (comp) { $('newroot').value = comp.dataset.comp + '/'; completeRoot(); return; }
     const fsrow = t.closest('.row[data-fs]');
     if (fsrow && !t.dataset.useRoot) { await browseTo(fsrow.dataset.fs); return; }
     if (t.dataset.toggleRoot) {
       await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.toggleRoot }) });
       setMsg('root toggled — Apply (ingest) to sync');
     } else if (t.dataset.delRoot) {
-      if (!window.confirm(`Remove this root and prune its notes from the vault?\n${t.dataset.delRoot}`)) return;
+      if (!(await appConfirm(`${t.dataset.delRoot}\n\nIts notes will be pruned from the vault (no ghost nodes).`,
+                              { title: 'Remove this source?', ok: 'Remove + prune', danger: true }))) return;
       const out = await api('/roots', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.delRoot }) });
       await buildSources();
       await api('/rebuild', { method: 'POST' });
@@ -393,7 +468,8 @@ window.aiDistill = async (scope) => {
     let out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ node_id: node, scope, depth: 2 }) });
     if (out.requires_confirmation) {
-      if (!window.confirm(`This distillation is ~${out.tokens_est.toLocaleString()} tokens (gate: ${out.threshold.toLocaleString()}). Spend it?`)) {
+      if (!(await appConfirm(`This distillation is ~${out.tokens_est.toLocaleString()} tokens (confirmation gate: ${out.threshold.toLocaleString()}).`,
+                             { title: 'Cost guard', ok: 'Spend it' }))) {
         $('ai-status').textContent = 'cancelled — nothing spent'; return;
       }
       out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },

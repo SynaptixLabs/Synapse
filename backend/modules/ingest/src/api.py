@@ -45,7 +45,9 @@ def bulk_toggle(req: BulkRequest) -> list[dict]:
     return load_roots(settings)
 
 
-_SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", ".cache"}
+# Dot-folders ARE shown (`.claude` etc. hold knowledge) — only true noise is skipped.
+_SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build",
+              ".cache", ".pytest_cache", ".next"}
 
 
 @router.get("/fs")
@@ -60,12 +62,41 @@ def browse_folders(path: str | None = None) -> dict:
     dirs = []
     try:
         for child in sorted(base.iterdir(), key=lambda c: c.name.lower()):
-            if not child.is_dir() or child.name.startswith(".") or child.name in _SKIP_DIRS:
+            if not child.is_dir() or child.name in _SKIP_DIRS:
                 continue
             dirs.append({"name": child.name, "path": str(child), "is_repo": (child / ".git").is_dir()})
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"No permission to read {base}")
     return {"path": str(base), "parent": str(base.parent), "dirs": dirs[:200]}
+
+
+@router.get("/fs/complete")
+def complete_path(q: str = "", base: str | None = None) -> dict:
+    """Autocomplete for the add-root field. Two modes:
+    - q contains '/': shell-style path completion (prefix match on the last segment)
+    - bare name: folder SEARCH (substring) inside `base` (the currently browsed folder)."""
+    from app.core.config import REPO_ROOT
+    if "/" in q:
+        p = Path(q).expanduser()
+        d, prefix, mode = (p, "", "path") if q.endswith("/") else (p.parent, p.name.lower(), "path")
+    else:
+        d, prefix, mode = (Path(base).expanduser() if base else REPO_ROOT.parent), q.lower(), "search"
+    results = []
+    if d.is_dir():
+        try:
+            for child in sorted(d.iterdir(), key=lambda c: c.name.lower()):
+                if not child.is_dir() or child.name in _SKIP_DIRS:
+                    continue
+                name = child.name.lower()
+                if prefix and ((mode == "path" and not name.startswith(prefix)) or
+                               (mode == "search" and prefix not in name)):
+                    continue
+                results.append({"path": str(child), "name": child.name, "is_repo": (child / ".git").is_dir()})
+                if len(results) >= 15:
+                    break
+        except PermissionError:
+            pass
+    return {"completions": results}
 
 
 @router.get("/roots")
