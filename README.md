@@ -125,9 +125,9 @@ artifacts — the sync never touches them.
 - **✦ My distills** — panel listing all your summaries: read, or bulk-delete (removes the note
   + its image; sources are never touched).
 
-| The AI loop: a distilled note + its self-briefed image | Semantic zoom: the long tail reveals per cluster |
+| The AI loop: a distilled note + its self-briefed image | The wiki reader over the full graph |
 |---|---|
-| ![A distill open in the reader with its rendered image](docs/screenshots/distill-render.png) | ![Zoomed into one source group — labels declutter, the long tail fades in](docs/screenshots/semantic-zoom.png) |
+| ![A distill open in the reader with its rendered image](docs/screenshots/distill-render.png) | ![A note open as a wiki article (infobox, links) with the whole brain visible](docs/screenshots/wiki-reader.png) |
 
 | The distills panel: read, select, bulk-delete |
 |---|
