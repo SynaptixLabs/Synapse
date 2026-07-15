@@ -39,10 +39,38 @@ navigation now drives the AI panel (a Distill after navigating would have spent 
 WRONG note). Backend suite 60/60 (+9 regression tests) · sprint-3 e2e green on an isolated mock
 stack · founder stack restored (18,828 notes, real keys).
 
+## Founder round: scale + unresolved + live keys (2026-07-15, afternoon)
+
+**(1) "Super slow at many nodes" → D-7 importance window.** Root cause of the freeze: the
+hand-rolled canvas animated ALL 21k notes, starving even API fetches (~19s per request measured
+from the page). Now the graph draws the top 1,500 notes by connectivity (+ all ✦ summaries +
+repo hubs), search/reader cover the full brain, and opening an off-window note pulls it + its
+neighbors in. Measured after: **API 0.2s (was 19s), load 3.9s, statusbar honest**
+("21107 notes · graph: top 1505 by links"). A real WebGL engine (sigma.js/Cosmograph) is the
+flagged v0.2 decision.
+
+**Bonus root cause — the ingest was never complete.** A pilot-lab file with a deep Hebrew path
+flattened past ext4's 255-byte filename limit; the write crashed and ABORTED ingest mid-run —
+everything alphabetically after `pilot-lab` (scaffold, synapse, website…, **2,278 files**) had
+silently never entered the vault. This was also the real bomb behind the earlier "CORS" repro.
+Fixed: over-long ids are deterministically hash-capped, one bad file can never abort the sync
+(recorded in `errors`, +regression test with the founder's exact repro shape). First-ever
+complete workspace ingest: **21,103 files, 0 errors, 7s.**
+
+**(2) "Why unresolved?" — answered with data.** All 4,200 categorized: **96% are genuinely dead
+links in the source repos** (md links to files that don't exist on disk — renamed/deleted/
+planned); **4% are wikilinks citing renamed note ids** (old summaries from before the root
+switched to `projects` — note ids are root-name-dependent). **Zero resolver misses**: every
+link whose target exists on disk resolves.
+
+**(3) Live smokes: BOTH PASS** (see EPIC_D/E reports). Distill: real README → `S — SYNAPSE.md`,
+8 grounded citations (`claude-sonnet-5`) — and caught a live-only bug (leading `ThinkingBlock`
+crashed `content[0].text`; provider now joins text blocks). Render: `gpt-image-1` → 1024×1024
+PNG, embedded, no text in image. **The full two-model loop is live.**
+
 ## External gates (founder actions)
 
-1. **Anthropic credits** — live distill returned `credit balance is too low` (clean error, seam
-   verified). 2. **OpenAI billing limit** — live render returned `billing hard limit reached`
-   (+ gpt-image-1 needs a verified org). 3. **`codex login`** — the Codex CLI 401s, so the
-   cross-vendor GBU ran as an internal fresh-eyes agent instead
+1. ~~Anthropic credits~~ ✔ funded — live distill PASS. 2. ~~OpenAI billing~~ ✔ funded — live
+   render PASS. 3. **`codex login`** — still open; the Codex CLI 401s, so the cross-vendor GBU
+   ran as an internal fresh-eyes agent instead
    ([review](../reviews/2026-07-15_gbu_fresh_eyes_sprint03.md)); re-run with Codex when re-authed.

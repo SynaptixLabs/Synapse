@@ -21,6 +21,7 @@ const reader = createReader({
     aiButtons(); updateDeleteBtn();
     if (!id) return;   // null = the Index view
     ac.notesOpened.add(id); acSave();
+    pullIntoWindow(id);   // off-window note? bring it (+ neighbors) into the picture first
     graph.focusOn(id, { zoom: window.__zoomNext ?? false });   // show WHERE the note lives
     window.__zoomNext = false;
   },
@@ -115,6 +116,38 @@ document.addEventListener('click', (ev) => {
   $('sresults').classList.remove('open');
 });
 
+// ── importance window ───────────────────────────────────────────────────────
+// Above the render budget the graph shows the TOP-N most-connected notes (founder ruling:
+// zoom/search-oriented, capped by importance — never all 20k at once). Search, the reader and
+// the drawer always cover the FULL brain; opening an off-window note pulls it + its direct
+// neighbors into the picture.
+const WINDOW_CAP = 1500;
+let winIds = null;   // Set of displayed ids · null = the whole brain fits the budget
+
+function windowed() {
+  const notes = nodes.filter(n => n.kind === 'note');
+  if (notes.length <= WINDOW_CAP) { winIds = null; return { n: nodes, e: edges }; }
+  const keep = new Set(nodes.filter(n => n.kind === 'repo').map(n => n.id));
+  for (const n of notes) if (n.repo === '✦ summaries') keep.add(n.id);   // user artifacts always shown
+  const ranked = notes.filter(n => n.repo !== '✦ summaries')
+    .sort((a, b) => (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree));
+  for (const n of ranked.slice(0, WINDOW_CAP)) keep.add(n.id);
+  winIds = keep;
+  return { n: nodes.filter(x => keep.has(x.id)), e: edges.filter(x => keep.has(x.src) && keep.has(x.dst)) };
+}
+
+/** Opening a note outside the window pulls it (+ direct neighbors) into the graph. */
+function pullIntoWindow(id) {
+  if (!winIds || winIds.has(id) || !nodes.some(x => x.id === id)) return;
+  winIds.add(id);
+  for (const e of edges) {
+    if (e.type === 'sibling') continue;
+    if (e.src === id) winIds.add(e.dst);
+    if (e.dst === id) winIds.add(e.src);
+  }
+  graph.setData(nodes.filter(x => winIds.has(x.id)), edges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
+}
+
 // ── data ────────────────────────────────────────────────────────────────────
 async function refresh() {
   try {
@@ -123,8 +156,11 @@ async function refresh() {
     ns = buildNamespace(nodes);
     stats = await api('/stats');
     $('empty').style.display = 'none';
-    graph.setData(nodes, edges);
-    $('st-notes').textContent = `${stats.notes} notes`;
+    const view = windowed();
+    graph.setData(view.n, view.e);
+    $('st-notes').textContent = winIds
+      ? `${stats.notes} notes · graph: top ${view.n.filter(x => x.kind === 'note').length} by links`
+      : `${stats.notes} notes`;
     $('st-edges').textContent = `${stats.edges_total} edges`;
     $('st-unres').textContent = `${stats.unresolved_links} unresolved`;
     $('st-unres').style.color = stats.unresolved_links ? 'var(--bad)' : '';

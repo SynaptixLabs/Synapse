@@ -92,11 +92,15 @@ class IngestService:
         m = _HASH_RE.search(head)
         return m.group(1) if m else None
 
-    def write_note(self, src: SourceFile) -> str:
-        """Write/refresh one note. Returns 'written' | 'unchanged' | 'skipped'."""
+    def write_note(self, src: SourceFile, errors: list[str] | None = None) -> str:
+        """Write/refresh one note. Returns 'written' | 'unchanged' | 'skipped'.
+        NO failure here may abort the ingest — one bad file (unreadable, un-writable,
+        name-too-long) is recorded and the sync moves on."""
         try:
             raw = src.path.read_bytes()
-        except OSError:
+        except OSError as e:
+            if errors is not None:
+                errors.append(f"{src.path}: {getattr(e, 'strerror', e)}")
             return "skipped"
         digest = self.content_hash(raw)
         note_path = self.notes_dir / src.note_id
@@ -106,11 +110,16 @@ class IngestService:
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
             return "skipped"   # not honest UTF-8 markdown — report, don't mangle
-        self.notes_dir.mkdir(parents=True, exist_ok=True)
-        # atomic: a concurrent rebuild must never index a half-written note
-        tmp = note_path.parent / (note_path.name + ".tmp")
-        tmp.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
-        os.replace(tmp, note_path)
+        try:
+            self.notes_dir.mkdir(parents=True, exist_ok=True)
+            # atomic: a concurrent rebuild must never index a half-written note
+            tmp = note_path.parent / (note_path.name + ".tmp")
+            tmp.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
+            os.replace(tmp, note_path)
+        except OSError as e:
+            if errors is not None:
+                errors.append(f"{note_path.name}: {getattr(e, 'strerror', e)}")
+            return "skipped"
         return "written"
 
     # ── the pipeline ──────────────────────────────────────────────────────
@@ -132,7 +141,7 @@ class IngestService:
                 continue   # honest: 0 files found for a missing path
             for src in self.scan_repo(repo_root, errors=report.errors):
                 rr.files_found += 1
-                outcome = self.write_note(src)
+                outcome = self.write_note(src, errors=report.errors)
                 if outcome == "written":
                     rr.notes_written += 1
                 elif outcome == "unchanged":

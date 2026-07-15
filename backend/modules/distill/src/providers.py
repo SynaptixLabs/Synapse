@@ -68,4 +68,6 @@ class AnthropicSummarizer(Summarizer):
             model=self.model, max_tokens=self.max_tokens,
             messages=[{"role": "user", "content": prompt}],
         )
-        return GroundedSummary(markdown=msg.content[0].text, model=self.model)
+        # the model may lead with thinking blocks — the summary is the joined TEXT blocks
+        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text")
+        return GroundedSummary(markdown=text, model=self.model)

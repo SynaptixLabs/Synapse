@@ -94,6 +94,22 @@ class TestIngest:
         assert report.skipped == 1 and report.pruned == 0
         assert note.is_file()                        # survived the bad pass
 
+    def test_filename_too_long_is_capped_never_aborts(self, service, tmp_path):
+        """Founder repro: a deep Hebrew-named file flattens past ext4's 255-byte filename
+        limit — the id must hash-cap deterministically and the whole ingest must survive."""
+        repo = tmp_path / "deep"
+        seg = "קורות חיים — דנה לוי מטפלת סיעודית למבוגרים מגורים בבית המטופל חיפה"
+        nested = repo / seg / seg      # each segment is legal; the FLATTENED id is not
+        nested.mkdir(parents=True)
+        (nested / "כרטיס עובד ומועמד לתפקיד — גרסה סופית להדפסה.md").write_text("# עמוק\n", encoding="utf-8")
+        (repo / "ok.md").write_text("# OK\n", encoding="utf-8")
+        report = service.ingest([repo], managed_names={"deep"})
+        assert report.notes_written == 2 and not report.errors     # BOTH written, nothing fatal
+        long_note = [p for p in service.notes_dir.glob("*.md") if "…" in p.name]
+        assert len(long_note) == 1 and len(long_note[0].name.encode()) <= 200
+        second = service.ingest([repo], managed_names={"deep"})    # capped id is deterministic
+        assert second.unchanged == 2 and second.pruned == 0
+
     def test_uppercase_md_is_markdown_too(self, service, tmp_path):
         repo = tmp_path / "shouty"; repo.mkdir()
         (repo / "README.MD").write_text("# Shout\n", encoding="utf-8")

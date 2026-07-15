@@ -23,12 +23,13 @@
   truncation honesty, citation validation, confirm-gate incl. root-always-ships fix, S-note
   frontmatter + graph join); Chromium E2E in mock mode: distill subtree → `S — Alpha.md` opened
   with 4 citations in the ✦ summaries group.
-- **Live smoke (2026-07-15, founder keys):** endpoint called with a real 1.9k-char note →
-  Anthropic returned `400: Your credit balance is too low to access the Anthropic API.`
-  The seam surfaced it as a clean, actionable JSON error (no stack trace) — the error path is
-  verified live; **the happy path awaits credits on the founder's Anthropic account.**
+- **Live smoke #1 (2026-07-15, unfunded keys):** Anthropic returned `400: credit balance too
+  low` — surfaced as clean actionable JSON (error seam verified live).
+- **Live smoke #2 (2026-07-15, funded keys): PASS.** `projects__synapse__README.md` (4.9 KB) →
+  `S — SYNAPSE.md`, **8 grounded citations**, `claude-sonnet-5`, 1,150 tokens est, not truncated.
+  The stricter grounding gate (cited ids must be real source notes) passed on the REAL model.
+- **Live-only bug caught and fixed:** `claude-sonnet-5` leads its response with a
+  `ThinkingBlock`, so `msg.content[0].text` crashed — the provider now joins all TEXT blocks.
+  Exactly the class of bug mocks cannot catch; the live-smoke stage earned its keep.
 
-## Open
-
-- Re-run the live smoke after credits are added (one call, small note) and paste the grounded
-  output here. Founder acceptance steps 1–3 depend on it.
+## Status: **CLOSED — live-verified end-to-end.** Founder acceptance steps 1–3 unblocked.

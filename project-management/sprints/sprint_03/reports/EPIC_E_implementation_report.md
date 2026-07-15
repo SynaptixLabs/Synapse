@@ -22,12 +22,11 @@
   PNG magic bytes, media naming/storage, idempotent re-embed, rebuild survival,
   only-summaries-render guard); Chromium E2E: render → image displayed in the reader, fetched
   from `/media/` with an image content-type.
-- **Live smoke (2026-07-15, founder keys):** real call on `S — aria.md` → OpenAI returned
-  `400: Billing hard limit has been reached.` Surfaced as clean actionable JSON — error path
-  verified live; **happy path awaits a raised/cleared OpenAI billing limit** (note: gpt-image-1
-  also requires a verified OpenAI organization).
+- **Live smoke #1 (2026-07-15, unfunded keys):** OpenAI returned `400: billing hard limit
+  reached` — surfaced as clean actionable JSON (error seam verified live).
+- **Live smoke #2 (2026-07-15, funded keys): PASS.** `S — SYNAPSE.md` (the live claude-sonnet-5
+  summary of this project's own README) → `gpt-image-1` → `media/S_SYNAPSE__05ef0297ef.png`
+  (1024×1024 RGB PNG, 1.4 MB), theme-derived prompt with the no-text rule (D-4), embedded into
+  the S-note (survives rebuilds, deletable with the summary).
 
-## Open
-
-- Re-run the live smoke after billing is fixed (one 1024×1024 image) and attach it here.
-  Founder acceptance step 4 depends on it.
+## Status: **CLOSED — live-verified end-to-end.** Founder acceptance step 4 unblocked.

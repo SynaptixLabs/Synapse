@@ -2,8 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# ext4 caps a FILENAME at 255 bytes; UTF-8 multiplies (Hebrew = 2 bytes/char). Cap well below
+# it (room for the atomic-write `.tmp` suffix too): over-long ids keep a readable head and get
+# a deterministic content-free hash tail — same path always maps to the same id.
+_MAX_ID_BYTES = 200
+
+
+def cap_note_id(flat: str) -> str:
+    if len(flat.encode("utf-8")) <= _MAX_ID_BYTES:
+        return flat
+    stem = flat[:-3] if flat.endswith(".md") else flat
+    tail = "…" + hashlib.sha256(flat.encode("utf-8")).hexdigest()[:10] + ".md"
+    budget = _MAX_ID_BYTES - len(tail.encode("utf-8"))
+    while len(stem.encode("utf-8")) > budget:
+        stem = stem[:-1]
+    return stem + tail
 
 
 @dataclass(frozen=True)
@@ -21,8 +38,10 @@ class SourceFile:
     @property
     def note_id(self) -> str:
         """Deterministic, collision-free, readable: `<repo>__<rel/path>` with `/` → `__`.
-        Keeps the `.md` suffix so the note is a valid markdown filename as-is."""
-        return f"{self.repo_name}__{self.rel_path.replace('/', '__')}"
+        Keeps the `.md` suffix so the note is a valid markdown filename as-is. Over-long
+        paths (deep trees, long Hebrew titles) are hash-capped — one un-writable filename
+        must never exist, let alone abort a whole-workspace ingest."""
+        return cap_note_id(f"{self.repo_name}__{self.rel_path.replace('/', '__')}")
 
 
 @dataclass
