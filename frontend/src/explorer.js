@@ -80,9 +80,7 @@ function renderResults() {
   const box = $('sresults');
   if (!q) { box.classList.remove('open'); box.innerHTML = ''; selIdx = -1; return; }
   const colors = graph.repoColors();
-  const hits = matchList(q)
-    .sort((a, b) => (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree))
-    .slice(0, 12);
+  const hits = matchList(q).slice(0, 12);
   box.innerHTML = hits.length
     ? hits.map((n, i) =>
         `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${n.id}">
@@ -93,6 +91,18 @@ function renderResults() {
 }
 document.addEventListener('click', (ev) => {
   if (!ev.target.closest('.searchwrap')) { $('sresults').classList.remove('open'); selIdx = -1; }
+});
+
+// picking a search result = SINGLE selection: clear the multi-match, fly to the node
+document.addEventListener('click', (ev) => {
+  const t = ev.target.closest('#sresults .r[data-open]');
+  if (!t) return;
+  ev.preventDefault();
+  graph.setMatch(null);
+  $('filter').value = '';
+  window.__zoomNext = true;
+  reader.openNote(t.dataset.open);
+  $('sresults').classList.remove('open');
 });
 
 // ── data ────────────────────────────────────────────────────────────────────
@@ -152,8 +162,26 @@ window.runIngest = async () => {
 };
 
 // ── filter ↔ graph sync ────────────────────────────────────────────────────
-const matchList = (q) => nodes.filter(n =>
-  n.kind === 'note' && (n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)));
+// Relevance scoring — an exact/prefix hit ("ARIA") must never lose to an accidental
+// substring ("InvARIAnts", "adversARIAl"). Degree only breaks ties within a tier.
+function scoreNote(n, q) {
+  const t = n.title.toLowerCase();
+  const id = n.id.toLowerCase();
+  const stem = (n.source_path?.split('/').pop() ?? '').replace(/\.md$/, '').toLowerCase();
+  if (t === q || stem === q) return 100;
+  if (t.startsWith(q) || stem.startsWith(q)) return 80;
+  if (t.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) return 60;
+  if (id.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) return 40;
+  if (t.includes(q) || id.includes(q)) return 15;
+  return 0;
+}
+const matchList = (q) => nodes
+  .filter(n => n.kind === 'note')
+  .map(n => [scoreNote(n, q), n])
+  .filter(([sc]) => sc > 0)
+  .sort((a, b) => b[0] - a[0] ||
+    (b[1].in_degree + b[1].out_degree) - (a[1].in_degree + a[1].out_degree))
+  .map(([, n]) => n);
 
 $('filter').addEventListener('input', () => {
   const q = $('filter').value.trim().toLowerCase();

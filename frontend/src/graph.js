@@ -42,7 +42,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   let _byId = null;
   const nodeById = (id) => (_byId ??= byId()).get(id);
 
-  function kick(a) { const was = sim.alpha; sim.alpha = Math.max(sim.alpha, a); _byId = null; if (was <= 0.02) requestAnimationFrame(tick); }
+  function kick(a) { const was = sim.alpha; sim.alpha = Math.max(sim.alpha, a); _byId = null; _deg = null; if (was <= 0.02) requestAnimationFrame(tick); }
 
   function tick() {
     const byGroup = new Map();
@@ -52,18 +52,21 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       (byGroup.get(g) ?? byGroup.set(g, []).get(g)).push(p);
     }
     for (const [g, pts] of byGroup) {
-      const strength = g === '__hubs__' ? 5200 : 140;
+      const strength = g === '__hubs__' ? 5200 : 110;
       for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
         const a = pts[i], b = pts[j];
         let dx = a.x - b.x, dy = a.y - b.y;
-        const d2 = dx * dx + dy * dy || 1; if (d2 > 22000 && g !== '__hubs__') continue;
+        const d2 = dx * dx + dy * dy || 1; if (d2 > 14000 && g !== '__hubs__') continue;
         const f = strength / d2;
         dx *= f; dy *= f; a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy;
       }
     }
+    const degOf = _degMap();
     for (const e of edges) {
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
-      const k = e.type === 'sibling' ? 0.03 : 0.012, rest = e.type === 'sibling' ? 85 : 60;
+      const dsum = (degOf.get(e.src) ?? 0) + (degOf.get(e.dst) ?? 0);
+      const k = e.type === 'sibling' ? 0.03 : 0.012 / (1 + dsum / 24);
+      const rest = e.type === 'sibling' ? 85 : 60 + Math.min(90, dsum * 1.4);
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       const f = k * (d - rest) / d;
       a.vx += dx * f; a.vy += dy * f; b.vx -= dx * f; b.vy -= dy * f;
@@ -75,13 +78,23 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       // only HUBS feel canvas-centering — notes orbit their hub (sibling springs), so a
       // dragged-away cluster STAYS apart instead of being herded back to the middle
       if (id.startsWith('repo:')) { p.vx += (w / 2 - p.x) * 0.002; p.vy += (h / 2 - p.y) * 0.005; }
-      if (p.x < 24) p.vx += (24 - p.x) * 0.04; if (p.x > w - 24) p.vx -= (p.x - (w - 24)) * 0.04;
-      if (p.y < 24) p.vy += (24 - p.y) * 0.04; if (p.y > h - 24) p.vy -= (p.y - (h - 24)) * 0.04;
+      else { p.vx += (w / 2 - p.x) * 0.0006; p.vy += (h / 2 - p.y) * 0.0015; }
+      if (p.x < 24) p.vx += (24 - p.x) * 0.06; if (p.x > w - 24) p.vx -= (p.x - (w - 24)) * 0.06;
+      if (p.y < 24) p.vy += (24 - p.y) * 0.06; if (p.y > h - 24) p.vy -= (p.y - (h - 24)) * 0.06;
+      p.vx = Math.max(-55, Math.min(55, p.vx)); p.vy = Math.max(-55, Math.min(55, p.vy));
       p.x += p.vx * sim.alpha; p.y += p.vy * sim.alpha; p.vx *= 0.8; p.vy *= 0.8;
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) { p.x = w / 2; p.y = h / 2; p.vx = p.vy = 0; }
     }
     sim.alpha *= 0.99;
     draw();
     if (sim.alpha > 0.02) requestAnimationFrame(tick);
+  }
+
+  let _deg = null;
+  function _degMap() {
+    if (_deg) return _deg;
+    _deg = new Map(nodes.map(n => [n.id, (n.in_degree ?? 0) + (n.out_degree ?? 0)]));
+    return _deg;
   }
 
   function neighborsOf(id) {
@@ -167,16 +180,17 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     drawHulls();   // soft per-repo blobs — the grouping layer
 
     // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
-    const EDGE = { wikilink: '#7c9eff', relative: '#7e8798', pathref: '#4ec9b0', sibling: '#2c3342' };
+    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342' };
+    const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13 };
     ctx.lineWidth = 0.75;
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
       const lit = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
-      ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
-      ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (e.type === 'sibling' ? 0.13 : 0.4);
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
+      ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (BASE[e.type] ?? 0.3) * Math.min(1, 240 / d);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       const bow = Math.min(d * 0.12, 22) * (e.src < e.dst ? 1 : -1);
       ctx.beginPath(); ctx.moveTo(a.x, a.y);
       ctx.quadraticCurveTo(mx - dy / d * bow, my + dx / d * bow, b.x, b.y);
@@ -200,13 +214,19 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         continue;
       }
       const deg = n.in_degree + n.out_degree;
-      const dim = (hood && !hood.has(n.id)) || (matchSet && !matchSet.has(n.id));
-      ctx.globalAlpha = dim ? 0.1 : 1;
+      const inMatch = matchSet?.has(n.id) ?? false;
+      const dim = (hood && !hood.has(n.id)) || (matchSet && !inMatch);
+      ctx.globalAlpha = dim ? 0.12 : 1;
+      if (inMatch) { ctx.shadowColor = '#7c9eff'; ctx.shadowBlur = 14; }
       ctx.fillStyle = noteColor(n);
       if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
-      const r = 2.2 + Math.min(deg, 12) * 0.55;
+      const r = 2.8 + Math.min(deg, 14) * 0.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
       ctx.shadowBlur = 0;
+      if (inMatch && !dim) {            // search selection: accent ring on EVERY match
+        ctx.strokeStyle = 'rgba(124,158,255,0.85)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r + 3.5, 0, 7); ctx.stroke();
+      }
       if (pinned.has(n.id) && !dim) {   // pinned marker: thin white ring
         ctx.strokeStyle = 'rgba(230,230,230,0.65)'; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 2.5, 0, 7); ctx.stroke();
@@ -217,7 +237,8 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       }
       // labels: hovered + small neighborhoods always; hubs-of-the-brain when zoomed in (LOD)
       const label = sim.hover === n.id || (hood?.has(n.id) && hood.size < 14) ||
-                    (!hood && sim.view.k >= 1.4 && deg >= 6);
+                    (inMatch && matchSet.size <= 15) ||
+                    (!hood && !matchSet && sim.view.k >= 1.4 && deg >= 6);
       if (label && !dim) {
         ctx.fillStyle = '#e6e6e6'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
         ctx.fillText(n.title.slice(0, 34), p.x, p.y - 9);
@@ -296,8 +317,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const n = nodeAt(toWorld(ev));
     if (n && pinned.has(n.id)) { pinned.delete(n.id); kick(0.4); }
   });
-  function animTo(p, targetK = 1.7) {
-    const tx = W() / 2 - p.x * targetK, ty = H() / 2 - p.y * targetK;
+  function animView(tx, ty, targetK) {
     const s = { x: sim.view.x, y: sim.view.y, k: sim.view.k };
     let step = 0;
     const anim = () => {
@@ -308,6 +328,18 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (step < 8) requestAnimationFrame(anim);
     };
     requestAnimationFrame(anim);
+  }
+  function animTo(p, targetK = 1.7) {
+    animView(W() / 2 - p.x * targetK, H() / 2 - p.y * targetK, targetK);
+  }
+  function fitTo(ids) {
+    const pts = ids.map(id => sim.p.get(id)).filter(Boolean);
+    if (!pts.length) return;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const minX = Math.min(...xs) - 70, maxX = Math.max(...xs) + 70;
+    const minY = Math.min(...ys) - 70, maxY = Math.max(...ys) + 70;
+    const k = Math.min(1.6, Math.max(0.3, Math.min(W() / (maxX - minX), H() / (maxY - minY))));
+    animView(W() / 2 - (minX + maxX) / 2 * k, H() / 2 - (minY + maxY) / 2 * k, k);
   }
   canvas.addEventListener('dblclick', (ev) => {
     const n = nodeAt(toWorld(ev));
@@ -339,7 +371,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (zoom) animTo(sim.p.get(id));
       else draw();
     },
-    setMatch(set) { matchSet = set; draw(); },
+    setMatch(set) { matchSet = set; if (set?.size) fitTo([...set]); else draw(); },
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
