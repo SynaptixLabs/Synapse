@@ -167,7 +167,7 @@ function makeResizer(el, varName, fromRight) {
       const w = fromRight ? innerWidth - ev.clientX : ev.clientX;
       const clamped = Math.max(180, Math.min(innerWidth * 0.45, w));
       document.documentElement.style.setProperty(varName, clamped + 'px');
-      graph.redraw();
+      graph.reflow();   // live: the layout slides with the panel edge (RHS included)
     };
     const up = () => { el.classList.remove('active'); removeEventListener('mousemove', move); removeEventListener('mouseup', up); persist(); };
     addEventListener('mousemove', move); addEventListener('mouseup', up);

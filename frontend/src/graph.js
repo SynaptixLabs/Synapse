@@ -94,8 +94,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
    *  rescale horizontally to the new width, then let the physics settle it. Without this the
    *  layout stays sized for the OLD canvas and gets clipped under the panels. */
   function reflow() {
+    // Called continuously during a panel drag: each frame rescales by (newW / prevW), and the
+    // per-frame ratios compound to exactly (finalW / startW) — so the graph slides WITH the
+    // panel edge instead of getting clipped under it. draw() refreshes sim.lastW afterwards.
     const w = W();
-    if (sim.lastW && w > 50 && Math.abs(w - sim.lastW) > 4) {
+    if (sim.lastW && w > 50 && Math.abs(w - sim.lastW) > 0.5) {
       const ratio = w / sim.lastW;
       for (const [, p] of sim.p) p.x *= ratio;
     }
