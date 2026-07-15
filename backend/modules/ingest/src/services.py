@@ -1,0 +1,107 @@
+"""
+Ingest service: source repos → vault notes.
+
+Binding constraints (see project-management/sprints/sprint_01/todo/EPIC_A_ingest_vault.md):
+- The vault is the source of truth for everything downstream; this module is the only writer
+  of `notes/` from external content.
+- Notes are `<our frontmatter>\n<original content verbatim>` — UTF-8, byte-faithful body.
+  (Known POC limitation: a source file's own frontmatter block remains visible in the body.)
+- Idempotent: unchanged `content_hash` ⇒ skip and report `unchanged`.
+- Stdlib only.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable
+
+from .models import IngestReport, RepoReport, SourceFile
+
+_HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
+FRONTMATTER_END = "---"
+
+
+class IngestService:
+    def __init__(self, vault_path: Path, ignore_dirs: frozenset[str] | set[str]):
+        self.vault_path = Path(vault_path)
+        self.notes_dir = self.vault_path / "notes"
+        self.ignore_dirs = set(ignore_dirs)
+
+    # ── discovery ─────────────────────────────────────────────────────────
+    def scan_repo(self, repo_root: Path) -> list[SourceFile]:
+        """All .md files under `repo_root`, skipping ignore-dirs at any depth."""
+        repo_root = Path(repo_root).resolve()
+        vault = self.vault_path.resolve()
+        found: list[SourceFile] = []
+        for path in sorted(repo_root.rglob("*.md")):
+            if path.is_relative_to(vault):
+                continue   # never ingest the vault itself (a repo may contain it)
+            rel_parts = path.relative_to(repo_root).parts
+            if any(part in self.ignore_dirs for part in rel_parts):
+                continue
+            found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=path))
+        return found
+
+    # ── note writing ──────────────────────────────────────────────────────
+    @staticmethod
+    def content_hash(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    def _frontmatter(self, src: SourceFile, digest: str) -> str:
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        return (
+            "---\n"
+            f"synapse.source_repo: {src.repo_name}\n"
+            f"synapse.source_path: {src.rel_path}\n"
+            f"synapse.ingested_at: {now}\n"
+            f"synapse.content_hash: {digest}\n"
+            "---\n"
+        )
+
+    def existing_hash(self, note_path: Path) -> str | None:
+        if not note_path.is_file():
+            return None
+        head = note_path.read_text(encoding="utf-8", errors="replace")[:600]
+        m = _HASH_RE.search(head)
+        return m.group(1) if m else None
+
+    def write_note(self, src: SourceFile) -> str:
+        """Write/refresh one note. Returns 'written' | 'unchanged' | 'skipped'."""
+        try:
+            raw = src.path.read_bytes()
+        except OSError:
+            return "skipped"
+        digest = self.content_hash(raw)
+        note_path = self.notes_dir / src.note_id
+        if self.existing_hash(note_path) == digest:
+            return "unchanged"
+        try:
+            body = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return "skipped"   # not honest UTF-8 markdown — report, don't mangle
+        self.notes_dir.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
+        return "written"
+
+    # ── the pipeline ──────────────────────────────────────────────────────
+    def ingest(self, repos: Iterable[Path]) -> IngestReport:
+        report = IngestReport()
+        for repo_root in repos:
+            repo_root = Path(repo_root)
+            rr = RepoReport(repo=repo_root.name)
+            report.repos.append(rr)
+            if not repo_root.is_dir():
+                continue   # honest: 0 files found for a missing path
+            for src in self.scan_repo(repo_root):
+                rr.files_found += 1
+                outcome = self.write_note(src)
+                if outcome == "written":
+                    rr.notes_written += 1
+                elif outcome == "unchanged":
+                    rr.unchanged += 1
+                else:
+                    rr.skipped += 1
+        return report

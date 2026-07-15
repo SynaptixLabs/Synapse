@@ -16,12 +16,12 @@ cd <your-clone-of-Synapse>
 
 | # | Do | Expect | PASS/FAIL |
 |---|---|---|---|
-| 1 | `synapse ingest` (or `python -m synapse ingest` from `backend/`) | Completes; prints an honest report: repos scanned, files found, notes written, unchanged, skipped | |
-| 2 | Run `synapse ingest` **again** | Same totals, everything reported `unchanged` — nothing duplicated | |
+| 1 | `./synapse ingest` | Completes; prints an honest report (repos scanned, found/written/unchanged/skipped) and rebuilds the graph + Index | |
+| 2 | Run `./synapse ingest` **again** | Same totals, everything reported `unchanged` — nothing duplicated | |
 | 3 | Open `data/vault/notes/` in your editor | One readable note per source `.md`; frontmatter shows the right repo + path; Hebrew/UTF-8 content intact | |
-| 4 | Open `data/vault/Index.md` | Every note listed, grouped by repo; links resolve; header counts match step 1 | |
-| 5 | `synapse stats` | Node/edge counts; pick any 3 notes you know well — their listed links match the real files | |
-| 6 | Delete `data/vault/graph.json`, run `synapse rebuild`, then `synapse stats` | Identical stats — the graph regenerated from the vault alone | |
+| 4 | Open `data/vault/Index.md` | Every note listed, grouped by repo; header counts match step 1; top-connected looks believable | |
+| 5 | `./synapse stats` | Node/edge counts; pick any 3 notes you know well — their listed links match the real files | |
+| 6 | `rm data/vault/graph.json && ./synapse rebuild && ./synapse stats` | Identical stats — the graph regenerated from the vault alone | |
 
 ## Verdict
 

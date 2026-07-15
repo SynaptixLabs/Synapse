@@ -64,19 +64,25 @@ contract changes are a `cpto`-gated decision (log them in [`0l_DECISIONS.md`](0l
 
 ### Canonical clients (your project's binding imports)
 
-<!-- CUSTOMIZE: the one blessed import for each cross-cutting need. Reuse-first enforces these. -->
 | Need | Module | Canonical import / entrypoint |
 |---|---|---|
-| {{LLM call}} | `{{llm_client}}` | `{{import path}}` |
-| {{Database}} | `{{db_layer}}` | `{{import path}}` |
-| {{Config}} | `{{settings}}` | `{{import path}}` |
+| Config / env / paths | `app.core.config` | `from app.core.config import load_settings` — never read env vars ad hoc |
+| Summarization (sprint 3) | `modules/distill` | `Summarizer` seam — never the Anthropic SDK directly |
+| Image generation (sprint 3) | `modules/render` | `ImageRenderer` seam — never the OpenAI SDK directly |
+| Database | — | **none in v0.1 (D-3)** — the vault is file-based; adding a DB is a flagged decision |
 
 ### Modules
 
-<!-- CUSTOMIZE: one row per module. Direction = who imports whom (one-way). -->
 | Module | Path | Owns (capability) | Public interface / entrypoint | Called by | Direction (one-way) |
 |---|---|---|---|---|---|
-| `{{example}}` | `backend/modules/{{example}}` | {{what it does}} | `{{class / function}}` | {{callers}} | {{caller}} → `{{example}}` |
+| `ingest` | `backend/modules/ingest` | repos → vault notes (frontmatter, idempotent, vault-self-exclusion) | `IngestService.ingest(repos)` · `POST /api/v1/ingest` | CLI, app | app/CLI → `ingest` |
+| `graph` | `backend/modules/graph` | vault → deterministic graph.json + Index.md + stats | `GraphService.rebuild()/build()/load()` · `GET /api/v1/graph|stats`, `POST /api/v1/rebuild` | CLI, app, frontend (via API) | app/CLI → `graph` (reads vault only) |
+| `distill` | `backend/modules/distill` *(sprint 3)* | node/subtree → grounded summary → `S —` note | `Summarizer.summarize(...)` | app | app → `distill` |
+| `render` | `backend/modules/render` *(sprint 3)* | summary note → image in `media/` | `ImageRenderer.render(...)` | app | app → `render` |
+
+`ingest` and `graph` never import each other — the **vault directory layout** is their shared
+contract (see `01_ARCHITECTURE.md`). The CLI (`backend/synapse/`) and FastAPI app are thin
+dispatchers over the module services.
 
 ### Standard module interface (optional convention)
 

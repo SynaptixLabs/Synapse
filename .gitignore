@@ -135,3 +135,6 @@ tests/screenshots/*.png
 # Project Specific
 # ========================
 # Add project-specific ignores below
+
+# SYNAPSE vault (user data — local-first, never committed)
+/data/

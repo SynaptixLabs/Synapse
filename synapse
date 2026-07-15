@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# SYNAPSE CLI wrapper — `./synapse ingest|rebuild|stats` from the repo root.
+# Uses the backend venv (created by `./start.sh setup`) and runs from backend/ so
+# `python -m synapse` resolves. Windows: run `python -m synapse <cmd>` from backend\.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$DIR/backend/.venv/bin/python"
+[ -x "$PY" ] || { echo "No venv yet — run ./start.sh setup first."; exit 2; }
+cd "$DIR/backend" && exec "$PY" -m synapse "$@"

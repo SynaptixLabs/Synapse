@@ -12,7 +12,11 @@ from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="{{PROJECT_NAME}} API", version="0.1.0")
+app = FastAPI(
+    title="SYNAPSE API",
+    version="0.1.0",
+    description="A second brain for your repos — ingest markdown, derive the knowledge graph, distill and render.",
+)
 
 # Template default so the dev frontend (:5173) can call the API — tighten per project.
 app.add_middleware(
@@ -33,6 +37,13 @@ async def health() -> dict:
     }
 
 
+from modules.graph.src.api import router as graph_router  # noqa: E402
+from modules.ingest.src.api import router as ingest_router  # noqa: E402
+
+app.include_router(ingest_router)
+app.include_router(graph_router)
+
+
 @app.get("/")
 async def root() -> dict:
-    return {"service": "{{PROJECT_NAME}}", "docs": "/docs", "health": "/health"}
+    return {"service": "SYNAPSE", "docs": "/docs", "health": "/health", "graph": "/api/v1/graph"}
