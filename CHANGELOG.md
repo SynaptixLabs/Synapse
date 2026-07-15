@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Sprint 01 — The Brain (closed 2026-07-15, founder acceptance PASS)
+- `modules/ingest`: repos → vault notes (provenance frontmatter, byte-verbatim bodies,
+  idempotent, ignore-list, vault-self-exclusion).
+- `modules/graph`: vault → deterministic `graph.json` + generated `Index.md` + stats; typed
+  edges (wikilink/relative/sibling); unresolved links recorded as forward-links.
+- CLI (`./synapse ingest·rebuild·stats`) + FastAPI (`/api/v1/{ingest,graph,stats,rebuild,note,index}`).
+- Acceptance dashboard: live checklist, honest ingest report, one-click rebuild-invariance
+  proof, **wiki-article popup** (KB-wiki visuals, clickable [[wikilinks]], infobox, RTL),
+  **Obsidian-style graph** (force layout, repo colors, hover neighborhood, click-to-article).
+- 31 unit/API tests (zero network) + committed Chromium E2E (`tests/e2e/`).
+
 ### Added
 - Project instantiated from [synaptix-scaffold](https://github.com/SynaptixLabs/scaffold)
   (agent layer: JANUS/ARIA/CORE, drift guard, cross-platform start scripts).

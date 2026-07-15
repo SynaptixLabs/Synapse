@@ -10,6 +10,15 @@ Make the knowledge graph *feel* like a second brain: an interactive canvas you c
 node panel that shows what a note actually says, and a filter that gets you anywhere in two
 keystrokes.
 
+> **Re-scoped at sprint-01 close.** Founder feedback during sprint-01 acceptance pulled part of
+> this epic forward — already shipped: force-directed repo-colored graph (hover neighborhood,
+> click-to-article, drag/zoom/pan), the wiki-article popup, and a notes-list filter.
+> **What remains for this epic:** ARIA's kit (formalize the shipped visuals + the explorer
+> layout), the dedicated explorer page (graph as the primary surface, side panel instead of
+> popup-only), filter ↔ graph sync (typing narrows the canvas live), legend interactions,
+> unresolved-links panel (actionable list), empty/error states, and the committed multi-viewport
+> Chromium E2E suite.
+
 ## Flow (kit-first — the HS model)
 
 1. **ARIA designs the kit** (`project-management/ui_kit/explorer/`): static HTML + MD spec —

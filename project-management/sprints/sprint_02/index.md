@@ -3,7 +3,8 @@
 > **Graph node.** Up: [`../00_index.md`](../00_index.md). Down: [`todo/`](todo/) ·
 > [`acceptance/`](acceptance/00_founder_acceptance_script.md).
 
-- **Status:** ⚪ Planned (opens when sprint 01 records founder PASS)
+- **Status:** 🟢 Active (opened 2026-07-15 on sprint-01 founder PASS; Epic C re-scoped — part
+  shipped early during sprint-01 acceptance, see the epic card)
 - **Owner:** `cpto` (JANUS) · design: `ux-design` (ARIA) · implementation: `dev` (CORE)
 - **Goal:** The graph from sprint 01 becomes explorable: an interactive graph view in the
   frontend (pan / zoom / click), a node panel showing the note's content and neighbors, and a

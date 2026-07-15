@@ -3,7 +3,9 @@
 > **Graph node.** Up: [`../00_index.md`](../00_index.md). Down: [`todo/`](todo/) (epic cards) ·
 > [`acceptance/`](acceptance/00_founder_acceptance_script.md) (founder script).
 
-- **Status:** 🟢 Active
+- **Status:** ✅ **CLOSED 2026-07-15** — founder acceptance PASS (all 6 steps, in the UI) ·
+  grade 4.5 · [closing report](reports/SPRINT_01_REPORT.md) ·
+  [close GBU](reviews/2026-07-15_gbu_sprint01_close.md)
 - **Owner:** `cpto` (JANUS) · implementation: `dev` (CORE)
 - **Goal:** Point SYNAPSE at ≥2 real repos and get a correct, local-first knowledge base:
   every `.md` becomes exactly one vault note (YAML frontmatter), the wikilink/relative-link

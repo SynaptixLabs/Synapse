@@ -28,8 +28,17 @@ cd <your-clone-of-Synapse>
 
 ## Verdict
 
-- **Result:** PASS / FAIL (strike one)
-- **Date:** &nbsp;
-- **Notes / findings:** &nbsp;
+- **Result:** ✅ **PASS** — all 6 steps (founder, in the dashboard UI)
+- **Date:** 2026-07-15
+- **Notes / findings raised during acceptance (all fixed before the PASS):**
+  1. Acceptance must be UI-driven, not CLI scripts → the acceptance dashboard was built
+     (checklist with auto-PASS badges + manual ticks). Now standing doctrine for all sprints.
+  2. "ingest failed: TypeError (.map)" → root causes: a stale Windows-side zombie server on
+     port 8000 impersonating the backend + the dashboard hardcoding `localhost`. Both fixed
+     (API host follows the page host; honest error surfaces).
+  3. Notes must open as a rich wiki-style popup (org KB wiki visuals) → wiki-article popup with
+     infobox, clickable [[wikilinks]] (blue/red), relative-link navigation, RTL support.
+  4. Graph preview must be Obsidian-class, colorful + interactive → force-directed, colored by
+     repo, hover-neighborhood highlight, click-to-article, drag/zoom/pan.
 
-A FAIL on any step reopens the sprint: file the finding here, dev fixes, re-run the script.
+Founder verdict message: "All pass" (2026-07-15).
