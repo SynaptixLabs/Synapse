@@ -159,18 +159,35 @@ function expandReader() {
 function makeResizer(el, varName, fromRight) {
   el.addEventListener('mousedown', (down) => {
     down.preventDefault();
+    el.classList.add('active');
     const move = (ev) => {
       const w = fromRight ? innerWidth - ev.clientX : ev.clientX;
-      const clamped = Math.max(180, Math.min(innerWidth / 2, w));
+      const clamped = Math.max(180, Math.min(innerWidth * 0.45, w));
       document.documentElement.style.setProperty(varName, clamped + 'px');
       graph.redraw();
     };
-    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up); persist(); };
+    const up = () => { el.classList.remove('active'); removeEventListener('mousemove', move); removeEventListener('mouseup', up); persist(); };
     addEventListener('mousemove', move); addEventListener('mouseup', up);
+  });
+  // double-click a handle = reset that panel to its default width
+  el.addEventListener('dblclick', () => {
+    document.documentElement.style.removeProperty(varName);
+    persist(); graph.redraw();
   });
 }
 makeResizer($('rs-lhs'), '--lhs-w', false);
 makeResizer($('rs-reader'), '--reader-w', true);
+
+// window resize: panels never squeeze the canvas out — clamp stored widths to 45vw
+addEventListener('resize', () => {
+  for (const varName of ['--lhs-w', '--reader-w']) {
+    const cur = parseInt(document.documentElement.style.getPropertyValue(varName));
+    if (cur && cur > innerWidth * 0.45) {
+      document.documentElement.style.setProperty(varName, Math.floor(innerWidth * 0.45) + 'px');
+    }
+  }
+  graph.redraw();
+});
 
 // ── keyboard ────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', (ev) => {
@@ -183,5 +200,74 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'ArrowLeft' && ev.altKey) reader.back();
 });
 
+// ── sprint-2 acceptance tracker: auto-PASS steps as the app proves them ────
+const AC_KEY = 'synapse.acceptance.s2';
+const ac = JSON.parse(localStorage.getItem(AC_KEY) ?? '{}');
+ac.notesOpened = new Set(ac.notesOpened ?? []);
+
+function acSave() {
+  localStorage.setItem(AC_KEY, JSON.stringify({ ...ac, notesOpened: [...ac.notesOpened] }));
+  acRender();
+}
+function acRender() {
+  const states = {
+    a1: ac.graphLoaded,
+    a2: ac.filterUsed && ac.enterOpened,
+    a3: ac.notesOpened.size >= 3,
+    a4: ac.wikilinkNav,
+    a5: ac.glossaryToggled && ac.unresolvedOpened,
+    a6: ac.readerCycled && ac.lhsCycled && ac.resized,
+    a7: ac.manual7,
+    a8: ac.mobileSeen,
+  };
+  for (const [id, pass] of Object.entries(states)) {
+    const el = $(id); if (!el) continue;
+    if (id === 'a7') { el.className = 'badge ' + (pass ? 'pass' : ''); continue; }
+    el.textContent = pass ? 'PASS' : (id === 'a3' ? `${ac.notesOpened.size}/3` : 'todo');
+    el.className = 'badge ' + (pass ? 'pass' : '');
+  }
+}
+window.manualAccept = (cb, id) => { ac.manual7 = cb.checked; acSave(); };
+window.resetAccept = () => { localStorage.removeItem(AC_KEY); location.reload(); };
+window.toggleAccept = () => $('accept').classList.toggle('open');
+document.addEventListener('click', (ev) => {
+  if ($('accept').classList.contains('open') &&
+      !ev.target.closest('#accept') && !ev.target.closest('.item')) $('accept').classList.remove('open');
+});
+
+// hooks into the real interactions
+const _openNote = reader.openNote;
+reader.openNote = (id, push) => { ac.notesOpened.add(id); acSave(); return _openNote(id, push); };
+$('filter').addEventListener('input', () => { if ($('filter').value.trim()) { ac.filterUsed = true; acSave(); } });
+$('filter').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && $('filter').value.trim()) { ac.enterOpened = true; acSave(); } });
+$('reader-body').addEventListener('click', (ev) => { if (ev.target.closest('a[data-wl]')) { ac.wikilinkNav = true; acSave(); } });
+$('drawer').addEventListener('click', (ev) => {
+  const row = ev.target.closest('.row');
+  if (row?.dataset.repo || row?.dataset.edge) ac.glossaryToggled = true;
+  if (row?.dataset.openNote) ac.unresolvedOpened = true;
+  acSave();
+});
+{
+  const _tr = window.toggleReader, _tl = window.toggleLhs;
+  window.toggleReader = () => { _tr(); if (document.body.dataset.reader === 'closed') ac._rClosed = true; else if (ac._rClosed) ac.readerCycled = true; acSave(); };
+  window.toggleLhs = () => { _tl(); if (document.body.dataset.lhs === 'closed') ac._lClosed = true; else if (ac._lClosed) ac.lhsCycled = true; acSave(); };
+}
+for (const rs of [$('rs-lhs'), $('rs-reader')]) {
+  rs.addEventListener('mousedown', () => {
+    const up = () => { ac.resized = true; acSave(); removeEventListener('mouseup', up); };
+    addEventListener('mouseup', up);
+  });
+}
+const acViewport = () => { if (innerWidth <= 700) { ac.mobileSeen = true; acSave(); } };
+addEventListener('resize', acViewport);
+acViewport();
+
+const _refresh = refresh;
+refresh = async function () {
+  await _refresh();
+  if (nodes.some(n => n.kind === 'note')) { ac.graphLoaded = true; acSave(); }
+};
+
 health($('health'));
 refresh();
+acRender();

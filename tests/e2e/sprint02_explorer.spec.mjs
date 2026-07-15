@@ -63,6 +63,21 @@ for (const w of [1024, 1280, 1920]) {
   await page.screenshot({ path: `tests/screenshots/explorer-${w}.png` });
 }
 
+// acceptance tracker (visual acceptance): drag a divider, open 3 notes, expect a1..a6 auto-PASS
+const rs = await page.locator('#rs-reader').boundingBox();
+await page.mouse.move(rs.x + 3, rs.y + rs.height / 2);
+await page.mouse.down();
+await page.mouse.move(rs.x - 120, rs.y + rs.height / 2, { steps: 5 });
+await page.mouse.up();
+await page.fill('#filter', 'readme'); await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
+await page.fill('#filter', 'beta');   await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
+await page.click('text=✓ Acceptance — sprint 2');
+await page.waitForSelector('#accept.open');
+await page.waitForFunction(() =>
+  ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].every(id => document.getElementById(id).classList.contains('pass')),
+  null, { timeout: 8000 });
+await page.screenshot({ path: 'tests/screenshots/explorer-acceptance-panel.png' });
+
 // mobile: panels become overlays, closed by default
 const mob = await browser.newPage({ viewport: { width: 390, height: 844 } });
 await mob.goto('http://localhost:5173/');

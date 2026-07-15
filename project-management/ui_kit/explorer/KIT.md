@@ -37,6 +37,14 @@ the top bar instead of permanently spending screen width.
    * = sprint-3 actions, shown disabled with a "sprint 3" tag
 ```
 
+> **REV 2.1 (founder live-testing corrections):** (a) drag handles must be a **clear control** —
+> visible grip pill on every divider, wide hit area, accent on hover/drag, **double-click
+> resets** the panel width; (b) the RHS reader must be **truly responsive** — stored widths
+> clamp to 45vw on window resize, tablet default 340px (≤1100px), and a **container query**
+> un-floats the infobox below 380px panel width; the glossary drawer never exceeds the viewport.
+> (c) The sprint acceptance checklist lives IN the UI (Menu → ✓ Acceptance): auto-PASS badges
+> where the app can prove a step, manual ticks for founder judgment, progress persisted.
+
 ## The accordion rule (binding, REV 2)
 
 Every panel (LHS, reading panel — and the glossary drawer) supports three states:

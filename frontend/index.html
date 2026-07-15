@@ -22,7 +22,8 @@
       .topbar .right { margin-left:auto; display:flex; gap:0.3rem; align-items:center; font-size:0.85rem; color:var(--dim); }
       #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
 
-      main { flex:1; display:grid; grid-template-columns:var(--lhs-w) 6px 1fr 6px var(--reader-w); min-height:0; position:relative; }
+      main { flex:1; display:grid; grid-template-columns:var(--lhs-w) 12px 1fr 12px var(--reader-w); min-height:0; position:relative; }
+      @media (max-width:1100px) { :root { --reader-w:340px; --lhs-w:200px; } }
 
       .lhs { background:var(--panel); border-right:1px solid var(--border); padding:0.7rem; font-size:0.86rem; display:flex; flex-direction:column; gap:0.15rem; overflow:hidden; }
       body[data-lhs="closed"] .lhs > :not(.strip) { display:none; }
@@ -39,9 +40,15 @@
       .lhs .ai .act { display:flex; justify-content:space-between; align-items:center; gap:0.4rem; padding:0.3rem 0.2rem; color:var(--dim); font-size:0.8rem; }
       .tag { font-size:0.62rem; background:#2a2410; color:#fbbf24; border:1px solid #4a3d12; padding:1px 6px; border-radius:999px; white-space:nowrap; }
 
-      .rs { cursor:col-resize; position:relative; }
-      .rs::after { content:''; position:absolute; inset:30% 2px; border-left:2px dotted var(--border); }
-      .rs:hover::after { border-color:var(--accent); }
+      /* drag handles: a visible grip pill, wide hit area, dblclick = reset width */
+      .rs { cursor:col-resize; position:relative; background:transparent; }
+      .rs::before { content:''; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+                    width:5px; height:56px; border-radius:99px; background:var(--border);
+                    transition:background 0.12s, height 0.12s; }
+      .rs::after { content:'⋮'; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+                   color:var(--dim); font-size:14px; pointer-events:none; }
+      .rs:hover::before, .rs.active::before { background:var(--accent); height:84px; }
+      .rs:hover::after, .rs.active::after { color:#0b0d12; }
 
       .canvasWrap { position:relative; overflow:hidden; background:radial-gradient(700px 340px at 50% 40%, #141926 0%, var(--bg) 70%); }
       canvas { position:absolute; inset:0; width:100%; height:100%; }
@@ -53,7 +60,12 @@
       .empty button { margin-top:0.8rem; background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:0.5rem 1rem; font-weight:600; cursor:pointer; }
 
       .reader { border-left:1px solid var(--border); background:#fff; color:#202122; display:flex; flex-direction:column; min-height:0; overflow:hidden;
-                font-family:'Linux Libertine',Georgia,'Times New Roman',serif; }
+                font-family:'Linux Libertine',Georgia,'Times New Roman',serif; container-type:inline-size; }
+      /* narrow panel → infobox stops floating, crumb stays readable (container query, not viewport) */
+      @container (max-width:380px) {
+        .wiki-infobox { float:none; width:auto; margin:0 0 12px; }
+        .reader-body { padding:12px 14px; }
+      }
       body[data-reader="closed"] .reader > :not(.strip) { display:none; }
       .reader .strip { display:none; }
       body[data-reader="closed"] .reader .strip { display:flex; flex-direction:column; align-items:center; gap:0.6rem; cursor:pointer; color:#54595d; padding-top:0.4rem; background:#f0eee6; height:100%; }
@@ -81,7 +93,7 @@
       .wiki-infobox dd { margin:1px 0 0; word-break:break-all; }
       .reader-empty { color:#54595d; font-family:sans-serif; font-size:13px; padding:20px; }
 
-      .drawer { position:absolute; top:0; right:calc(var(--reader-w) + 12px); width:330px; max-height:70%; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:0 0 12px 12px; padding:0.8rem; font-size:0.82rem; box-shadow:0 14px 40px rgba(0,0,0,.5); z-index:8; display:none; }
+      .drawer { position:absolute; top:0; right:12px; width:330px; max-width:calc(100% - 24px); max-height:70%; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:0 0 12px 12px; padding:0.8rem; font-size:0.82rem; box-shadow:0 14px 40px rgba(0,0,0,.5); z-index:8; display:none; }
       .drawer.open { display:block; }
       .drawer h4 { font-size:0.66rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin:0.6rem 0 0.3rem; }
       .drawer h4:first-child { margin-top:0; }
@@ -94,6 +106,11 @@
       .row.off .tg { color:var(--dim); }
       .unres { color:#f87171; font-family:ui-monospace,monospace; font-size:0.74rem; display:block; }
       .unres small { color:var(--dim); font-family:system-ui; display:block; }
+      .drawer.accept { left:calc(var(--lhs-w) + 18px); right:auto; width:400px; }
+      .check { list-style:none; padding:0; margin:0; font-size:0.84rem; }
+      .check li { display:flex; gap:0.5rem; padding:0.3rem 0; align-items:baseline; }
+      .badge { min-width:4rem; text-align:center; font-size:0.7rem; border-radius:999px; padding:0.1rem 0.45rem; border:1px solid var(--border); color:var(--dim); flex:none; }
+      .badge.pass { background:rgba(74,222,128,.12); color:var(--ok); border-color:rgba(74,222,128,.4); }
 
       .statusbar { border-top:1px solid var(--border); background:var(--panel); padding:0.35rem 1rem; font-size:0.75rem; color:var(--dim); display:flex; gap:1.4rem; align-items:center; }
       .statusbar .msg { color:var(--ok); }
@@ -132,7 +149,8 @@
         <div class="strip" onclick="toggleLhs()">⟩<span>MENU · AI</span></div>
         <h4>Menu <span class="chev" title="collapse" onclick="toggleLhs()">⟨</span></h4>
         <span class="item active">◉ Explorer</span>
-        <a class="item" href="/dashboard.html">▦ Acceptance board</a>
+        <span class="item" onclick="toggleAccept()">✓ Acceptance — sprint 2</span>
+        <a class="item" href="/dashboard.html">▦ Sprint-1 board</a>
         <span class="item" onclick="viewIndex()">☰ View Index</span>
         <span class="item" onclick="runIngest()">⟳ Run ingest</span>
         <a class="item" href="https://github.com/SynaptixLabs/Synapse" target="_blank" rel="noopener">⧉ GitHub</a>
@@ -160,6 +178,21 @@
           </div>
         </div>
         <div class="drawer" id="drawer"></div>
+        <div class="drawer accept" id="accept">
+          <h4 style="display:flex">Acceptance — sprint 02 · The Explorer
+            <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="resetAccept()" title="reset progress">↺ reset</span></h4>
+          <ul class="check">
+            <li><span class="badge" id="a1">todo</span> <span><b>My graph renders.</b> Repo-colored clusters, LHS menu + AI, reader panel.</span></li>
+            <li><span class="badge" id="a2">todo</span> <span><b>Filter syncs.</b> Typing dims non-matches; Enter opens the best match.</span></li>
+            <li><span class="badge" id="a3">todo</span> <span><b>Notes read well.</b> Open 3+ notes in the panel — check content/RTL yourself.</span></li>
+            <li><span class="badge" id="a4">todo</span> <span><b>Wikilinks navigate.</b> Click a blue link inside an article (red = no note yet).</span></li>
+            <li><span class="badge" id="a5">todo</span> <span><b>Glossary acts.</b> Toggle a repo/edge + open an unresolved link from the list.</span></li>
+            <li><span class="badge" id="a6">todo</span> <span><b>Accordion works.</b> Hide+restore both panels and drag a divider.</span></li>
+            <li><span class="badge" id="a7"><input type="checkbox" onchange="manualAccept(this,'a7')"></span> <span><b>Honest errors.</b> Stop the backend (`./start.sh stop`), click Run ingest → clear message. Restart after.</span></li>
+            <li><span class="badge" id="a8">todo</span> <span><b>Phone width.</b> Narrow the window (or phone): panels become overlays, ☰ opens the menu.</span></li>
+          </ul>
+          <p style="color:var(--dim);font-size:0.75rem;margin-top:0.5rem">Steps auto-PASS as the app proves them (progress survives reload). When all 8 are green — tell JANUS "PASS" and sprint 2 closes.</p>
+        </div>
       </section>
 
       <div class="rs" id="rs-reader" title="drag to stretch"></div>
