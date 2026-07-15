@@ -21,6 +21,7 @@ from typing import Iterable
 from .models import IngestReport, RepoReport, SourceFile
 
 _HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
+_REPO_RE = re.compile(r"^synapse\.source_repo:\s*(.+?)\s*$", re.MULTILINE)
 FRONTMATTER_END = "---"
 
 
@@ -87,10 +88,17 @@ class IngestService:
         return "written"
 
     # ── the pipeline ──────────────────────────────────────────────────────
-    def ingest(self, repos: Iterable[Path]) -> IngestReport:
+    def ingest(self, repos: Iterable[Path], managed_names: set[str] | None = None) -> IngestReport:
+        """Sync the vault to the enabled roots. With `managed_names` (ALL configured roots,
+        enabled AND disabled), ingest also PRUNES: notes from disabled roots, and notes whose
+        source file no longer exists in an enabled root. Notes from repos outside the roots
+        list (e.g. `✦ summaries`) are never touched."""
         report = IngestReport()
+        expected: set[str] = set()
+        enabled_names = set()
         for repo_root in repos:
             repo_root = Path(repo_root)
+            enabled_names.add(repo_root.name)
             rr = RepoReport(repo=repo_root.name)
             report.repos.append(rr)
             if not repo_root.is_dir():
@@ -104,4 +112,15 @@ class IngestService:
                     rr.unchanged += 1
                 else:
                     rr.skipped += 1
+                if outcome in ("written", "unchanged"):
+                    expected.add(src.note_id)
+        if managed_names is not None and self.notes_dir.is_dir():
+            for note in self.notes_dir.glob("*.md"):
+                head = note.read_text(encoding="utf-8", errors="replace")[:600]
+                m = _REPO_RE.search(head)
+                if not m or m.group(1) not in managed_names:
+                    continue   # not managed by the roots list (summaries etc.) — keep
+                if m.group(1) not in enabled_names or note.name not in expected:
+                    note.unlink()
+                    report.pruned += 1
         return report

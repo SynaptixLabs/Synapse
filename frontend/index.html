@@ -117,6 +117,19 @@
       .unres { color:#f87171; font-family:ui-monospace,monospace; font-size:0.74rem; display:block; }
       .unres small { color:var(--dim); font-family:system-ui; display:block; }
       .drawer.accept { left:calc(var(--lhs-w) + 18px); right:auto; width:400px; }
+      /* LHS-docked drawer: slides out attached to the menu, full height */
+      .drawer.dock { left:0; right:auto; top:0; bottom:0; max-height:none; width:410px;
+                     border-radius:0 14px 14px 0; border-left:none; box-shadow:14px 0 40px rgba(0,0,0,.45);
+                     display:none; }
+      .drawer.dock.open { display:block; }
+      .srcbtns { display:flex; gap:0.4rem; margin:0.2rem 0 0.5rem; }
+      .srcbtns button { background:var(--panel2); color:var(--text); border:1px solid var(--border); border-radius:7px; padding:0.25rem 0.7rem; font-size:0.75rem; cursor:pointer; }
+      .srcbtns button:hover { border-color:var(--accent); color:var(--accent); }
+      .fsbar { display:flex; gap:0.4rem; align-items:center; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:0.3rem 0.5rem; margin:0.5rem 0 0.3rem; font-size:0.75rem; }
+      .fsbar .cur { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; flex:1; color:var(--dim); }
+      .fsls { max-height:34vh; overflow:auto; }
+      .fsls .row .use { margin-left:auto; color:var(--accent); font-size:0.72rem; cursor:pointer; }
+      .repo-badge { font-size:0.6rem; background:#12281a; color:#4ade80; border:1px solid #1d4029; padding:0 5px; border-radius:999px; }
       .check { list-style:none; padding:0; margin:0; font-size:0.84rem; }
       .check li { display:flex; gap:0.5rem; padding:0.3rem 0; align-items:baseline; }
       .badge { min-width:4rem; text-align:center; font-size:0.7rem; border-radius:999px; padding:0.1rem 0.45rem; border:1px solid var(--border); color:var(--dim); flex:none; }
@@ -196,7 +209,7 @@
           </div>
         </div>
         <div class="drawer" id="drawer"></div>
-        <div class="drawer accept" id="sources"></div>
+        <div class="drawer dock" id="sources"></div>
         <div class="drawer accept" id="accept">
           <h4 style="display:flex">Acceptance — sprint 02 · The Explorer
             <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="resetAccept()" title="reset progress">↺ reset</span></h4>

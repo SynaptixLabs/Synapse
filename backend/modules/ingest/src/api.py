@@ -17,16 +17,55 @@ router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
 @router.post("/ingest")
 def ingest() -> dict:
-    """Ingest all ENABLED roots into the vault. Returns the honest report."""
+    """SYNC the vault to the enabled roots (add/update/prune). Returns the honest report."""
     settings = load_settings()
     service = IngestService(settings.vault_path, settings.ignore_dirs)
-    report = service.ingest(settings.source_repos)
+    managed = {Path(e["path"]).name for e in load_roots(settings)}
+    report = service.ingest(settings.source_repos, managed_names=managed)
     return report.to_dict()
 
 
 # ── roots CRUD (D-6): the UI-managed list of source repos ─────────────────────
 class RootRequest(BaseModel):
     path: str
+
+
+class BulkRequest(BaseModel):
+    enabled: bool
+
+
+@router.post("/roots/bulk")
+def bulk_toggle(req: BulkRequest) -> list[dict]:
+    """Select all / deselect all."""
+    settings = load_settings()
+    entries = load_roots(settings)
+    for e in entries:
+        e["enabled"] = req.enabled
+    save_roots(settings, entries)
+    return load_roots(settings)
+
+
+_SKIP_DIRS = {"node_modules", ".git", ".venv", "venv", "__pycache__", "dist", "build", ".cache"}
+
+
+@router.get("/fs")
+def browse_folders(path: str | None = None) -> dict:
+    """Server-side folder browser for 'add root' — a local web app can't read absolute paths
+    from a browser file dialog, so the backend (which IS local) lists directories instead.
+    Starts at the parent of this repo (the projects folder)."""
+    from app.core.config import REPO_ROOT
+    base = Path(path).expanduser().resolve() if path else REPO_ROOT.parent
+    if not base.is_dir():
+        raise HTTPException(status_code=404, detail=f"Not a directory: {base}")
+    dirs = []
+    try:
+        for child in sorted(base.iterdir(), key=lambda c: c.name.lower()):
+            if not child.is_dir() or child.name.startswith(".") or child.name in _SKIP_DIRS:
+                continue
+            dirs.append({"name": child.name, "path": str(child), "is_repo": (child / ".git").is_dir()})
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"No permission to read {base}")
+    return {"path": str(base), "parent": str(base.parent), "dirs": dirs[:200]}
 
 
 @router.get("/roots")

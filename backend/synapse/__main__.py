@@ -27,7 +27,10 @@ def cmd_ingest(settings) -> int:
             "  SYNAPSE_SOURCE_REPOS=/home/you/projects/repo-a,/home/you/projects/repo-b"
         )
         return 2
-    report = IngestService(settings.vault_path, settings.ignore_dirs).ingest(settings.source_repos)
+    from app.core.roots import load_roots
+    from pathlib import Path as _P
+    managed = {_P(e["path"]).name for e in load_roots(settings)}
+    report = IngestService(settings.vault_path, settings.ignore_dirs).ingest(settings.source_repos, managed_names=managed)
     print(report.render())
     stats = GraphService(settings.vault_path).rebuild().stats()
     print(f"\nGraph rebuilt: {stats['notes']} notes, {stats['edges_total']} edges "

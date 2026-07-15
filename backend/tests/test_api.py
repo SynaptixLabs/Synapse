@@ -106,14 +106,37 @@ def test_roots_crud_with_prune(client, tmp_path, monkeypatch):
     rep = client.post("/api/v1/ingest").json()
     assert any(r["repo"] == "repo_c" for r in rep["repos"])
 
-    # toggle: disabled roots are skipped by the next ingest
+    # toggle: ingest is a SYNC — the disabled root's notes are pruned right away
     client.patch("/api/v1/roots", json={"path": str(extra)})
     rep = client.post("/api/v1/ingest").json()
     assert not any(r["repo"] == "repo_c" for r in rep["repos"])
+    assert rep["totals"]["pruned"] == 1
 
-    # delete: root gone AND its notes pruned from the vault (no ghost nodes)
+    # deleted source file → next ingest prunes its note too (no ghost nodes)
+    client.patch("/api/v1/roots", json={"path": str(extra)})   # re-enable
+    client.post("/api/v1/ingest")
+    (extra / "solo.md").unlink()
+    rep = client.post("/api/v1/ingest").json()
+    assert rep["totals"]["pruned"] == 1
+
+    # delete root: list shrinks; nothing left to prune (sync already did)
     out = client.request("DELETE", "/api/v1/roots", json={"path": str(extra)}).json()
-    assert out["pruned_notes"] == 1
+    assert out["pruned_notes"] == 0 and len(out["roots"]) == 2
     client.post("/api/v1/rebuild")
     graph = client.get("/api/v1/graph").json()
     assert not any(n["repo"] == "repo_c" for n in graph["nodes"])
+
+
+def test_bulk_toggle_and_fs_browse(client, tmp_path):
+    client.post("/api/v1/ingest")                                   # fill the vault first
+    off = client.post("/api/v1/roots/bulk", json={"enabled": False}).json()
+    assert all(not r["enabled"] for r in off)
+    rep = client.post("/api/v1/ingest").json()
+    assert rep["totals"]["files_found"] == 0 and rep["totals"]["pruned"] >= 4   # everything synced away
+    on = client.post("/api/v1/roots/bulk", json={"enabled": True}).json()
+    assert all(r["enabled"] for r in on)
+
+    fs = client.get("/api/v1/fs", params={"path": str(FIXTURES)}).json()
+    names = [d["name"] for d in fs["dirs"]]
+    assert "repo_a" in names and "repo_b" in names
+    assert client.get("/api/v1/fs", params={"path": "/nowhere"}).status_code == 404

@@ -39,6 +39,7 @@ class IngestReport:
     """The honest ingest outcome — printed by the CLI and returned by the API verbatim."""
 
     repos: list[RepoReport] = field(default_factory=list)
+    pruned: int = 0            # notes removed by the sync (disabled roots / deleted sources)
 
     @property
     def files_found(self) -> int:
@@ -64,6 +65,7 @@ class IngestReport:
                 "notes_written": self.notes_written,
                 "unchanged": self.unchanged,
                 "skipped": self.skipped,
+                "pruned": self.pruned,
             },
         }
 
@@ -77,6 +79,6 @@ class IngestReport:
         t = self.to_dict()["totals"]
         lines.append(
             f"  TOTAL: {t['files_found']} found → {t['notes_written']} written, "
-            f"{t['unchanged']} unchanged, {t['skipped']} skipped"
+            f"{t['unchanged']} unchanged, {t['skipped']} skipped, {t['pruned']} pruned"
         )
         return "\n".join(lines)

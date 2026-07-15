@@ -91,7 +91,7 @@ window.runIngest = async () => {
     const rep = await api('/ingest', { method: 'POST' });
     await api('/rebuild', { method: 'POST' });
     const t = rep.totals;
-    setMsg(`ingest: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped`);
+    setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned`);
     await refresh();
   } catch (e) { setMsg('ingest failed: ' + e.message, true); }
 };
@@ -124,40 +124,76 @@ $('filter').addEventListener('keydown', (ev) => {
 async function buildSources() {
   try {
     const roots = await api('/roots');
+    const rows = roots.map(r => `
+      <div class="row" title="${r.path}">
+        <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="enable/disable" />
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.path}</span>
+        ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
+        <span class="tg" data-del-root="${r.path}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
+      </div>`).join('');
     $('sources').innerHTML =
-      `<h4>Sources — the repos this brain ingests</h4>` +
-      roots.map(r => `
-        <div class="row" title="${r.path}">
-          <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="enable/disable" />
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.path}</span>
-          ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
-          <span class="tg" data-del-root="${r.path}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
-        </div>`).join('') +
-      `<div style="display:flex;gap:0.4rem;margin-top:0.6rem">
-         <input type="text" id="newroot" placeholder="/absolute/path/to/repo" style="flex:1" />
+      `<h4 style="display:flex">Sources — the repos this brain ingests
+         <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="toggleSources()">✕</span></h4>
+       <div class="srcbtns">
+         <button onclick="bulkRoots(true)">✓ Select all</button>
+         <button onclick="bulkRoots(false)">◻ Deselect all</button>
+         <button onclick="runIngest()">⟳ Apply (ingest)</button>
+       </div>` + rows +
+      `<h4>Add a root</h4>
+       <div style="display:flex;gap:0.4rem">
+         <input type="text" id="newroot" placeholder="/absolute/path — or browse ↓" style="flex:1" />
          <button class="mi" style="border:1px solid var(--border)" onclick="addRoot()">+ Add</button>
        </div>
+       <div class="fsbar"><span style="cursor:pointer" onclick="browseUp()" title="up one folder">⬆</span>
+         <span class="cur" id="fscur">…</span></div>
+       <div class="fsls" id="fsls"></div>
        <p style="color:var(--dim);font-size:0.72rem;margin-top:0.5rem">
-         Changes apply on the next <b>Run ingest</b>. Removing a root also prunes its notes
-         (no ghost nodes). Default when nothing is configured: this project itself.</p>`;
+         Ingest is a <b>sync</b>: enabled roots are added/updated, disabled roots and deleted
+         files are pruned (✦ summaries are never touched). Default with nothing configured:
+         this project itself.</p>`;
+    await browseTo(fsPath);
   } catch (e) { $('sources').innerHTML = `<h4>Sources</h4><div class="row">${e.message}</div>`; }
 }
+
+// server-side folder browser (a local web app can't read absolute paths from a file dialog)
+let fsPath = null;
+async function browseTo(path) {
+  const d = await api('/fs' + (path ? `?path=${encodeURIComponent(path)}` : ''));
+  fsPath = d.path;
+  $('fscur').textContent = d.path;
+  $('fscur').dataset.parent = d.parent;
+  $('fsls').innerHTML = d.dirs.map(x => `
+    <div class="row" data-fs="${x.path}">
+      <span>📁 ${x.name}</span>
+      ${x.is_repo ? '<span class="repo-badge">git repo</span>' : ''}
+      <span class="use" data-use-root="${x.path}">+ use</span>
+    </div>`).join('') || '<div class="row" style="color:var(--dim)">no subfolders</div>';
+}
+window.browseUp = () => browseTo($('fscur').dataset.parent);
+window.bulkRoots = async (enabled) => {
+  await api('/roots/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
+  await buildSources();
+  setMsg(enabled ? 'all roots enabled — Apply (ingest) to sync' : 'all roots disabled — Apply (ingest) will empty their notes');
+};
 window.toggleSources = () => { const el = $('sources'); el.classList.toggle('open'); if (el.classList.contains('open')) buildSources(); };
-window.addRoot = async () => {
-  const path = $('newroot').value.trim();
-  if (!path) return;
+window.addRoot = async (path) => {
+  const p = path ?? $('newroot').value.trim();
+  if (!p) return;
   try {
-    await api('/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    await api('/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) });
     await buildSources();
-    setMsg('root added — Run ingest to bring its notes in');
+    setMsg('root added — Apply (ingest) to bring its notes in');
   } catch (e) { setMsg(e.message, true); }
 };
 $('sources').addEventListener('click', async (ev) => {
   const t = ev.target;
   try {
+    if (t.dataset.useRoot) { await addRoot(t.dataset.useRoot); return; }
+    const fsrow = t.closest('.row[data-fs]');
+    if (fsrow && !t.dataset.useRoot) { await browseTo(fsrow.dataset.fs); return; }
     if (t.dataset.toggleRoot) {
       await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.toggleRoot }) });
-      setMsg('root toggled — Run ingest to apply');
+      setMsg('root toggled — Apply (ingest) to sync');
     } else if (t.dataset.delRoot) {
       if (!window.confirm(`Remove this root and prune its notes from the vault?\n${t.dataset.delRoot}`)) return;
       const out = await api('/roots', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.delRoot }) });
