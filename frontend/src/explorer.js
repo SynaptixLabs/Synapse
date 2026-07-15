@@ -136,6 +136,12 @@ function windowed() {
   return { n: nodes.filter(x => keep.has(x.id)), e: edges.filter(x => keep.has(x.src) && keep.has(x.dst)) };
 }
 
+/** The long tail goes to the graph's semantic-zoom reveal layer (D-8): static dots around
+ *  their repo hub, visible past zoom 1.5, clickable — a click promotes them into the window. */
+function sendStatics() {
+  graph.setStatics(winIds ? nodes.filter(x => x.kind === 'note' && !winIds.has(x.id)) : []);
+}
+
 /** Opening a note outside the window pulls it (+ direct neighbors) into the graph. */
 function pullIntoWindow(id) {
   if (!winIds || winIds.has(id) || !nodes.some(x => x.id === id)) return;
@@ -146,6 +152,7 @@ function pullIntoWindow(id) {
     if (e.dst === id) winIds.add(e.src);
   }
   graph.setData(nodes.filter(x => winIds.has(x.id)), edges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
+  sendStatics();
 }
 
 // ── data ────────────────────────────────────────────────────────────────────
@@ -158,8 +165,9 @@ async function refresh() {
     $('empty').style.display = 'none';
     const view = windowed();
     graph.setData(view.n, view.e);
+    sendStatics();
     $('st-notes').textContent = winIds
-      ? `${stats.notes} notes · graph: top ${view.n.filter(x => x.kind === 'note').length} by links`
+      ? `${stats.notes} notes · graph: top ${view.n.filter(x => x.kind === 'note').length} by links · zoom reveals the rest`
       : `${stats.notes} notes`;
     $('st-edges').textContent = `${stats.edges_total} edges`;
     $('st-unres').textContent = `${stats.unresolved_links} unresolved`;

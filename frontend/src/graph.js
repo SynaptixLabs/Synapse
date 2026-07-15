@@ -15,6 +15,14 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const hiddenRepos = new Set();
   let matchSet = null;   // Set of note ids matching the filter (null = no filter)
 
+  // Semantic zoom (D-8): the z-axis of a 2D map — zoom level = importance altitude. The
+  // long tail (notes outside the importance window) lives here as STATIC dots haloed around
+  // their repo hub: no physics, drawn only past REVEAL_K, hoverable + clickable (a click
+  // promotes the note into the living graph via the host's onNodeClick → pull-in).
+  const REVEAL_K = 1.5;
+  let statics = [];        // [{ n, dx, dy }] — deterministic halo offset from the repo hub
+  let staticsDrawn = 0;    // last-frame count (exposed via state() for honest verification)
+
   const W = () => canvas.clientWidth, H = () => canvas.clientHeight || 340;
   // Beyond the POC budget (~2k nodes) the O(n²) physics + full edge draw would freeze the tab:
   // degrade honestly — spring/gravity-only layout, wikilink-only edges until zoomed, no hulls.
@@ -36,6 +44,19 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     }
     sim.view = { x: 0, y: 0, k: 1 };
     kick(1);
+  }
+
+  function setStatics(list) {
+    statics = list.map((n) => {
+      let h = 0;
+      for (let i = 0; i < n.id.length; i++) h = (h * 31 + n.id.charCodeAt(i)) >>> 0;
+      const ang = (h % 3600) / 3600 * Math.PI * 2;
+      // uniform-density annulus OUTSIDE the animated cluster — sqrt spread keeps a 20k-note
+      // single-root long tail from piling into one thin ring
+      const rad = 170 + Math.sqrt(((h >>> 8) % 1000) / 1000) * 620;
+      return { n, dx: Math.cos(ang) * rad, dy: Math.sin(ang) * rad };
+    });
+    draw();
   }
 
   const visibleNode = (n) => n.kind === 'repo' ? !hiddenRepos.has(n.repo) : !hiddenRepos.has(n.repo);
@@ -180,14 +201,28 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const focusSet = sim.focus
       ? (sim.focus.startsWith('repo:') ? clusterSet(sim.focus.slice(5)) : neighborsOf(sim.focus))
       : null;
-    const hood = sim.hover ? neighborsOf(sim.hover) : focusSet;
+    // hovering a STATIC (long-tail) dot must not spotlight-dim the whole living graph
+    const hood = (sim.hover && sim.p.has(sim.hover)) ? neighborsOf(sim.hover) : focusSet;
 
     drawHulls();   // soft per-repo blobs — the grouping layer
+
+    // map-engine LOD discipline: symbols and text keep a ~constant SCREEN size while the
+    // world zooms underneath, and labels declutter on a screen-space grid (no label soup).
+    const K = sim.view.k;
+    const labelCells = new Set();
+    const labelFits = (x, y) => {
+      const cell = (((x * K + sim.view.x) / 160) | 0) + ':' + (((y * K + sim.view.y) / 30) | 0);
+      if (labelCells.has(cell)) return false;
+      labelCells.add(cell); return true;
+    };
+    // zooming IN keeps symbols at constant screen size (map convention); zooming OUT only
+    // softens shrink so the brain stays visible from afar
+    const symScale = K < 1 ? Math.sqrt(K) : K;
 
     // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
     const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342' };
     const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13 };
-    ctx.lineWidth = 0.75;
+    ctx.lineWidth = 0.75 / Math.sqrt(K);
     const bigMode = big();
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
@@ -216,8 +251,8 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 14;
         ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, 7); ctx.stroke();
         ctx.shadowBlur = 0;
-        ctx.fillStyle = '#e6e6e6'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'center';
-        ctx.fillText(n.title, p.x, p.y - 15);
+        ctx.fillStyle = '#e6e6e6'; ctx.font = `600 ${12 / K}px system-ui`; ctx.textAlign = 'center';
+        ctx.fillText(n.title, p.x, p.y - 15 / K);
         ctx.globalAlpha = 1;
         continue;
       }
@@ -228,7 +263,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (inMatch) { ctx.shadowColor = '#7c9eff'; ctx.shadowBlur = 14; }
       ctx.fillStyle = noteColor(n);
       if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
-      const r = 2.8 + Math.min(deg, 14) * 0.5;
+      const r = (2.8 + Math.min(deg, 14) * 0.5) / symScale;
       if (big() && !inMatch && sim.hover !== n.id) {
         ctx.shadowBlur = 0;
         ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);   // fast path: 18k arcs/frame won't fly
@@ -248,13 +283,39 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         ctx.strokeStyle = '#e6e6e6'; ctx.lineWidth = 1.6;
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 4.5, 0, 7); ctx.stroke();
       }
-      // labels: hovered + small neighborhoods always; hubs-of-the-brain when zoomed in (LOD)
+      // labels: hovered + small neighborhoods always; zoomed-in hubs pass the DECLUTTER grid
       const label = sim.hover === n.id || (hood?.has(n.id) && hood.size < 14) ||
                     (inMatch && matchSet.size <= 15) ||
-                    (!hood && !matchSet && sim.view.k >= 1.4 && deg >= 6);
+                    (!hood && !matchSet && K >= 1.4 && deg >= 6 && labelFits(p.x, p.y));
       if (label && !dim) {
-        ctx.fillStyle = '#e6e6e6'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-        ctx.fillText(n.title.slice(0, 34), p.x, p.y - 9);
+        ctx.fillStyle = '#e6e6e6'; ctx.font = `${11 / K}px system-ui`; ctx.textAlign = 'center';
+        ctx.fillText(n.title.slice(0, 34), p.x, p.y - 9 / K);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── the reveal layer: past REVEAL_K the long tail fades in around its repo hub ──
+    staticsDrawn = 0;
+    if (statics.length && sim.view.k >= REVEAL_K) {
+      const minX = -sim.view.x / sim.view.k, minY = -sim.view.y / sim.view.k;
+      const maxX = minX + W() / sim.view.k, maxY = minY + H() / sim.view.k;
+      const t = Math.min(1, (sim.view.k - REVEAL_K) / 0.8);   // fade in over ~one zoom stop
+      ctx.globalAlpha = 0.3 * t;
+      for (const s of statics) {
+        if (hiddenRepos.has(s.n.repo) || sim.p.has(s.n.id)) continue;
+        const hub = sim.p.get(`repo:${s.n.repo}`); if (!hub) continue;
+        const x = hub.x + s.dx, y = hub.y + s.dy;
+        if (x < minX || x > maxX || y < minY || y > maxY) continue;
+        const ds = 2.4 / sim.view.k;   // constant screen size, smaller than the living nodes
+        ctx.fillStyle = `hsl(${hue(s.n.repo)} 45% 50%)`;
+        ctx.fillRect(x - ds / 2, y - ds / 2, ds, ds);
+        if (s.n.id === sim.hover) {
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = '#e6e6e6'; ctx.font = `${11 / sim.view.k}px system-ui`; ctx.textAlign = 'center';
+          ctx.fillText(s.n.title.slice(0, 34), x, y - 8 / sim.view.k);
+          ctx.globalAlpha = 0.3 * t;
+        }
+        if (++staticsDrawn >= 2000) break;   // per-frame budget — honesty over spectacle
       }
       ctx.globalAlpha = 1;
     }
@@ -274,6 +335,14 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       const r = n.kind === 'repo' ? 16 / sim.view.k : bd;   // hubs get a bigger grab radius
       const d = Math.hypot(p.x - w.x, p.y - w.y);
       if (d < (n.kind === 'repo' ? r : bd)) { bd = d; best = n; }
+    }
+    if (!best && sim.view.k >= REVEAL_K) {   // revealed long-tail dots are hoverable/clickable too
+      for (const s of statics) {
+        if (hiddenRepos.has(s.n.repo) || sim.p.has(s.n.id)) continue;
+        const hub = sim.p.get(`repo:${s.n.repo}`); if (!hub) continue;
+        const d = Math.hypot(hub.x + s.dx - w.x, hub.y + s.dy - w.y);
+        if (d < bd) { bd = d; best = s.n; }
+      }
     }
     return best;
   };
@@ -374,6 +443,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
 
   return {
     setData,
+    setStatics,
     redraw: draw,
     reflow,
     reset() { pinned.clear(); sim.focus = null; setData(nodes, edges); },   // fresh layout, all pins released
@@ -388,6 +458,6 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
-    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus }),
+    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, statics: statics.length, staticsDrawn, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }) }),
   };
 }
