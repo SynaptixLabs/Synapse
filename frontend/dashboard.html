@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="SYNAPSE — a second brain for your repos. Sprint-1 acceptance dashboard: run ingest, read notes as wiki articles, prove the graph." />
+    <title>SYNAPSE · acceptance board</title>
+    <style>
+      :root {
+        --bg:#0f1115; --panel:#161a22; --panel2:#131720; --border:#262c38;
+        --text:#e6e6e6; --dim:#9aa3b2; --accent:#7c9eff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+      }
+      * { box-sizing:border-box; }
+      body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); margin:0; padding:1.2rem; }
+      header { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
+      header h1 { font-size:1.4rem; margin:0; letter-spacing:0.05em; }
+      header h1 .dot { color:var(--accent); }
+      header .tag { color:var(--dim); }
+      header .health { margin-left:auto; font-size:0.85rem; color:var(--dim); }
+      #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
+      .grid { display:grid; gap:0.9rem; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:start; }
+      .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:0.9rem 1rem; }
+      .card h2 { font-size:0.8rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--dim); margin:0 0 0.6rem; }
+      .actions { display:flex; gap:0.6rem; flex-wrap:wrap; }
+      button { background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:0.55rem 1rem; font-weight:600; cursor:pointer; }
+      button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+      button:disabled { opacity:0.5; cursor:wait; }
+      table { width:100%; border-collapse:collapse; font-size:0.88rem; }
+      th,td { text-align:left; padding:0.3rem 0.45rem; border-bottom:1px solid var(--border); }
+      th { color:var(--dim); font-weight:500; }
+      td.num { text-align:right; font-variant-numeric:tabular-nums; }
+      .kpis { display:flex; gap:0.9rem; flex-wrap:wrap; }
+      .kpi { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:0.5rem 0.9rem; }
+      .kpi b { display:block; font-size:1.3rem; } .kpi span { color:var(--dim); font-size:0.75rem; }
+      .check { list-style:none; padding:0; margin:0; font-size:0.9rem; }
+      .check li { display:flex; gap:0.5rem; padding:0.28rem 0; align-items:baseline; }
+      .badge { min-width:4.2rem; text-align:center; font-size:0.72rem; border-radius:999px; padding:0.1rem 0.5rem; border:1px solid var(--border); color:var(--dim); }
+      .badge.pass { background:rgba(74,222,128,.12); color:var(--ok); border-color:rgba(74,222,128,.4); }
+      .badge.wait { color:var(--warn); }
+      canvas { width:100%; height:340px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; }
+      #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:9; max-width:40ch; }
+      input[type=text] { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.5rem 0.7rem; margin-bottom:0.5rem; }
+      #notelist { max-height:340px; overflow:auto; font-size:0.85rem; }
+      #notelist div { padding:0.22rem 0.3rem; cursor:pointer; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      #notelist div:hover { background:var(--panel2); color:var(--accent); }
+      .muted { color:var(--dim); font-size:0.82rem; }
+      .legend { display:flex; gap:1rem; font-size:0.75rem; color:var(--dim); margin-top:0.4rem; }
+      .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; border-radius:2px; }
+      footer { color:var(--dim); font-size:0.78rem; margin-top:1rem; }
+      a { color:var(--accent); }
+
+      /* ── The wiki popup: a paper encyclopedia article over the dark app ──
+         Tokens borrowed from the org KB wiki (pilot-lab/KB/wiki/style.css). */
+      #overlay { position:fixed; inset:0; background:rgba(5,7,10,.62); display:none; place-items:center; z-index:50; padding:1.5rem 1rem; }
+      #overlay.open { display:grid; }
+      .wiki { background:#fff; color:#202122; width:min(920px,100%); max-height:92vh; overflow:auto;
+              border-radius:8px; box-shadow:0 18px 60px rgba(0,0,0,.5);
+              font-family:'Linux Libertine', Georgia, 'Times New Roman', serif; line-height:1.6; }
+      .wiki-top { position:sticky; top:0; background:#f0eee6; border-bottom:1px solid #a2a9b1;
+                  padding:8px 16px; font-family:sans-serif; font-size:13px; display:flex; gap:12px; align-items:center; z-index:2; }
+      .wiki-top .crumb { color:#54595d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .wiki-top button { margin-left:auto; background:none; border:1px solid #a2a9b1; color:#202122; border-radius:4px; padding:2px 10px; font-size:12px; }
+      .wiki-top .back { margin-left:0; }
+      .wiki-article { padding:20px 30px 26px; font-size:15px; }
+      .wiki-article h1 { font-size:28px; font-weight:400; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; overflow-wrap:anywhere; }
+      .wiki-article h2 { font-size:22px; font-weight:400; margin-top:26px; padding-bottom:4px; border-bottom:1px solid #eaecf0; }
+      .wiki-article h3 { font-size:17px; font-weight:700; margin-top:20px; }
+      .wiki-article a { color:#0645ad; text-decoration:none; }
+      .wiki-article a:hover { text-decoration:underline; }
+      .wiki-article a.wl-new { color:#ba0000; cursor:help; }
+      .wiki-article code { background:#f8f9fa; border:1px solid #eaecf0; border-radius:3px; padding:1px 5px; font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#202122; }
+      .wiki-article pre { background:#f8f9fa; border:1px solid #a2a9b1; border-radius:3px; padding:12px; overflow-x:auto; font-size:13px; }
+      .wiki-article pre code { border:none; background:none; padding:0; }
+      .wiki-article blockquote { border-left:4px solid #a2a9b1; background:#f8f9fa; color:#54595d; margin:12px 0; padding:4px 12px; }
+      .wiki-article table { border-collapse:collapse; margin:12px 0; font-size:14px; display:block; overflow-x:auto; max-width:100%; }
+      .wiki-article th, .wiki-article td { border:1px solid #a2a9b1; padding:6px 10px; text-align:left; vertical-align:top; }
+      .wiki-article th { background:#f0eee6; }
+      .wiki-article img { max-width:100%; }
+      .wiki-infobox { float:right; width:260px; background:#f0eee6; border:1px solid #a2a9b1; margin:0 0 16px 22px; padding:12px; font-family:sans-serif; font-size:12px; }
+      .wiki-infobox h3 { margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; font-size:13px; font-weight:700; }
+      .wiki-infobox dt { font-weight:700; margin-top:6px; color:#54595d; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; }
+      .wiki-infobox dd { margin:2px 0 0; word-wrap:break-word; }
+      @media (max-width:700px) { .wiki-infobox { float:none; width:auto; margin:0 0 14px; } .wiki-article { padding:16px; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>SYNAPSE<span class="dot">.</span></h1>
+      <span class="tag">a second brain for your repos — sprint-1 acceptance board</span>
+      <a href="/" style="color:var(--accent);font-size:0.85rem;text-decoration:none">◉ open the Explorer</a>
+      <span class="health">backend: <span id="health">checking…</span></span>
+    </header>
+
+    <div class="grid">
+      <section class="card" style="grid-column:1/-1">
+        <h2>Acceptance — sprint 01 · The Brain</h2>
+        <ul class="check" id="checklist">
+          <li><span class="badge" id="s1">todo</span> <span><b>Ingest works.</b> Run ingest → an honest report (found / written / unchanged / skipped) per repo.</span></li>
+          <li><span class="badge" id="s2">todo</span> <span><b>Idempotent.</b> Run ingest again → everything <code>unchanged</code>, nothing duplicated.</span></li>
+          <li><span class="badge" id="s3"><input type="checkbox" onchange="manual(this,'s3')"></span> <span><b>Vault readable.</b> Open notes — a wiki-style article popup; right repo/path, Hebrew/UTF-8 intact, wikilinks navigate.</span></li>
+          <li><span class="badge" id="s4"><input type="checkbox" onchange="manual(this,'s4')"></span> <span><b>Index is the front door.</b> View the Index — every note listed, counts honest, entries clickable.</span></li>
+          <li><span class="badge" id="s5"><input type="checkbox" onchange="manual(this,'s5')"></span> <span><b>Graph honest.</b> Stats + preview match reality (spot-check 3 notes you know).</span></li>
+          <li><span class="badge" id="s6">todo</span> <span><b>Vault is the truth.</b> Fresh rebuild (deletes graph.json first) → identical stats.</span></li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Actions</h2>
+        <div class="actions">
+          <button id="btn-ingest" onclick="runIngest()">Run ingest</button>
+          <button id="btn-fresh" class="secondary" onclick="freshRebuild()">Fresh rebuild (invariance proof)</button>
+          <button class="secondary" onclick="loadIndex()">View Index.md</button>
+        </div>
+        <p class="muted" id="action-msg" style="min-height:1.2em"></p>
+        <div id="report"></div>
+      </section>
+
+      <section class="card">
+        <h2>Stats</h2>
+        <div class="kpis" id="kpis"><span class="muted">No graph yet — run ingest.</span></div>
+        <div id="top" style="margin-top:0.6rem"></div>
+      </section>
+
+      <section class="card" style="grid-column:1/-1">
+        <h2>Graph preview <span style="text-transform:none;letter-spacing:0">(the interactive explorer ships in sprint 2)</span></h2>
+        <canvas id="graph"></canvas>
+        <div class="legend">
+          <span><i style="background:#7c9eff"></i>wikilink</span>
+          <span><i style="background:#9aa3b2"></i>relative</span>
+          <span><i style="background:#3a4152"></i>repo grouping</span>
+          <span id="graphinfo"></span>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column:1/-1">
+        <h2>Notes browser <span style="text-transform:none;letter-spacing:0">— click a note to read it as a wiki article</span></h2>
+        <input type="text" id="filter" placeholder="filter notes…" oninput="renderList()" />
+        <div id="notelist"><span class="muted">No graph yet.</span></div>
+      </section>
+    </div>
+
+    <!-- The wiki article popup -->
+    <div id="overlay">
+      <div class="wiki" role="dialog" aria-modal="true">
+        <div class="wiki-top">
+          <button class="back" id="wiki-back" onclick="wikiBack()" style="display:none">← back</button>
+          <span class="crumb" id="wiki-crumb"></span>
+          <button onclick="closeWiki()" aria-label="Close">✕ close</button>
+        </div>
+        <div class="wiki-article" id="wiki-article" dir="auto"></div>
+      </div>
+    </div>
+
+    <div id="tooltip"></div>
+    <footer>
+      Vault: <code>data/vault/</code> · CLI twin: <code>./synapse ingest · rebuild · stats</code> ·
+      <a href="https://github.com/SynaptixLabs/Synapse">GitHub</a> · MIT · started via <code>./start.sh</code>
+    </footer>
+
+    <script type="module" src="/src/dashboard.js"></script>
+  </body>
+</html>

@@ -3,159 +3,188 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="SYNAPSE — a second brain for your repos. Sprint-1 acceptance dashboard: run ingest, read notes as wiki articles, prove the graph." />
-    <title>SYNAPSE · brain dashboard</title>
+    <meta name="description" content="SYNAPSE explorer — wander your second brain: force graph, wiki reading panel, glossary. A second brain for your repos, by SynaptixLabs (MIT)." />
+    <title>SYNAPSE · explorer</title>
     <style>
-      :root {
-        --bg:#0f1115; --panel:#161a22; --panel2:#131720; --border:#262c38;
-        --text:#e6e6e6; --dim:#9aa3b2; --accent:#7c9eff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
-      }
-      * { box-sizing:border-box; }
-      body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); margin:0; padding:1.2rem; }
-      header { display:flex; align-items:baseline; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; }
-      header h1 { font-size:1.4rem; margin:0; letter-spacing:0.05em; }
-      header h1 .dot { color:var(--accent); }
-      header .tag { color:var(--dim); }
-      header .health { margin-left:auto; font-size:0.85rem; color:var(--dim); }
-      #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
-      .grid { display:grid; gap:0.9rem; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); align-items:start; }
-      .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:0.9rem 1rem; }
-      .card h2 { font-size:0.8rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--dim); margin:0 0 0.6rem; }
-      .actions { display:flex; gap:0.6rem; flex-wrap:wrap; }
-      button { background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:0.55rem 1rem; font-weight:600; cursor:pointer; }
-      button.secondary { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
-      button:disabled { opacity:0.5; cursor:wait; }
-      table { width:100%; border-collapse:collapse; font-size:0.88rem; }
-      th,td { text-align:left; padding:0.3rem 0.45rem; border-bottom:1px solid var(--border); }
-      th { color:var(--dim); font-weight:500; }
-      td.num { text-align:right; font-variant-numeric:tabular-nums; }
-      .kpis { display:flex; gap:0.9rem; flex-wrap:wrap; }
-      .kpi { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:0.5rem 0.9rem; }
-      .kpi b { display:block; font-size:1.3rem; } .kpi span { color:var(--dim); font-size:0.75rem; }
-      .check { list-style:none; padding:0; margin:0; font-size:0.9rem; }
-      .check li { display:flex; gap:0.5rem; padding:0.28rem 0; align-items:baseline; }
-      .badge { min-width:4.2rem; text-align:center; font-size:0.72rem; border-radius:999px; padding:0.1rem 0.5rem; border:1px solid var(--border); color:var(--dim); }
-      .badge.pass { background:rgba(74,222,128,.12); color:var(--ok); border-color:rgba(74,222,128,.4); }
-      .badge.wait { color:var(--warn); }
-      canvas { width:100%; height:340px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; }
-      #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:9; max-width:40ch; }
-      input[type=text] { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.5rem 0.7rem; margin-bottom:0.5rem; }
-      #notelist { max-height:340px; overflow:auto; font-size:0.85rem; }
-      #notelist div { padding:0.22rem 0.3rem; cursor:pointer; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-      #notelist div:hover { background:var(--panel2); color:var(--accent); }
-      .muted { color:var(--dim); font-size:0.82rem; }
-      .legend { display:flex; gap:1rem; font-size:0.75rem; color:var(--dim); margin-top:0.4rem; }
-      .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:4px; border-radius:2px; }
-      footer { color:var(--dim); font-size:0.78rem; margin-top:1rem; }
-      a { color:var(--accent); }
+      :root { --bg:#0f1115; --panel:#161a22; --panel2:#131720; --border:#262c38; --text:#e6e6e6;
+              --dim:#9aa3b2; --accent:#7c9eff; --ok:#4ade80; --bad:#f87171;
+              --lhs-w:240px; --reader-w:440px; }
+      * { box-sizing:border-box; margin:0; }
+      body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+      body[data-lhs="closed"] { --lhs-w:36px; }
+      body[data-reader="closed"] { --reader-w:36px; }
 
-      /* ── The wiki popup: a paper encyclopedia article over the dark app ──
-         Tokens borrowed from the org KB wiki (pilot-lab/KB/wiki/style.css). */
-      #overlay { position:fixed; inset:0; background:rgba(5,7,10,.62); display:none; place-items:center; z-index:50; padding:1.5rem 1rem; }
-      #overlay.open { display:grid; }
-      .wiki { background:#fff; color:#202122; width:min(920px,100%); max-height:92vh; overflow:auto;
-              border-radius:8px; box-shadow:0 18px 60px rgba(0,0,0,.5);
-              font-family:'Linux Libertine', Georgia, 'Times New Roman', serif; line-height:1.6; }
-      .wiki-top { position:sticky; top:0; background:#f0eee6; border-bottom:1px solid #a2a9b1;
-                  padding:8px 16px; font-family:sans-serif; font-size:13px; display:flex; gap:12px; align-items:center; z-index:2; }
-      .wiki-top .crumb { color:#54595d; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-      .wiki-top button { margin-left:auto; background:none; border:1px solid #a2a9b1; color:#202122; border-radius:4px; padding:2px 10px; font-size:12px; }
-      .wiki-top .back { margin-left:0; }
-      .wiki-article { padding:20px 30px 26px; font-size:15px; }
-      .wiki-article h1 { font-size:28px; font-weight:400; margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; overflow-wrap:anywhere; }
-      .wiki-article h2 { font-size:22px; font-weight:400; margin-top:26px; padding-bottom:4px; border-bottom:1px solid #eaecf0; }
-      .wiki-article h3 { font-size:17px; font-weight:700; margin-top:20px; }
-      .wiki-article a { color:#0645ad; text-decoration:none; }
-      .wiki-article a:hover { text-decoration:underline; }
-      .wiki-article a.wl-new { color:#ba0000; cursor:help; }
-      .wiki-article code { background:#f8f9fa; border:1px solid #eaecf0; border-radius:3px; padding:1px 5px; font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#202122; }
-      .wiki-article pre { background:#f8f9fa; border:1px solid #a2a9b1; border-radius:3px; padding:12px; overflow-x:auto; font-size:13px; }
-      .wiki-article pre code { border:none; background:none; padding:0; }
-      .wiki-article blockquote { border-left:4px solid #a2a9b1; background:#f8f9fa; color:#54595d; margin:12px 0; padding:4px 12px; }
-      .wiki-article table { border-collapse:collapse; margin:12px 0; font-size:14px; display:block; overflow-x:auto; max-width:100%; }
-      .wiki-article th, .wiki-article td { border:1px solid #a2a9b1; padding:6px 10px; text-align:left; vertical-align:top; }
-      .wiki-article th { background:#f0eee6; }
-      .wiki-article img { max-width:100%; }
-      .wiki-infobox { float:right; width:260px; background:#f0eee6; border:1px solid #a2a9b1; margin:0 0 16px 22px; padding:12px; font-family:sans-serif; font-size:12px; }
-      .wiki-infobox h3 { margin:0 0 8px; padding-bottom:6px; border-bottom:1px solid #a2a9b1; font-size:13px; font-weight:700; }
-      .wiki-infobox dt { font-weight:700; margin-top:6px; color:#54595d; font-size:10px; text-transform:uppercase; letter-spacing:0.06em; }
-      .wiki-infobox dd { margin:2px 0 0; word-wrap:break-word; }
-      @media (max-width:700px) { .wiki-infobox { float:none; width:auto; margin:0 0 14px; } .wiki-article { padding:16px; } }
+      .topbar { display:flex; align-items:center; gap:0.9rem; padding:0.55rem 1rem; border-bottom:1px solid var(--border); background:var(--panel); z-index:6; }
+      .topbar b { letter-spacing:0.05em; } .topbar b i { color:var(--accent); font-style:normal; }
+      .topbar input { flex:1; max-width:480px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.45rem 0.8rem; }
+      .mi { color:var(--dim); font-size:0.85rem; cursor:pointer; padding:0.3rem 0.6rem; border-radius:6px; background:none; border:none; font-family:inherit; }
+      .mi:hover, .mi.open { background:var(--panel2); color:var(--text); }
+      .topbar .right { margin-left:auto; display:flex; gap:0.3rem; align-items:center; font-size:0.85rem; color:var(--dim); }
+      #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
+
+      main { flex:1; display:grid; grid-template-columns:var(--lhs-w) 6px 1fr 6px var(--reader-w); min-height:0; position:relative; }
+
+      .lhs { background:var(--panel); border-right:1px solid var(--border); padding:0.7rem; font-size:0.86rem; display:flex; flex-direction:column; gap:0.15rem; overflow:hidden; }
+      body[data-lhs="closed"] .lhs > :not(.strip) { display:none; }
+      .lhs .strip { display:none; }
+      body[data-lhs="closed"] .lhs .strip { display:flex; flex-direction:column; align-items:center; gap:0.6rem; cursor:pointer; color:var(--dim); padding-top:0.4rem; }
+      .lhs .strip span { writing-mode:vertical-rl; font-size:0.7rem; letter-spacing:0.12em; }
+      .lhs h4 { font-size:0.66rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin:0.6rem 0 0.3rem; display:flex; align-items:center; }
+      .lhs h4 .chev { margin-left:auto; cursor:pointer; padding:0 0.3rem; }
+      .lhs .item { padding:0.35rem 0.5rem; border-radius:7px; cursor:pointer; display:flex; gap:0.5rem; align-items:center; color:var(--text); text-decoration:none; }
+      .lhs .item:hover { background:var(--panel2); }
+      .lhs .item.active { background:var(--panel2); color:var(--accent); font-weight:600; }
+      .lhs .ai { margin-top:auto; background:var(--panel2); border:1px dashed var(--border); border-radius:10px; padding:0.7rem; }
+      .lhs .ai .muted { color:var(--dim); font-size:0.78rem; padding:0.2rem 0; }
+      .lhs .ai .act { display:flex; justify-content:space-between; align-items:center; gap:0.4rem; padding:0.3rem 0.2rem; color:var(--dim); font-size:0.8rem; }
+      .tag { font-size:0.62rem; background:#2a2410; color:#fbbf24; border:1px solid #4a3d12; padding:1px 6px; border-radius:999px; white-space:nowrap; }
+
+      .rs { cursor:col-resize; position:relative; }
+      .rs::after { content:''; position:absolute; inset:30% 2px; border-left:2px dotted var(--border); }
+      .rs:hover::after { border-color:var(--accent); }
+
+      .canvasWrap { position:relative; overflow:hidden; background:radial-gradient(700px 340px at 50% 40%, #141926 0%, var(--bg) 70%); }
+      canvas { position:absolute; inset:0; width:100%; height:100%; }
+      .hint { position:absolute; bottom:8px; left:12px; color:var(--dim); font-size:0.74rem; pointer-events:none; }
+      .edgeBtn { position:absolute; top:8px; font-size:0.8rem; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; z-index:3; }
+      #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:20; max-width:40ch; }
+      .empty { position:absolute; inset:0; display:grid; place-items:center; }
+      .empty .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.5rem; text-align:center; max-width:44ch; }
+      .empty button { margin-top:0.8rem; background:var(--accent); color:#0b0d12; border:0; border-radius:8px; padding:0.5rem 1rem; font-weight:600; cursor:pointer; }
+
+      .reader { border-left:1px solid var(--border); background:#fff; color:#202122; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+                font-family:'Linux Libertine',Georgia,'Times New Roman',serif; }
+      body[data-reader="closed"] .reader > :not(.strip) { display:none; }
+      .reader .strip { display:none; }
+      body[data-reader="closed"] .reader .strip { display:flex; flex-direction:column; align-items:center; gap:0.6rem; cursor:pointer; color:#54595d; padding-top:0.4rem; background:#f0eee6; height:100%; }
+      .reader .strip span { writing-mode:vertical-rl; font-size:0.7rem; letter-spacing:0.12em; font-family:sans-serif; }
+      .reader-top { background:#f0eee6; border-bottom:1px solid #a2a9b1; padding:7px 12px; font-family:sans-serif; font-size:12px; color:#54595d; display:flex; gap:10px; align-items:center; }
+      .reader-top button { border:1px solid #a2a9b1; background:none; border-radius:4px; padding:1px 8px; cursor:pointer; font-size:11px; color:#202122; }
+      .reader-top .crumb { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .reader-top .x { margin-left:auto; }
+      .reader-body { padding:16px 22px; overflow:auto; font-size:14.5px; line-height:1.55; }
+      .reader-body h1 { font-size:24px; font-weight:400; border-bottom:1px solid #a2a9b1; padding-bottom:5px; margin:0 0 8px; overflow-wrap:anywhere; }
+      .reader-body h2 { font-size:19px; font-weight:400; border-bottom:1px solid #eaecf0; margin-top:22px; padding-bottom:4px; }
+      .reader-body a { color:#0645ad; text-decoration:none; } .reader-body a:hover { text-decoration:underline; }
+      .reader-body a.wl-new { color:#ba0000; cursor:help; }
+      .reader-body code { background:#f8f9fa; border:1px solid #eaecf0; border-radius:3px; padding:1px 5px; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; }
+      .reader-body pre { background:#f8f9fa; border:1px solid #a2a9b1; border-radius:3px; padding:12px; overflow-x:auto; font-size:12.5px; }
+      .reader-body pre code { border:none; background:none; padding:0; }
+      .reader-body blockquote { border-left:4px solid #a2a9b1; background:#f8f9fa; color:#54595d; margin:12px 0; padding:4px 12px; }
+      .reader-body table { border-collapse:collapse; margin:12px 0; font-size:13px; display:block; overflow-x:auto; max-width:100%; }
+      .reader-body th, .reader-body td { border:1px solid #a2a9b1; padding:5px 9px; text-align:left; vertical-align:top; }
+      .reader-body th { background:#f0eee6; }
+      .reader-body img { max-width:100%; }
+      .wiki-infobox { float:right; width:200px; background:#f0eee6; border:1px solid #a2a9b1; margin:0 0 12px 16px; padding:10px; font-family:sans-serif; font-size:11px; }
+      .wiki-infobox h3 { margin:0 0 6px; padding-bottom:5px; border-bottom:1px solid #a2a9b1; font-size:12px; }
+      .wiki-infobox dt { font-weight:700; color:#54595d; text-transform:uppercase; font-size:9px; margin-top:5px; }
+      .wiki-infobox dd { margin:1px 0 0; word-break:break-all; }
+      .reader-empty { color:#54595d; font-family:sans-serif; font-size:13px; padding:20px; }
+
+      .drawer { position:absolute; top:0; right:calc(var(--reader-w) + 12px); width:330px; max-height:70%; overflow:auto; background:var(--panel); border:1px solid var(--border); border-radius:0 0 12px 12px; padding:0.8rem; font-size:0.82rem; box-shadow:0 14px 40px rgba(0,0,0,.5); z-index:8; display:none; }
+      .drawer.open { display:block; }
+      .drawer h4 { font-size:0.66rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--dim); margin:0.6rem 0 0.3rem; }
+      .drawer h4:first-child { margin-top:0; }
+      .drawer .row { display:flex; align-items:center; gap:0.5rem; padding:0.24rem 0.3rem; border-radius:6px; cursor:pointer; }
+      .drawer .row:hover { background:var(--panel2); }
+      .drawer .row.off { opacity:0.4; }
+      .dot { width:10px; height:10px; border-radius:50%; flex:none; }
+      .edot { width:14px; height:3px; border-radius:2px; flex:none; }
+      .tg { margin-left:auto; color:var(--ok); font-size:0.7rem; }
+      .row.off .tg { color:var(--dim); }
+      .unres { color:#f87171; font-family:ui-monospace,monospace; font-size:0.74rem; display:block; }
+      .unres small { color:var(--dim); font-family:system-ui; display:block; }
+
+      .statusbar { border-top:1px solid var(--border); background:var(--panel); padding:0.35rem 1rem; font-size:0.75rem; color:var(--dim); display:flex; gap:1.4rem; align-items:center; }
+      .statusbar .msg { color:var(--ok); }
+      .statusbar .vault { margin-left:auto; }
+
+      @media (max-width:700px) {
+        main { grid-template-columns:1fr; }
+        .rs { display:none; }
+        .lhs { position:fixed; left:0; top:44px; bottom:0; width:min(78vw,280px); z-index:9; transform:translateX(-100%); transition:transform 0.15s; border-right:1px solid var(--border); }
+        body[data-lhs="open"] .lhs { transform:none; }
+        .lhs .strip { display:none !important; }
+        .reader { position:fixed; inset:44px 0 0 0; z-index:9; display:none; }
+        body[data-reader="open"] .reader { display:flex; }
+        .reader .strip { display:none !important; }
+        .drawer { right:8px; left:8px; width:auto; }
+        .topbar .mobile-menu { display:inline; }
+      }
+      .mobile-menu { display:none; }
     </style>
   </head>
-  <body>
-    <header>
-      <h1>SYNAPSE<span class="dot">.</span></h1>
-      <span class="tag">a second brain for your repos — sprint-1 acceptance dashboard</span>
-      <span class="health">backend: <span id="health">checking…</span></span>
-    </header>
-
-    <div class="grid">
-      <section class="card" style="grid-column:1/-1">
-        <h2>Acceptance — sprint 01 · The Brain</h2>
-        <ul class="check" id="checklist">
-          <li><span class="badge" id="s1">todo</span> <span><b>Ingest works.</b> Run ingest → an honest report (found / written / unchanged / skipped) per repo.</span></li>
-          <li><span class="badge" id="s2">todo</span> <span><b>Idempotent.</b> Run ingest again → everything <code>unchanged</code>, nothing duplicated.</span></li>
-          <li><span class="badge" id="s3"><input type="checkbox" onchange="manual(this,'s3')"></span> <span><b>Vault readable.</b> Open notes — a wiki-style article popup; right repo/path, Hebrew/UTF-8 intact, wikilinks navigate.</span></li>
-          <li><span class="badge" id="s4"><input type="checkbox" onchange="manual(this,'s4')"></span> <span><b>Index is the front door.</b> View the Index — every note listed, counts honest, entries clickable.</span></li>
-          <li><span class="badge" id="s5"><input type="checkbox" onchange="manual(this,'s5')"></span> <span><b>Graph honest.</b> Stats + preview match reality (spot-check 3 notes you know).</span></li>
-          <li><span class="badge" id="s6">todo</span> <span><b>Vault is the truth.</b> Fresh rebuild (deletes graph.json first) → identical stats.</span></li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <h2>Actions</h2>
-        <div class="actions">
-          <button id="btn-ingest" onclick="runIngest()">Run ingest</button>
-          <button id="btn-fresh" class="secondary" onclick="freshRebuild()">Fresh rebuild (invariance proof)</button>
-          <button class="secondary" onclick="loadIndex()">View Index.md</button>
-        </div>
-        <p class="muted" id="action-msg" style="min-height:1.2em"></p>
-        <div id="report"></div>
-      </section>
-
-      <section class="card">
-        <h2>Stats</h2>
-        <div class="kpis" id="kpis"><span class="muted">No graph yet — run ingest.</span></div>
-        <div id="top" style="margin-top:0.6rem"></div>
-      </section>
-
-      <section class="card" style="grid-column:1/-1">
-        <h2>Graph preview <span style="text-transform:none;letter-spacing:0">(the interactive explorer ships in sprint 2)</span></h2>
-        <canvas id="graph"></canvas>
-        <div class="legend">
-          <span><i style="background:#7c9eff"></i>wikilink</span>
-          <span><i style="background:#9aa3b2"></i>relative</span>
-          <span><i style="background:#3a4152"></i>repo grouping</span>
-          <span id="graphinfo"></span>
-        </div>
-      </section>
-
-      <section class="card" style="grid-column:1/-1">
-        <h2>Notes browser <span style="text-transform:none;letter-spacing:0">— click a note to read it as a wiki article</span></h2>
-        <input type="text" id="filter" placeholder="filter notes…" oninput="renderList()" />
-        <div id="notelist"><span class="muted">No graph yet.</span></div>
-      </section>
-    </div>
-
-    <!-- The wiki article popup -->
-    <div id="overlay">
-      <div class="wiki" role="dialog" aria-modal="true">
-        <div class="wiki-top">
-          <button class="back" id="wiki-back" onclick="wikiBack()" style="display:none">← back</button>
-          <span class="crumb" id="wiki-crumb"></span>
-          <button onclick="closeWiki()" aria-label="Close">✕ close</button>
-        </div>
-        <div class="wiki-article" id="wiki-article" dir="auto"></div>
+  <body data-lhs="open" data-reader="open">
+    <div class="topbar">
+      <button class="mi mobile-menu" onclick="toggleLhs()">☰</button>
+      <b>SYNAPSE<i>.</i></b>
+      <input id="filter" placeholder="/  filter notes… (Enter opens best match)" autocomplete="off" />
+      <button class="mi" id="glossaryBtn" onclick="toggleDrawer()">Glossary ▾</button>
+      <div class="right">
+        <button class="mi" onclick="runIngest()">⟳ Ingest</button>
+        <button class="mi" onclick="viewIndex()">☰ Index</button>
+        <span>backend: <span id="health">checking…</span></span>
       </div>
     </div>
 
-    <div id="tooltip"></div>
-    <footer>
-      Vault: <code>data/vault/</code> · CLI twin: <code>./synapse ingest · rebuild · stats</code> ·
-      <a href="https://github.com/SynaptixLabs/Synapse">GitHub</a> · MIT · started via <code>./start.sh</code>
-    </footer>
+    <main>
+      <aside class="lhs">
+        <div class="strip" onclick="toggleLhs()">⟩<span>MENU · AI</span></div>
+        <h4>Menu <span class="chev" title="collapse" onclick="toggleLhs()">⟨</span></h4>
+        <span class="item active">◉ Explorer</span>
+        <a class="item" href="/dashboard.html">▦ Acceptance board</a>
+        <span class="item" onclick="viewIndex()">☰ View Index</span>
+        <span class="item" onclick="runIngest()">⟳ Run ingest</span>
+        <a class="item" href="https://github.com/SynaptixLabs/Synapse" target="_blank" rel="noopener">⧉ GitHub</a>
+        <div class="ai">
+          <h4 style="margin:0 0 0.3rem">AI</h4>
+          <div class="muted">Chat — TBD</div>
+          <div class="act">✦ Distill node/subtree <span class="tag">sprint 3</span></div>
+          <div class="act">▣ Render as image <span class="tag">sprint 3</span></div>
+        </div>
+      </aside>
 
-    <script type="module" src="/src/main.js"></script>
+      <div class="rs" id="rs-lhs" title="drag to stretch"></div>
+
+      <section class="canvasWrap" id="canvasWrap">
+        <canvas id="graph"></canvas>
+        <button class="edgeBtn" style="left:8px" onclick="toggleLhs()" title="hide/show menu">⟨</button>
+        <button class="edgeBtn" style="right:8px" onclick="toggleReader()" title="hide/show reader">⟩</button>
+        <span class="hint">drag nodes · wheel zooms · click opens the article · <b>/</b> filters</span>
+        <div class="empty" id="empty" style="display:none">
+          <div class="card">
+            <h3>No brain yet</h3>
+            <p class="muted" style="color:var(--dim);margin-top:0.4rem">Set <code>SYNAPSE_SOURCE_REPOS</code> in <code>backend/.env</code>, then ingest your repos.</p>
+            <button onclick="runIngest()">⟳ Run ingest</button>
+            <p id="empty-err" style="color:var(--bad);font-size:0.8rem;margin-top:0.6rem"></p>
+          </div>
+        </div>
+        <div class="drawer" id="drawer"></div>
+      </section>
+
+      <div class="rs" id="rs-reader" title="drag to stretch"></div>
+
+      <aside class="reader">
+        <div class="strip" onclick="toggleReader()">⟨<span>READER</span></div>
+        <div class="reader-top">
+          <button id="reader-back" onclick="readerBack()" style="display:none">← back</button>
+          <span class="crumb" id="reader-crumb">nothing open</span>
+          <button class="x" onclick="toggleReader()">⟩ hide</button>
+        </div>
+        <div class="reader-body" id="reader-body">
+          <p class="reader-empty">Click a node in the graph — the note opens here as a wiki article.
+          Blue links navigate; red links are notes that don't exist yet.</p>
+        </div>
+      </aside>
+    </main>
+
+    <div id="tooltip"></div>
+    <div class="statusbar">
+      <span id="st-notes">–</span><span id="st-edges">–</span><span id="st-unres">–</span>
+      <span class="msg" id="st-msg"></span>
+      <span class="vault">vault: <code>data/vault/</code> · MIT</span>
+    </div>
+
+    <script type="module" src="/src/explorer.js"></script>
   </body>
 </html>

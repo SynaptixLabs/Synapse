@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-await page.goto('http://localhost:5173/');
+await page.goto('http://localhost:5173/dashboard.html');
 await page.waitForFunction(() => document.getElementById('health').dataset.ok === 'true');
 await page.waitForFunction(() => document.querySelectorAll('#notelist div').length > 5, null, { timeout: 15000 });
 
