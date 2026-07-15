@@ -240,8 +240,53 @@ document.addEventListener('click', (ev) => {
 });
 
 // hooks into the real interactions
+let currentOpenId = null;
+function aiButtons() {
+  const isNote = !!currentOpenId, isSummary = !!currentOpenId?.startsWith('S — ');
+  $('ai-distill').disabled = !isNote || isSummary;
+  $('ai-distill-tree').disabled = !isNote || isSummary;
+  $('ai-render').disabled = !isSummary;
+  $('ai-status').textContent = isSummary ? 'a summary is open — render it as an image'
+    : isNote ? 'distill the open note (or its subtree)' : 'open a note to distill it';
+}
 const _openNote = reader.openNote;
-reader.openNote = (id, push) => { ac.notesOpened.add(id); acSave(); return _openNote(id, push); };
+reader.openNote = (id, push) => { ac.notesOpened.add(id); acSave(); currentOpenId = id; aiButtons(); return _openNote(id, push); };
+const _loadIndex = reader.loadIndex;
+reader.loadIndex = () => { currentOpenId = null; aiButtons(); return _loadIndex(); };
+
+window.aiDistill = async (scope) => {
+  if (!currentOpenId) return;
+  const node = currentOpenId;
+  $('ai-status').textContent = scope === 'subtree' ? 'distilling the subtree…' : 'distilling…';
+  try {
+    let out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: node, scope, depth: 2 }) });
+    if (out.requires_confirmation) {
+      if (!window.confirm(`This distillation is ~${out.tokens_est.toLocaleString()} tokens (gate: ${out.threshold.toLocaleString()}). Spend it?`)) {
+        $('ai-status').textContent = 'cancelled — nothing spent'; return;
+      }
+      out = await api('/distill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: node, scope, depth: 2, confirm: true }) });
+    }
+    await api('/rebuild', { method: 'POST' });
+    await refresh();
+    await reader.openNote(out.summary_note_id);
+    $('ai-status').textContent = `distilled ✓ ${out.citations} citation(s)` + (out.truncated ? ' · truncated (disclosed)' : '');
+    setMsg(`S-note created: ${out.summary_note_id} (${out.model})`);
+  } catch (e) { $('ai-status').textContent = e.message; setMsg(e.message, true); }
+};
+
+window.aiRender = async () => {
+  if (!currentOpenId?.startsWith('S — ')) return;
+  $('ai-status').textContent = 'rendering the idea…';
+  try {
+    const out = await api('/render', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary_note_id: currentOpenId }) });
+    await reader.openNote(currentOpenId, false);
+    $('ai-status').textContent = `image ✓ (${out.model})`;
+    setMsg(`rendered → ${out.image}`);
+  } catch (e) { $('ai-status').textContent = e.message; setMsg(e.message, true); }
+};
 $('filter').addEventListener('input', () => { if ($('filter').value.trim()) { ac.filterUsed = true; acSave(); } });
 $('filter').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && $('filter').value.trim()) { ac.enterOpened = true; acSave(); } });
 $('reader-body').addEventListener('click', (ev) => { if (ev.target.closest('a[data-wl]')) { ac.wikilinkNav = true; acSave(); } });

@@ -66,3 +66,26 @@ def test_fresh_rebuild_is_invariant_via_api(client):
     first = client.post("/api/v1/rebuild").json()
     fresh = client.post("/api/v1/rebuild?fresh=true").json()
     assert first == fresh                          # the UI's invariance-proof contract
+
+
+def test_distill_and_render_in_mock_mode(client, monkeypatch):
+    monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
+    client.post("/api/v1/ingest")
+    client.post("/api/v1/rebuild")
+
+    out = client.post("/api/v1/distill",
+                      json={"node_id": "repo_a__docs__alpha.md", "scope": "subtree", "depth": 1}).json()
+    assert out["citations"] >= 1 and out["summary_note_id"].startswith("S — ")
+
+    img = client.post("/api/v1/render", json={"summary_note_id": out["summary_note_id"]}).json()
+    assert img["image"].startswith("media/") and "no text" in img["prompt"].lower()
+
+    note = client.get(f"/api/v1/note/{out['summary_note_id']}").json()
+    assert "mock distillation" in note["body"]
+
+
+def test_model_endpoints_fail_actionably_without_keys(client, monkeypatch):
+    monkeypatch.delenv("SYNAPSE_MOCK_MODELS", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-REPLACE-ME")
+    r = client.post("/api/v1/distill", json={"node_id": "x.md"})
+    assert r.status_code == 400 and "ANTHROPIC_API_KEY" in r.json()["detail"]

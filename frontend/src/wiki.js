@@ -5,7 +5,7 @@
  */
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { api } from './api.js';
+import { API, api } from './api.js';
 
 export const WIKILINK_RE = /\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|([^\[\]]*))?\]\]/g;
 
@@ -97,6 +97,12 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     bodyEl.innerHTML = (infobox || '') + srcFm + html;
     linkifyWikilinks(bodyEl);
     for (const a of bodyEl.querySelectorAll('a[href^="http"]')) { a.target = '_blank'; a.rel = 'noopener'; }
+    // vault media (generated images) is served by the backend — rewrite relative srcs
+    for (const img of bodyEl.querySelectorAll('img')) {
+      const src = img.getAttribute('src') ?? '';
+      const m = src.match(/(?:\.\.\/)?media\/(.+)$/);
+      if (m) img.src = `${API.replace('/api/v1', '')}/media/${m[1]}`;
+    }
     if (backBtn) backBtn.style.display = stack.length > 1 ? '' : 'none';
     bodyEl.scrollTop = 0;
     onShow?.();

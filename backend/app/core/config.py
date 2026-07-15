@@ -44,11 +44,48 @@ def _resolve(p: str) -> Path:
     return path if path.is_absolute() else (REPO_ROOT / path).resolve()
 
 
+def _is_placeholder(v: str | None) -> bool:
+    return not v or "REPLACE-ME" in v or v.startswith("sk-ant-REPLACE") or v == "sk-REPLACE-ME"
+
+
 @dataclass(frozen=True)
 class Settings:
     vault_path: Path
     source_repos: tuple[Path, ...]
     ignore_dirs: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_IGNORE_DIRS))
+
+    # ── sprint-3 model seams (all env-driven; mocks by default in tests/CI) ──
+    @property
+    def mock_models(self) -> bool:
+        """SYNAPSE_MOCK_MODELS=1 wires the Mock providers end-to-end (no keys, no cost)."""
+        return os.environ.get("SYNAPSE_MOCK_MODELS", "") in ("1", "true", "yes")
+
+    @property
+    def anthropic_key(self) -> str | None:
+        v = os.environ.get("ANTHROPIC_API_KEY")
+        return None if _is_placeholder(v) else v
+
+    @property
+    def openai_key(self) -> str | None:
+        v = os.environ.get("OPENAI_API_KEY")
+        return None if _is_placeholder(v) else v
+
+    @property
+    def summarizer_model(self) -> str:
+        return os.environ.get("SUMMARIZER_MODEL", "claude-sonnet-5")
+
+    @property
+    def summarizer_max_tokens(self) -> int:
+        return int(os.environ.get("SUMMARIZER_MAX_TOKENS", "4096"))
+
+    @property
+    def image_model(self) -> str:
+        return os.environ.get("IMAGE_MODEL", "gpt-image-1")
+
+    @property
+    def confirm_threshold_tokens(self) -> int:
+        """Estimated prompt tokens above this require an explicit user confirmation (cost guard)."""
+        return int(os.environ.get("SUMMARIZE_CONFIRM_THRESHOLD", "20000"))
 
     @property
     def notes_dir(self) -> Path:
