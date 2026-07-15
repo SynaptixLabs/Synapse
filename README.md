@@ -19,7 +19,7 @@ your brain knows.
 > every CLI). · Concept: natural20.com's
 > ["second brain / LLM wiki"](https://natural20.com/using-claude-code-to-setup-a-second-brain-aka-llm-wiki).
 
-![The SYNAPSE explorer — a 21,000-note whole-workspace brain, one colored constellation per project](docs/screenshots/explorer-hero.png)
+![The SYNAPSE explorer on its own repository — the default self-ingested brain a fresh clone gives you (point Sources at your own repos and it scales past 21,000 notes)](docs/screenshots/explorer-hero.png)
 
 ## The loop
 
