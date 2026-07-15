@@ -1,0 +1,40 @@
+# SYNAPSE — post-POC backlog (what v0.2 wants)
+
+> **Graph node.** Up: [`00_INDEX.md`](00_INDEX.md). Written at POC close
+> ([sprint 03 final report](sprints/sprint_03/reports/SPRINT_03_REPORT.md), 2026-07-15).
+> One page, priorities not promises — every item below is a **flagged decision** for the
+> founder before it becomes sprint scope.
+
+## Carried from the PRD's non-goals (the natural v0.2 arc)
+
+1. **Entity extraction** — v0.1 is a document-level graph; v0.2 extracts entities/concepts as
+   first-class nodes (the Karpathy "ripple" pattern: new note → touch the entities it mentions).
+2. **Ripple maintenance** — ingest today rebuilds honestly; v0.2 keeps summaries fresh when
+   their sources change (staleness marks on `S —` notes whose cited sources' hashes moved).
+3. **Chat query** — the explorer's AI panel has the slot ("Chat — TBD"); querying is
+   Index-first via the graph, answers grounded with the same `(vault: …)` citation gate.
+4. **Scheduled re-index** — watch mode / cron ingest; the sync semantics (prune + errors
+   ledger) are already built for it.
+
+## Earned during the POC (scale + quality debts, all founder-flagged)
+
+5. **WebGL graph engine** (sigma.js / Cosmograph evaluation) — the D-7/8/9 windowed canvas
+   holds 21k notes honestly, but whole-workspace brains as a *first-class* case want a real
+   engine. The flagged v0.2 decision recorded in D-7/D-8.
+6. **Codex cross-vendor GBU re-run** — the POC's external reviews ran as internal fresh-eyes
+   agents (Codex CLI 401 — founder `codex login` gate). Re-run one full cross-vendor GBU when
+   re-authed; founder-accepted as post-close.
+7. **Note-id stability across root renames** — ids are root-name-dependent; renaming/moving a
+   root strands old wikilinks in summaries (~4% of the unresolved population measured in
+   sprint 3). Candidate: content-addressed alias map kept at ingest.
+8. **Distill styles/presets** — explicitly out of v0.1 scope (D-4 keeps "no text in image");
+   founder may want voice/style presets per distill once usage patterns emerge.
+
+## Platform hygiene (small, non-blocking)
+
+9. **Live-smoke harness** — the two opt-in live smokes are runbook steps today; wrap them as
+   `./start.sh smoke` with recorded transcripts under the active sprint's `reports/`.
+10. **Vault export/import** — the vault is portable markdown by design; add a zip
+    export + import checksum manifest so brains can move between machines verifiably.
+
+— `cpto` (JANUS), 2026-07-15

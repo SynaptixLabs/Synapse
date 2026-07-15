@@ -31,20 +31,29 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const hue = (repo) => repoHue.get(repo) ?? 220;
   const noteColor = (n) => `hsl(${hue(n.repo)} 65% ${52 + Math.min(n.in_degree + n.out_degree, 12) * 2.2}%)`;
 
-  function setData(n, e) {
+  function setData(n, e, { preserve = false } = {}) {
+    // preserve=true (incremental pull-in): keep the camera, every existing position and every
+    // pin — promoting a zoom-revealed note must NOT snap the view to k=1 and reshuffle the
+    // layout the user was working in (second-opinion finding #3). Default (false) is a fresh
+    // layout — that's what refresh and ⟲ reset mean.
     nodes = n; edges = e;
     const repos = nodes.filter(x => x.kind === 'repo');
     repoHue = new Map(repos.map((r, i) => [r.repo, (i * 137.5) % 360]));
-    sim.p = new Map();
-    repos.forEach((r, i) => sim.p.set(r.id, { x: W() * (i + 1) / (repos.length + 1), y: H() / 2, vx: 0, vy: 0 }));
+    if (!preserve) sim.p = new Map();
+    repos.forEach((r, i) => {
+      if (!sim.p.has(r.id)) sim.p.set(r.id, { x: W() * (i + 1) / (repos.length + 1), y: H() / 2, vx: 0, vy: 0 });
+    });
     for (const nd of nodes) {
-      if (nd.kind === 'repo') continue;
+      if (nd.kind === 'repo' || sim.p.has(nd.id)) continue;
       const hub = sim.p.get(`repo:${nd.repo}`) ?? { x: W() / 2, y: H() / 2 };
       sim.p.set(nd.id, { x: hub.x + Math.sin(nd.id.length * 7 + nd.id.charCodeAt(0)) * 90,
                          y: hub.y + Math.cos(nd.id.length * 13) * 90, vx: 0, vy: 0 });
     }
-    sim.view = { x: 0, y: 0, k: 1 };
-    kick(1);
+    if (!preserve) sim.view = { x: 0, y: 0, k: 1 };
+    // a focused note that no longer exists (deleted distill) must not keep spotlight-dimming
+    // the whole brain (second-opinion finding #4)
+    if (sim.focus && !nodes.some(x => x.id === sim.focus)) sim.focus = null;
+    kick(preserve ? 0.3 : 1);
   }
 
   function setStatics(list) {

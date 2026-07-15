@@ -3,7 +3,9 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto('http://localhost:5173/dashboard.html');
 await page.waitForFunction(() => document.getElementById('health').dataset.ok === 'true');
-await page.waitForFunction(() => document.querySelectorAll('#notelist div').length > 5, null, { timeout: 15000 });
+// populated = at least one note row (the committed fixture corpus is 4 notes — a `> 5`
+// threshold here could never pass against the CI fixture vault, only a founder-sized one)
+await page.waitForFunction(() => document.querySelectorAll('#notelist div').length > 0, null, { timeout: 15000 });
 
 // Index opens as a wiki article with clickable [[wikilinks]]
 await page.click('text=View Index.md');

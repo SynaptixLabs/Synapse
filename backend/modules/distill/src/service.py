@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from modules.graph.src.services import GraphService
+from modules.ingest.src.models import cap_note_id
 
 from .providers import SourceNote, Summarizer
 
@@ -25,23 +26,34 @@ def citation_audit(markdown: str, known: set[str]) -> tuple[int, list[str]]:
     """(citation_count, unknown_ids). Tolerant of real-model formatting: several ids
     comma-joined inside one parenthetical, repeated `vault:` prefixes, and ids truncated
     by an inner ')' (note ids may themselves contain parentheses)."""
-    frags: list[str] = []
-    for m in _CITE_RE.finditer(markdown):
-        for part in m.group(1).split(","):
-            part = part.strip()
-            if part.lower().startswith("vault:"):
-                part = part[6:].strip()
-            if part:
-                frags.append(part)
-    unknown = []
-    for c in frags:
+    def strip_prefix(s: str) -> str:
+        s = s.strip()
+        return s[6:].strip() if s.lower().startswith("vault:") else s
+
+    def matches(c: str) -> bool:
         cl = c.lower()
+        if not cl:
+            return False
         if cl in known or f"{cl}.md" in known:
+            return True
+        return len(cl) >= 4 and any(k.startswith(cl) for k in known)
+
+    count, unknown = 0, []
+    for m in _CITE_RE.finditer(markdown):
+        whole = strip_prefix(m.group(1))
+        if matches(whole):
+            # a comma-CONTAINING note id cited verbatim — never split it (a false REJECT
+            # burns an already-paid model call, deterministically, on every retry)
+            count += 1
             continue
-        if len(cl) >= 4 and any(k.startswith(cl) for k in known):
-            continue   # id cut short by an inner ')' — matches a real note's prefix
-        unknown.append(c)
-    return len(frags), sorted(set(unknown))
+        for part in m.group(1).split(","):
+            part = strip_prefix(part)
+            if not part:
+                continue
+            count += 1
+            if not matches(part):
+                unknown.append(part)
+    return count, sorted(set(unknown))
 
 
 class ConfirmationRequired(Exception):
@@ -74,13 +86,20 @@ class DistillService:
             for _ in range(depth):
                 if not frontier:
                     break   # exhausted — never keep scanning all edges for empty rings
-                out_ring, in_ring = [], []
+                out_ring, in_ring, fset = [], [], set(frontier)
+                # TWO passes (edges live in a SET, whose iteration order changes across
+                # interpreter runs): out-links are classified first for the whole ring, so a
+                # note reachable BOTH ways always counts as a definition — single-pass
+                # classification depended on which edge the set yielded first.
                 for e in g.edges:
                     if e.type == "sibling":
                         continue
-                    if e.src in frontier and e.dst not in seen and e.dst in g.nodes and g.nodes[e.dst].kind == "note":
+                    if e.src in fset and e.dst not in seen and e.dst in g.nodes and g.nodes[e.dst].kind == "note":
                         seen.add(e.dst); out_ring.append(e.dst)
-                    if e.dst in frontier and e.src not in seen and e.src in g.nodes and g.nodes[e.src].kind == "note":
+                for e in g.edges:
+                    if e.type == "sibling":
+                        continue
+                    if e.dst in fset and e.src not in seen and e.src in g.nodes and g.nodes[e.src].kind == "note":
                         seen.add(e.src); in_ring.append(e.src)
                 # ring order = OUT-links first (what the subject POINTS TO — its definitions),
                 # then in-links (what points at it — echoes/references); each sorted for
@@ -132,7 +151,9 @@ class DistillService:
 
     def _write_summary(self, subject, root_id, scope, depth, notes, truncated, result) -> str:
         safe = re.sub(r"[/\\:*?\"<>|]", "·", subject)[:80].strip() or "note"
-        note_id = f"S — {safe}.md"
+        # byte-cap, not char-cap: an emoji/CJK-heavy 80-char subject can exceed ext4's
+        # 255-byte filename limit — same doctrine (and helper) as ingest note ids
+        note_id = cap_note_id(f"S — {safe}.md")
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         fm = (
             "---\n"

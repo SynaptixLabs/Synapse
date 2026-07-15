@@ -1,54 +1,43 @@
+# NOTE: the supported install path is `./start.sh setup` (pip + backend/requirements.txt).
+# This file carries the project metadata + shared tool config (ruff / black / mypy / pytest).
+
 [tool.poetry]
 name = "synapse"
-version = "1.0.0"
-description = "SYNAPSE — a second brain for your repos: index scattered markdown into a wikilinked knowledge graph; summarize any node/subtree and render it as an image"
+version = "0.1.0"
+description = "SYNAPSE — a second brain for your repos: index scattered markdown into a wikilinked knowledge graph; distill any node/subtree with an LLM and render the idea as an image"
 authors = ["Avidor Rabinovich <avidor@synaptixlabs.ai>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/SynaptixLabs/Synapse"
 repository = "https://github.com/SynaptixLabs/Synapse"
-keywords = ["agents", "ai", "template", "claude-code", "codex", "cursor", "gemini-cli", "devin", "agents-md"]
+keywords = ["second-brain", "knowledge-graph", "markdown", "wiki", "wikilinks", "llm", "anthropic", "gpt-image-1", "fastapi", "local-first"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
-    "Topic :: Software Development :: Code Generators",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Typing :: Typed"
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 [tool.poetry.dependencies]
-# ⚠️ CRITICAL: Python 3.14+ is NOT supported. Use 3.11, 3.12, or 3.13 only.
-# Verify with: python --version (must be 3.11.x, 3.12.x, or 3.13.x)
+# Mirror of backend/requirements.txt (the canonical dependency list).
+# Python 3.11–3.13 only.
 python = ">=3.11,<3.14"
-copier = ">=9.0.0,<10.0"
-pydantic = ">=2.5,<3.0"
-pydantic-settings = ">=2.0,<3.0"
-python-dotenv = ">=1.0,<2.0"
-rich = ">=13.0,<14.0"
-typer = ">=0.12.0,<1.0"
-PyYAML = ">=6.0,<7.0"
-jinja2 = ">=3.1,<4.0"
-gitpython = ">=3.1,<4.0"
-pathlib-mate = ">=1.0,<2.0"
+fastapi = ">=0.115"
+uvicorn = { version = ">=0.30", extras = ["standard"] }
+anthropic = ">=0.40"   # Distill provider — imported ONLY in backend/modules/distill
+openai = ">=1.50"      # Render provider — imported ONLY in backend/modules/render
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
-pytest-asyncio = "^0.23.0"
-pytest-mock = "^3.14.0"
-pytest-cov = "^5.0.0"
+pytest-asyncio = "^0.24.0"
+httpx = "^0.27.0"      # FastAPI TestClient transport
 ruff = "^0.11.0"
-mypy = "^1.8.0"
-black = "^24.0.0"
-pre-commit = "^3.6.0"
-sphinx = "^8.0.0"
-sphinx-autoapi = "^3.1.0"
-myst-parser = "^4.0.0"
-furo = "^2024.8.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -64,7 +53,6 @@ exclude = [
     ".ruff_cache",
     ".venv",
     "__pycache__",
-    "template-generators/*/template/*"  # Don't lint template files
 ]
 
 [tool.ruff.lint]
@@ -88,14 +76,10 @@ ignore = [
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
-exclude = [
-    "template-generators/",  # Don't type check template files
-    "examples/",
-]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
-testpaths = ["tests"]
+testpaths = ["backend"]   # the Python suite lives under backend/ (tests/ holds the Playwright E2E)
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 # Coverage flags live in CI (backend job runs `pytest --cov` explicitly) so a bare
@@ -125,7 +109,6 @@ exclude = '''
     | buck-out
     | build
     | dist
-    | template-generators
   )/
 )
 '''

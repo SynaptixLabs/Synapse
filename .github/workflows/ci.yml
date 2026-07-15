@@ -1,9 +1,9 @@
-# CI — synaptix-scaffold
+# CI — SYNAPSE
 #
-# The `agents` job works out of the box: it verifies the agent layer is consistent (no adapter
-# drift). The backend / frontend / shared jobs are CUSTOMIZATION POINTS — they are gated off until
-# you fill in your stack. Set the repo variable ENABLE_STACK_CI = "true" (Settings → Actions →
-# Variables) once your backend/frontend actually build, and replace the {{PLACEHOLDER}} commands.
+# Always-on: `agents` (adapter drift guard) · `backend` (full pytest suite on MOCK providers —
+# zero paid model calls by design) · `frontend` (vite production build).
+# Opt-in: `e2e` (real-Chromium Playwright against a fixture vault) via repo variable
+# ENABLE_E2E_CI = "true" — it needs a browser download + a live stack (~2–3 min).
 
 name: CI
 
@@ -32,63 +32,43 @@ jobs:
         run: python3 scripts/check_adapters_selftest.py
 
   # ========================
-  # Backend tests — CUSTOMIZE: enable via repo variable ENABLE_STACK_CI once your stack is real.
+  # Backend tests — the full unit/API suite. Model providers are MOCKED (SYNAPSE ships
+  # mock seams for both models); this job can never spend money.
   # ========================
   backend:
-    name: Backend tests
-    if: vars.ENABLE_STACK_CI == 'true'
+    name: Backend tests (mocked models, zero paid calls)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"   # CUSTOMIZE
+          python-version: "3.12"
       - name: Install dependencies
-        run: |
-          cd backend
-          pip install poetry && poetry install --with dev
-      - name: Lint
-        run: cd backend && poetry run ruff check .   # CUSTOMIZE
+        run: pip install -r backend/requirements.txt
       - name: Run tests
-        run: cd backend && poetry run pytest --cov=. --cov-report=xml
-      - name: Check coverage
-        run: cd backend && poetry run coverage report --fail-under=90
+        run: cd backend && python -m pytest -q
 
   # ========================
-  # Frontend tests (incl. real-Chromium Playwright E2E) — CUSTOMIZE.
+  # Frontend build — the explorer is dependency-light (vite + marked + dompurify);
+  # a production build catches import/syntax breakage. Browser behavior is covered
+  # by the opt-in `e2e` job below.
   # ========================
   frontend:
-    name: Frontend tests
-    if: vars.ENABLE_STACK_CI == 'true'
+    name: Frontend build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"   # CUSTOMIZE
+          node-version: "22"
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: cd frontend && npm ci
-      - name: Lint
-        run: cd frontend && npm run lint
-      - name: Run unit tests
-        run: cd frontend && npm run test:unit
-      - name: Install Playwright Chromium
-        run: cd frontend && npx playwright install --with-deps chromium
-      - name: Run E2E tests (real Chromium — page.goto, not request.get)
-        run: cd frontend && npm run test:e2e
-      - name: Upload E2E evidence (screenshots + Playwright report)
-        if: always()   # keep the evidence even when the E2E step fails
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-evidence
-          path: |
-            tests/screenshots/
-            frontend/playwright-report/
-          if-no-files-found: ignore
+      - name: Production build
+        run: cd frontend && npm run build
 
   # ========================
   # Explorer E2E — real Chromium against a fixture vault. Opt-in: set repo variable
@@ -102,6 +82,7 @@ jobs:
     env:
       SYNAPSE_VAULT_PATH: ${{ github.workspace }}/data/vault
       SYNAPSE_SOURCE_REPOS: ${{ github.workspace }}/backend/tests/fixtures/repo_a,${{ github.workspace }}/backend/tests/fixtures/repo_b
+      SYNAPSE_MOCK_MODELS: "1"   # the sprint-03 AI flow runs on the mock seams — zero cost
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -130,6 +111,7 @@ jobs:
           node tests/e2e/sprint02_explorer.spec.mjs
           node tests/e2e/sprint01_wiki_popup.spec.mjs
           node tests/e2e/sprint01_dashboard.spec.mjs
+          node tests/e2e/sprint03_distill_render.spec.mjs
       - name: Upload E2E evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -240,8 +240,12 @@ function pullIntoWindow(id) {
     if (e.src === id) winIds.add(e.dst);
     if (e.dst === id) winIds.add(e.src);
   }
-  graph.setData(vNodes.filter(x => winIds.has(x.id)), vEdges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
+  graph.setData(vNodes.filter(x => winIds.has(x.id)), vEdges.filter(x => winIds.has(x.src) && winIds.has(x.dst)),
+                { preserve: true });   // incremental: keep the camera, positions and pins
   sendStatics();
+  // the statusbar must stay honest — the window just grew
+  const shown = vNodes.filter(x => x.kind === 'note' && winIds.has(x.id)).length;
+  if (stats) $('st-notes').textContent = `${stats.notes} notes · graph: ${shown} in view · zoom reveals the rest`;
 }
 
 // ── data ────────────────────────────────────────────────────────────────────

@@ -1,6 +1,25 @@
 # Contributing
 
-Thanks for improving the scaffold. The whole design rests on one rule — keep it intact.
+Thanks for improving SYNAPSE. Two areas, two rulebooks:
+
+## Contributing to the app (backend / frontend)
+
+1. **Set up:** `./start.sh setup` · run the stack with `./start.sh` (mock the models with
+   `SYNAPSE_MOCK_MODELS=1` — no keys needed).
+2. **House rules (enforced in review):**
+   - The **vault is the source of truth** — `graph.json` stays derived and rebuildable; no databases.
+   - Vendor SDKs live **only** inside their provider module (`backend/modules/distill` /
+     `backend/modules/render`); everything else talks to the seam.
+   - **Tests never spend money** — model calls are mocked; live smokes are opt-in env flags.
+   - **E2E = a real Chromium browser** (Playwright `page.goto()` + visibility assertions +
+     screenshots) — an HTTP request is an API test, not E2E.
+   - Before building anything, check `project-management/03_MODULE_CONTRACTS.md` (reuse first).
+3. **Before you push:** `./start.sh test` (backend suite green) and, for UI changes, the
+   relevant spec under `tests/e2e/`.
+
+## Contributing to the agent layer (the scaffold)
+
+The agent layer's whole design rests on one rule — keep it intact.
 
 ## The one rule: adapters are thin
 

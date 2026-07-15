@@ -28,7 +28,21 @@ cd <your-clone-of-Synapse>
 
 ## POC verdict
 
-- **Result:** PASS / FAIL (strike one) → on PASS the POC is **closed**
-- **Grade (1–5):** &nbsp;
-- **Date:** &nbsp;
-- **Findings / v0.2 wishes:** &nbsp;
+- **Result:** ✅ **PASS** — accepted via live founder testing (a full day of rounds against the
+  running explorer on the founder's own 21k-note workspace brain, with founder-funded keys),
+  then close ordered by the founder: *"create the sprint report, review, fix bugs and close the
+  sprint and demo"* (2026-07-15). Same acceptance mode as sprint 02.
+- **Step evidence (live rounds mapped to the script):**
+  | # | Covered by |
+  |---|---|
+  | 1 | Live distill of the founder's own `README.md` → `S — SYNAPSE.md`, 8 grounded citations, every one a real vault note ([Epic D report](../reports/EPIC_D_implementation_report.md)) |
+  | 2 | Founder subtree rounds — incl. the ARIA-doorway repro: truncation starved her role note → fixed (definitions-first ordering) and re-distilled faithfully ([progress](../reports/SPRINT_03_PROGRESS.md)) |
+  | 3 | ✦ summaries join the graph on rebuild — founder-used daily (✦ My distills panel); E2E-proven (`summariesGroup === 1`) |
+  | 4 | Live `gpt-image-1` render of the SYNAPSE summary, embedded beside the note, under `data/vault/media/` ([Epic E report](../reports/EPIC_E_implementation_report.md)); founder ruling "the image must reflect the subject" implemented + re-verified |
+  | 5 | Cost-guard confirm fired live on the founder's big-subtree distills (in-app modal, never native); unit + E2E covered |
+  | 6 | Verified live in the harshest form: unfunded-key runs surfaced clean actionable JSON errors, not stack traces (both providers, smoke #1 of each) |
+  | 7 | Close-out table filled with live links at close ([Epic F](../todo/EPIC_F_poc_close.md)) |
+- **Grade (1–5):** 4.6 (close-GBU scorecard — [review](../reviews/2026-07-15_gbu_sprint03_close.md))
+- **Date:** 2026-07-15
+- **Findings / v0.2 wishes:** recorded as the post-POC backlog → [`0m_BACKLOG.md`](../../../0m_BACKLOG.md)
+  (WebGL graph engine, entity extraction, ripple maintenance, chat query, Codex GBU re-run).

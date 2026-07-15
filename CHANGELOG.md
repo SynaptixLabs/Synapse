@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet — v0.2 candidates live in
+[`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
+
+## [0.1.0] — 2026-07-15 · **the POC** (sprints 01–03, each closed on founder acceptance PASS)
+
+The full loop the PRD promised — **ingest → graph → distill → render** — live end-to-end:
+proven on a 21k-note whole-workspace brain and on a fresh keyless clone (mock mode).
+
+### Sprint 03 — The Twist (closed 2026-07-15, founder acceptance PASS · POC close)
+- `modules/distill`: `Summarizer` seam (Anthropic `claude-sonnet-5` + deterministic mock),
+  BFS subtree collection (definitions-first truncation, honest disclosure), grounding gate
+  (every `(vault: …)` citation must BE a source note — hallucinations are rejected),
+  cost-confirm gate above a token threshold; summaries saved as `S —` vault notes
+  (`✦ summaries` group), gist voice, each authoring its own `Image:` visual brief.
+- `modules/render`: `ImageRenderer` seam (OpenAI `gpt-image-1` + stdlib-PNG mock); PNG into
+  `vault/media/` (content-hashed), idempotently embedded in the summary, no text in images
+  (D-4), deleted together with its summary.
+- Explorer AI panel: Distill (note + neighbors) / Distill wider / Render as image, in-app
+  cost-guard modal, ✦ My distills panel (read, bulk delete), summary-aware search boost.
+- Scale arc (founder-driven, D-7/8/9): complete-ingest fix (hash-capped note ids — one bad
+  filename can never abort a sync; 21,103 files, 0 errors), importance-windowed graph
+  (top-1,500 by connectivity; API 19s → 0.2s), semantic zoom (long-tail reveal layer),
+  source groups + hard per-frame layer budgets + viewport culling.
+- Never-500 hardening: global JSON exception handler that keeps CORS headers, defensive
+  filesystem walk, XSS-escaping across the explorer (fresh-eyes GBU wave: 4 P1 + 7 P2 fixed).
+- Live smokes (opt-in, once each, recorded): real Anthropic distill (8 grounded citations) +
+  real gpt-image-1 render (1024×1024 embedded PNG). Suite: 65 tests, zero paid calls.
+
 ### Sprint 02 — The Explorer (closed 2026-07-15, founder acceptance PASS, grade 4.6)
 - Explorer as the root page: accordion panels (grip-pill resizers, dblclick reset, persisted,
   mobile overlays), LHS menu + AI panel (sprint-3 slots), glossary drawer (repo/edge toggles +

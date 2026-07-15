@@ -102,6 +102,26 @@ class TestDistill:
         # a_ref is alphabetically first (the old order shipped it) — the OUT-link must survive
         assert [n.note_id for n in cut] == ["ringrepo__root.md", "ringrepo__zdef.md"]
 
+    def test_dual_linked_neighbor_is_a_definition_deterministically(self, tmp_path):
+        """A neighbor linked BOTH ways (root→it and it→root) must classify as an OUT-link
+        (definition) regardless of edge-set iteration order — the single-pass classifier
+        made its truncation survival depend on the process hash seed."""
+        repo = tmp_path / "dualrepo"; repo.mkdir()
+        (repo / "root.md").write_text("# Root\n\npoints to [[zdual]]\n", encoding="utf-8")
+        (repo / "zdual.md").write_text("# zdual\n\nthe definition, links back to [[Root]]\n", encoding="utf-8")
+        (repo / "a_ref.md").write_text("# a_ref\n\nreferences [[Root]]\n", encoding="utf-8")
+        v = tmp_path / "dualvault"
+        IngestService(v, IGNORE).ingest([repo])
+        svc = DistillService(vault_path=v, summarizer=MockSummarizer())
+        full, _ = svc.collect("dualrepo__root.md", "subtree", 1)
+        root = next(n for n in full if n.note_id == "dualrepo__root.md")
+        zdual = next(n for n in full if n.note_id == "dualrepo__zdual.md")
+        svc.hard_cap_chars = len(root.body) + len(zdual.body) + 1   # room for root + ONE more
+        for _ in range(3):   # stable across repeated builds within (and thanks to the two-pass
+            cut, truncated = svc.collect("dualrepo__root.md", "subtree", 1)   # fix, across) runs
+            assert truncated
+            assert [n.note_id for n in cut] == ["dualrepo__root.md", "dualrepo__zdual.md"]
+
     def test_citation_audit_tolerates_real_model_formats(self):
         """Live sonnet-5 comma-joins ids in one parenthetical, and note ids may contain
         parentheses (which truncate the regex match) — neither is a hallucination."""
@@ -114,6 +134,29 @@ class TestDistill:
         assert count == 4 and unknown == []
         _, bad = citation_audit("Sure thing (vault: made-up-note.md).", known)
         assert bad == ["made-up-note.md"]
+
+    def test_citation_of_comma_containing_id_is_not_split(self):
+        """Second-opinion P1: a note id WITH a comma, cited verbatim (as the prompt instructs),
+        must never be split into fragments and falsely rejected — that burns a paid call
+        deterministically on every retry."""
+        from modules.distill.src.service import citation_audit
+        known = {"repo__plan, v2.md", "repo__קורות חיים — דנה, מטפלת.md"}
+        count, unknown = citation_audit(
+            "Claim (vault: repo__plan, v2.md). Also (vault: repo__קורות חיים — דנה, מטפלת.md).",
+            known)
+        assert count == 2 and unknown == []
+
+    def test_summary_filename_is_byte_capped(self, tmp_path):
+        """Second-opinion P2: an emoji/CJK-heavy subject must not blow ext4's 255-byte
+        filename limit AFTER the model call — same cap doctrine as ingest note ids."""
+        repo = tmp_path / "emojirepo"; repo.mkdir()
+        (repo / "wow.md").write_text("# " + "🧠" * 80 + "\n\nbody\n", encoding="utf-8")
+        v = tmp_path / "capvault"
+        IngestService(v, IGNORE).ingest([repo])
+        out = DistillService(v, MockSummarizer()).distill("emojirepo__wow.md", scope="node")
+        sid = out["summary_note_id"]
+        assert len(sid.encode("utf-8")) <= 200
+        assert (v / "notes" / sid).is_file()   # written, not OSError'd after the spend
 
     def test_truncation_is_disclosed(self, vault):
         svc = DistillService(vault, MockSummarizer())

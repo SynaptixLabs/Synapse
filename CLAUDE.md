@@ -38,7 +38,7 @@ Subagents live in [`.claude/agents/`](.claude/agents/00_index.md); slash command
 | **Name** | SYNAPSE |
 | **Purpose** | A second brain for your repos — index the markdown scattered across repositories into one wikilinked knowledge graph; summarize any node/subtree (model #1) and render the summary as an image (model #2). |
 | **Production URL** | — (local-first demo; no deploy target yet) |
-| **Current sprint** | sprint_01 → `project-management/sprints/sprint_01/index.md` |
+| **Current sprint** | none — **POC v0.1.0 closed** (sprints 01–03 PASS) → `project-management/sprints/00_index.md`; v0.2 backlog: `project-management/0m_BACKLOG.md` |
 | **Dev ports** | 8000 backend · 5173 frontend (`./start.sh`) |
 | **Source concept** | natural20.com "second brain / LLM wiki" (Karpathy pattern: wiki = codebase, LLM = librarian) — see `project-management/0k_PRD.md` |
 

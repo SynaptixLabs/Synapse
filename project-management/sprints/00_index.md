@@ -19,9 +19,9 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 
 ## Active sprint
 
-- **[`sprint_03/`](sprint_03/index.md)** — 🟢 Active — The Twist: distill any node/subtree
-  (Anthropic) + render the summary as an image (gpt-image-1); POC close. Epics D, E, F.
-  **Needs the founder's API keys in `backend/.env`.**
+- **None — the POC (v0.1.0) is CLOSED** (2026-07-15, sprint 03 founder PASS + release-gate GO).
+  What v0.2 wants: [`../0m_BACKLOG.md`](../0m_BACKLOG.md) — every item is a flagged founder
+  decision before it becomes sprint scope.
 
 ## All sprints
 
@@ -29,7 +29,7 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 |---|---|---|---|---|---|---|
 | 01 | ✅ Closed 2026-07-15 · PASS · 4.5 | **The Brain** | Repos' `.md` → vault → derived graph + `Index.md`; rebuildable proven; + acceptance dashboard, wiki popup, Obsidian-class graph (pulled forward) | A — Ingest & Vault · B — Graph & Index | none | [`sprint_01/index.md`](sprint_01/index.md) |
 | 02 | ✅ Closed 2026-07-15 · PASS · 4.6 | **The Explorer** | Explorer page (kit REV 2→2.3): accordion, glossary, immersive placeable graph, persistent focus, in-UI acceptance | C — Explorer UI | none | [`sprint_02/index.md`](sprint_02/index.md) |
-| 03 | 🟢 Active | **The Twist** | Two models end-to-end: summarize node/subtree (Anthropic) + render summary as image (gpt-image-1); POC close | D — Distill · E — Render · F — POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | [`sprint_03/index.md`](sprint_03/index.md) |
+| 03 | ✅ Closed 2026-07-15 · PASS · **POC closed (v0.1.0)** | **The Twist** | Two models end-to-end: summarize node/subtree (Anthropic) + render summary as image (gpt-image-1); POC close | D — Distill · E — Render · F — POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | [`sprint_03/index.md`](sprint_03/index.md) |
 
 ## Sprint anatomy (each `sprint_<N>/` node)
 
