@@ -1,21 +1,27 @@
 /**
  * Obsidian-style force graph (vanilla Canvas2D) — shared by dashboard and explorer.
- * Factory: bind to a canvas, feed nodes/edges, get filters/toggles/interactions.
+ * Visual language (ARIA, kit REV 2.2): hue = repo · brightness & size = connectedness ·
+ * soft convex-hull blobs group each repo (the sibling spaghetti is hidden by default) ·
+ * curved edges · glowing draggable repo hubs (children move along) · zoom-adaptive labels ·
+ * double-click zooms to a node.
  */
 export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const ctx = canvas.getContext('2d');
   let nodes = [], edges = [];
-  let sim = { p: new Map(), alpha: 0, hover: null, drag: null, view: { x: 0, y: 0, k: 1 }, moved: false };
-  let repoColor = new Map();
-  const hiddenEdges = new Set(), hiddenRepos = new Set();
+  let sim = { p: new Map(), alpha: 0, hover: null, drag: null, view: { x: 0, y: 0, k: 1 }, moved: false, lastW: 0 };
+  let repoHue = new Map();
+  const hiddenEdges = new Set(['sibling']);   // grouping is shown as hulls, not spaghetti
+  const hiddenRepos = new Set();
   let matchSet = null;   // Set of note ids matching the filter (null = no filter)
 
   const W = () => canvas.clientWidth, H = () => canvas.clientHeight || 340;
+  const hue = (repo) => repoHue.get(repo) ?? 220;
+  const noteColor = (n) => `hsl(${hue(n.repo)} 65% ${52 + Math.min(n.in_degree + n.out_degree, 12) * 2.2}%)`;
 
   function setData(n, e) {
     nodes = n; edges = e;
     const repos = nodes.filter(x => x.kind === 'repo');
-    repoColor = new Map(repos.map((r, i) => [r.repo, `hsl(${(i * 137.5) % 360} 65% 62%)`]));
+    repoHue = new Map(repos.map((r, i) => [r.repo, (i * 137.5) % 360]));
     sim.p = new Map();
     repos.forEach((r, i) => sim.p.set(r.id, { x: W() * (i + 1) / (repos.length + 1), y: H() / 2, vx: 0, vy: 0 }));
     for (const nd of nodes) {
@@ -84,46 +90,115 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     return set;
   }
 
+  /** Re-fit the layout when the canvas size changes (panel drag/collapse/window resize):
+   *  rescale horizontally to the new width, then let the physics settle it. Without this the
+   *  layout stays sized for the OLD canvas and gets clipped under the panels. */
+  function reflow() {
+    const w = W();
+    if (sim.lastW && w > 50 && Math.abs(w - sim.lastW) > 4) {
+      const ratio = w / sim.lastW;
+      for (const [, p] of sim.p) p.x *= ratio;
+    }
+    kick(0.4);
+  }
+
+  function convexHull(pts) {
+    if (pts.length < 3) return pts;
+    const s = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower = [], upper = [];
+    for (const p of s) { while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
+    for (const p of s.reverse()) { while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+    return lower.slice(0, -1).concat(upper.slice(0, -1));
+  }
+
+  function drawHulls() {
+    const byRepo = new Map();
+    for (const n of nodes) {
+      if (n.kind !== 'note' || hiddenRepos.has(n.repo)) continue;
+      const p = sim.p.get(n.id); if (!p) continue;
+      (byRepo.get(n.repo) ?? byRepo.set(n.repo, []).get(n.repo)).push(p);
+    }
+    for (const [repo, pts] of byRepo) {
+      if (pts.length < 3) continue;
+      const hull = convexHull(pts);
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+      const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      ctx.beginPath();
+      hull.forEach((p, i) => {
+        const dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1;
+        const x = p.x + dx / d * 26, y = p.y + dy / d * 26;   // pad the blob outward
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = `hsl(${hue(repo)} 60% 60% / 0.055)`;
+      ctx.strokeStyle = `hsl(${hue(repo)} 60% 60% / 0.16)`;
+      ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
+      ctx.fill(); ctx.stroke();
+    }
+  }
+
   function draw() {
     const dpr = devicePixelRatio;
     canvas.width = W() * dpr; canvas.height = H() * dpr;
+    sim.lastW = W();
     ctx.setTransform(dpr * sim.view.k, 0, 0, dpr * sim.view.k, dpr * sim.view.x, dpr * sim.view.y);
     ctx.clearRect(-sim.view.x / sim.view.k, -sim.view.y / sim.view.k, canvas.width / (dpr * sim.view.k), canvas.height / (dpr * sim.view.k));
     const hood = sim.hover ? neighborsOf(sim.hover) : null;
-    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', sibling: '#2c3342' };
-    ctx.lineWidth = 0.7;
+
+    drawHulls();   // soft per-repo blobs — the grouping layer
+
+    // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
+    const EDGE = { wikilink: '#7c9eff', relative: '#7e8798', sibling: '#2c3342' };
+    ctx.lineWidth = 0.75;
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
       const lit = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
       ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
-      ctx.globalAlpha = hood ? (lit ? 0.95 : 0.05) : (e.type === 'sibling' ? 0.15 : 0.45);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (e.type === 'sibling' ? 0.13 : 0.4);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const bow = Math.min(d * 0.12, 22) * (e.src < e.dst ? 1 : -1);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(mx - dy / d * bow, my + dx / d * bow, b.x, b.y);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
+
     for (const n of nodes) {
       const p = sim.p.get(n.id); if (!p || !visibleNode(n)) continue;
       if (n.kind === 'repo') {
+        // the draggable hub: glowing ring + label (drag it — its children come along)
+        ctx.globalAlpha = hood ? 0.4 : 0.95;
+        ctx.strokeStyle = `hsl(${hue(n.repo)} 70% 65% / 0.5)`;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, 7); ctx.stroke();
+        ctx.shadowBlur = 0;
         ctx.fillStyle = '#e6e6e6'; ctx.font = '600 12px system-ui'; ctx.textAlign = 'center';
-        ctx.globalAlpha = hood ? 0.35 : 0.9;
-        ctx.fillText(n.title, p.x, p.y);
+        ctx.fillText(n.title, p.x, p.y - 15);
         ctx.globalAlpha = 1;
         continue;
       }
       const deg = n.in_degree + n.out_degree;
-      const dimHover = hood && !hood.has(n.id);
-      const dimMatch = matchSet && !matchSet.has(n.id);
-      ctx.globalAlpha = dimHover || dimMatch ? 0.12 : 1;
-      ctx.fillStyle = repoColor.get(n.repo) ?? '#c8cfdd';
+      const dim = (hood && !hood.has(n.id)) || (matchSet && !matchSet.has(n.id));
+      ctx.globalAlpha = dim ? 0.1 : 1;
+      ctx.fillStyle = noteColor(n);
+      if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
       ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 + Math.min(deg, 12) * 0.55, 0, 7); ctx.fill();
-      if (sim.hover === n.id || (hood?.has(n.id) && hood.size < 14)) {
+      ctx.shadowBlur = 0;
+      // labels: hovered + small neighborhoods always; hubs-of-the-brain when zoomed in (LOD)
+      const label = sim.hover === n.id || (hood?.has(n.id) && hood.size < 14) ||
+                    (!hood && sim.view.k >= 1.4 && deg >= 6);
+      if (label && !dim) {
         ctx.fillStyle = '#e6e6e6'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
         ctx.fillText(n.title.slice(0, 34), p.x, p.y - 9);
       }
       ctx.globalAlpha = 1;
     }
     if (infoEl) infoEl.textContent =
-      `${nodes.filter(n => n.kind === 'note' && visibleNode(n)).length} notes · ${edges.filter(visibleEdge).length} edges · drag nodes · wheel zooms · click opens the article`;
+      `${nodes.filter(n => n.kind === 'note' && visibleNode(n)).length} notes · ${edges.filter(visibleEdge).length} edges shown · hue = repo · brightness/size = connectedness`;
   }
 
   const toWorld = (ev) => {
@@ -133,10 +208,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const nodeAt = (w) => {
     let best = null, bd = 11 / sim.view.k;
     for (const n of nodes) {
-      if (n.kind !== 'note' || !visibleNode(n)) continue;
+      if (!visibleNode(n)) continue;
       const p = sim.p.get(n.id); if (!p) continue;
+      const r = n.kind === 'repo' ? 16 / sim.view.k : bd;   // hubs get a bigger grab radius
       const d = Math.hypot(p.x - w.x, p.y - w.y);
-      if (d < bd) { bd = d; best = n; }
+      if (d < (n.kind === 'repo' ? r : bd)) { bd = d; best = n; }
     }
     return best;
   };
@@ -145,8 +221,18 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const w = toWorld(ev);
     if (sim.drag) {
       sim.moved = true;
-      if (sim.drag.p) { sim.drag.p.x = w.x; sim.drag.p.y = w.y; }
-      else { sim.view.x += ev.movementX; sim.view.y += ev.movementY; }
+      if (sim.drag.p) {
+        const dx = w.x - sim.drag.p.x, dy = w.y - sim.drag.p.y;
+        sim.drag.p.x = w.x; sim.drag.p.y = w.y;
+        // dragging a repo hub carries its children along (rigid move, physics re-settles)
+        if (sim.drag.id?.startsWith('repo:')) {
+          const repo = sim.drag.id.slice(5);
+          for (const n of nodes) {
+            if (n.kind !== 'note' || n.repo !== repo) continue;
+            const p = sim.p.get(n.id); if (p) { p.x += dx; p.y += dy; }
+          }
+        }
+      } else { sim.view.x += ev.movementX; sim.view.y += ev.movementY; }
       kick(0.12); return;
     }
     const n = nodeAt(w);
@@ -167,8 +253,26 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     if (n) kick(0.3);
   });
   addEventListener('mouseup', () => {
-    if (sim.drag && !sim.moved && sim.drag.id) onNodeClick?.(sim.drag.id);
+    if (sim.drag && !sim.moved && sim.drag.id && !sim.drag.id.startsWith('repo:')) onNodeClick?.(sim.drag.id);
     sim.drag = null;
+  });
+  canvas.addEventListener('dblclick', (ev) => {
+    const n = nodeAt(toWorld(ev));
+    if (!n || n.kind !== 'note') return;
+    const p = sim.p.get(n.id); if (!p) return;
+    // zoom to the node: center it at 1.7x (smooth-ish: 8 animation steps)
+    const targetK = 1.7;
+    const tx = W() / 2 - p.x * targetK, ty = H() / 2 - p.y * targetK;
+    const s = { x: sim.view.x, y: sim.view.y, k: sim.view.k };
+    let step = 0;
+    const anim = () => {
+      step++;
+      const t = step / 8;
+      sim.view = { x: s.x + (tx - s.x) * t, y: s.y + (ty - s.y) * t, k: s.k + (targetK - s.k) * t };
+      draw();
+      if (step < 8) requestAnimationFrame(anim);
+    };
+    requestAnimationFrame(anim);
   });
   canvas.addEventListener('mouseleave', () => { sim.hover = null; if (tooltipEl) tooltipEl.style.display = 'none'; });
   canvas.addEventListener('wheel', (ev) => {
@@ -186,10 +290,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   return {
     setData,
     redraw: draw,
+    reflow,
     setMatch(set) { matchSet = set; draw(); },
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
-    repoColors: () => repoColor,
+    repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
     state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet }),
   };
 }

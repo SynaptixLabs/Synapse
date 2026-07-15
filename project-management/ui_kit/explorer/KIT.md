@@ -45,6 +45,19 @@ the top bar instead of permanently spending screen width.
 > (c) The sprint acceptance checklist lives IN the UI (Menu → ✓ Acceptance): auto-PASS badges
 > where the app can prove a step, manual ticks for founder judgment, progress persisted.
 
+> **REV 2.2 (founder live-testing, round 2 — ARIA creative pass on the graph):**
+> - **Reflow, not clip:** any panel change (drag/collapse/window resize) rescales and re-settles
+>   the layout into the new canvas — the graph is never clipped under a panel edge.
+> - **Visual language:** hue = repo (golden-angle spacing) · node brightness AND size =
+>   connectedness · hubs of the brain glow (degree ≥ 8).
+> - **Cluster hulls:** each repo's territory is a soft translucent convex-hull blob (overlaps
+>   show where repos interlink); the n-per-note sibling edges are hidden by default (toggle in
+>   the glossary re-enables).
+> - **Curved edges** (deterministic bow) for organic reading; **zoom-adaptive labels** (LOD —
+>   top-connected labels appear as you zoom); **double-click zooms to a node**.
+> - **Repo hubs are draggable rings — dragging a hub carries its children** (rigid move, the
+>   physics re-settles). Clicking a hub does not open a note.
+
 ## The accordion rule (binding, REV 2)
 
 Every panel (LHS, reading panel — and the glossary drawer) supports three states:

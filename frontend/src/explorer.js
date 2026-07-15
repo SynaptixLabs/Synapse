@@ -93,9 +93,12 @@ function buildDrawer() {
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
       `<div class="row" data-repo="${r}"><span class="dot" style="background:${colors.get(r)}"></span> ${r} <span class="tg">${c} · on</span></div>`).join('') +
-    `<h4>Edges (click toggles)</h4>` +
-    Object.entries(EDGE).map(([t, c]) =>
-      `<div class="row" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${t === 'sibling' ? 'repo grouping' : t} <span class="tg">on</span></div>`).join('') +
+    `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
+    Object.entries(EDGE).map(([t, c]) => {
+      const off = graph.state().hiddenEdges.includes(t);
+      const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t;
+      return `<div class="row ${off ? 'off' : ''}" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${name} <span class="tg">${off ? 'off' : 'on'}</span></div>`;
+    }).join('') +
     `<h4>Unresolved (${unresolved.length}) — click opens the note</h4>` +
     (unresolved.slice(0, 40).map(({ u, n }) =>
       `<div class="row" data-open-note="${n.id}"><span class="unres">${u.replace(/</g, '&lt;')}<small>in ${n.repo} / ${n.source_path}</small></span></div>`).join('')
@@ -142,7 +145,7 @@ function persist() {
     lhsW: document.documentElement.style.getPropertyValue('--lhs-w') || undefined,
     readerW: document.documentElement.style.getPropertyValue('--reader-w') || undefined,
   }));
-  graph.redraw();
+  graph.reflow();   // panels changed → re-fit the layout into the new canvas size
 }
 window.toggleLhs = () => {
   document.body.dataset.lhs = document.body.dataset.lhs === 'closed' ? 'open' : 'closed';
@@ -172,7 +175,7 @@ function makeResizer(el, varName, fromRight) {
   // double-click a handle = reset that panel to its default width
   el.addEventListener('dblclick', () => {
     document.documentElement.style.removeProperty(varName);
-    persist(); graph.redraw();
+    persist();
   });
 }
 makeResizer($('rs-lhs'), '--lhs-w', false);
@@ -186,7 +189,7 @@ addEventListener('resize', () => {
       document.documentElement.style.setProperty(varName, Math.floor(innerWidth * 0.45) + 'px');
     }
   }
-  graph.redraw();
+  graph.reflow();
 });
 
 // ── keyboard ────────────────────────────────────────────────────────────────
