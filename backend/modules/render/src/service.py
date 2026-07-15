@@ -30,12 +30,20 @@ class RenderService:
 
     def derive_prompt(self, body: str) -> str:
         title = next((ln[2:].strip() for ln in body.splitlines() if ln.startswith("# ")), "an idea")
+        # the image must REFLECT THE SUBJECT (founder ruling) — feed the summary's essence
+        # paragraph, not just bullets, and let the metaphor come from the domain instead of
+        # forcing a generic constellation on everything
+        essence = next((ln.strip() for ln in body.splitlines()
+                        if ln.strip() and not ln.strip().startswith(("#", "-", ">", "!", "["))), "")
+        essence = re.sub(r"\(vault:[^)]*\)|\[\[|\]\]|\*\*", "", essence).strip()[:400]
         themes = [re.sub(r"\(vault:[^)]*\)|\[\[|\]\]|\*\*", "", ln).lstrip("- ").strip()
-                  for ln in body.splitlines() if ln.strip().startswith("- ")][:6]
+                  for ln in body.splitlines() if ln.strip().startswith("- ")][:4]
         return (
-            f"An evocative abstract scene visualizing the idea: {title}. "
-            f"Themes: {'; '.join(themes) if themes else 'connected knowledge'}. "
-            "Style: luminous knowledge-graph constellation, depth of field, rich color. "
+            f"A single evocative illustration EMBODYING the subject: {title}. "
+            f"What it is: {essence or 'connected knowledge'}. "
+            f"Key ideas: {'; '.join(themes) if themes else 'connected knowledge'}. "
+            "Choose a visual metaphor drawn from the subject's own domain, role and purpose — "
+            "NOT a generic abstract network. Cinematic light, rich color, depth of field. "
             "Absolutely no text, letters, words or labels in the image."
         )
 

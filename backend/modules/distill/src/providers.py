@@ -57,10 +57,15 @@ class AnthropicSummarizer(Summarizer):
 
         corpus = "\n\n".join(f"<note id=\"{n.note_id}\" title=\"{n.title}\">\n{n.body}\n</note>" for n in notes)
         prompt = (
-            f"Summarize the {scope} rooted at '{subject}' from the notes below.\n"
-            "Rules: be faithful — every claim-cluster must cite its source as `(vault: <note id>)` "
-            "using the ids given; name the sub-themes; if something is unclear in the sources, say so. "
-            "Output clean markdown starting with a one-paragraph essence, then '## Key threads' bullets.\n\n"
+            f"Write a wiki-style GIST of '{subject}' from the source notes below ({scope} scope).\n"
+            "Voice: an encyclopedia entry about the SUBJECT ITSELF — lead with what it IS and "
+            "what it does in plain language, then how it works and why it matters. Synthesize; "
+            "never narrate file structure or walk the sources section by section.\n"
+            "Rules: stay faithful — every claim-cluster cites its source as `(vault: <note id>)` "
+            "using the ids given, exactly ONE id per parenthetical (repeat the parenthetical for "
+            "multiple sources, never comma-join); if the sources cover only a narrow slice of the subject, say so "
+            "in ONE closing line; if something is unclear, say so. Output clean markdown: a "
+            "one-paragraph essence first, then '## Key threads' bullets.\n\n"
             f"{corpus}"
         )
         client = anthropic.Anthropic(api_key=self._api_key)

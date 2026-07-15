@@ -21,6 +21,29 @@ _CITE_RE = re.compile(r"\(vault:\s*([^)]+?)\s*\)")
 SUMMARY_REPO = "✦ summaries"
 
 
+def citation_audit(markdown: str, known: set[str]) -> tuple[int, list[str]]:
+    """(citation_count, unknown_ids). Tolerant of real-model formatting: several ids
+    comma-joined inside one parenthetical, repeated `vault:` prefixes, and ids truncated
+    by an inner ')' (note ids may themselves contain parentheses)."""
+    frags: list[str] = []
+    for m in _CITE_RE.finditer(markdown):
+        for part in m.group(1).split(","):
+            part = part.strip()
+            if part.lower().startswith("vault:"):
+                part = part[6:].strip()
+            if part:
+                frags.append(part)
+    unknown = []
+    for c in frags:
+        cl = c.lower()
+        if cl in known or f"{cl}.md" in known:
+            continue
+        if len(cl) >= 4 and any(k.startswith(cl) for k in known):
+            continue   # id cut short by an inner ')' — matches a real note's prefix
+        unknown.append(c)
+    return len(frags), sorted(set(unknown))
+
+
 class ConfirmationRequired(Exception):
     def __init__(self, tokens_est: int, threshold: int):
         self.tokens_est, self.threshold = tokens_est, threshold
@@ -86,18 +109,16 @@ class DistillService:
 
         subject = notes[0].title if notes else node_id
         result = self.summarizer.summarize(subject, notes, scope)
-        cited = [c.strip() for c in _CITE_RE.findall(result.markdown)]
-        if not cited:
-            raise GroundingError("The summary contains zero (vault: ...) citations — rejected as ungrounded.")
         # grounded means grounded: every cited id must BE one of the source notes — a
         # hallucinated `(vault: made-up.md)` must not pass the gate
         known = {n.note_id.lower() for n in notes} | {n.title.strip().lower() for n in notes}
-        unknown = sorted({c for c in cited if c.lower() not in known and f"{c.lower()}.md" not in known})
+        citations, unknown = citation_audit(result.markdown, known)
+        if citations == 0:
+            raise GroundingError("The summary contains zero (vault: ...) citations — rejected as ungrounded.")
         if unknown:
             raise GroundingError(
                 "The summary cites notes that are NOT in the source set (hallucinated citations): "
                 + ", ".join(unknown[:5]) + (" …" if len(unknown) > 5 else "") + " — rejected.")
-        citations = len(cited)
 
         note_id = self._write_summary(subject, node_id, scope, depth, notes, truncated, result)
         return {"summary_note_id": note_id, "citations": citations, "truncated": truncated,

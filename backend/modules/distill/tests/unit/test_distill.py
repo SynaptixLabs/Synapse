@@ -82,6 +82,19 @@ class TestDistill:
         with pytest.raises(GroundingError, match="NOT in the source set"):
             DistillService(vault, Hallucinator()).distill(ALPHA)
 
+    def test_citation_audit_tolerates_real_model_formats(self):
+        """Live sonnet-5 comma-joins ids in one parenthetical, and note ids may contain
+        parentheses (which truncate the regex match) — neither is a hallucination."""
+        from modules.distill.src.service import citation_audit
+        known = {"repo_a__docs__alpha.md", "s — aria (ui·ux) — client thin adapter.md"}
+        md = ("Claim one (vault: repo_a__docs__alpha.md, vault: repo_a__docs__alpha.md). "
+              "Claim two (vault: S — ARIA (UI·UX). "          # id truncated by its own paren
+              "Claim three (vault: repo_a__docs__alpha).")     # id without the .md suffix
+        count, unknown = citation_audit(md, known)
+        assert count == 4 and unknown == []
+        _, bad = citation_audit("Sure thing (vault: made-up-note.md).", known)
+        assert bad == ["made-up-note.md"]
+
     def test_truncation_is_disclosed(self, vault):
         svc = DistillService(vault, MockSummarizer())
         svc.hard_cap_chars = 150                     # tiny safety cap → the subtree must be cut
