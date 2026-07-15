@@ -1,12 +1,14 @@
 <!-- ⛔ E2E MEANS A REAL BROWSER — see .claude/policies/e2e-doctrine.md before writing any test ⛔ -->
 
-# {{PROJECT_NAME}} — Claude Code entry
+# SYNAPSE — Claude Code entry
 
 > **Thin loader.** Claude Code auto-reads this file. It carries only **project-local facts**
 > (below). All agent behavior — roles, personas, policies, skills — is canonical in **`.claude/`**
 > and summarized in **[`AGENTS.md`](AGENTS.md)**. Read those, don't restate them here.
 >
-> **Template version:** SynaptixLabs scaffold v1.0 · **Stack:** {{TECH_STACK_SUMMARY}}
+> **Template version:** SynaptixLabs scaffold v1.0 · **Stack:** Python 3.12 FastAPI (indexer +
+> graph API) · Vite frontend (graph explorer) · local-first markdown vault + derived JSON graph ·
+> two models: Anthropic (summarization) + OpenAI gpt-image-1 (image rendering)
 
 ## Read order (every session)
 
@@ -29,44 +31,49 @@ Subagents live in [`.claude/agents/`](.claude/agents/00_index.md); slash command
 
 ---
 
-## Project identity  <!-- CUSTOMIZE: fill these when you instantiate the template -->
+## Project identity
 
 | Field | Value |
 |---|---|
-| **Name** | {{PROJECT_NAME}} |
-| **Purpose** | {{PROJECT_DESCRIPTION}} |
-| **Production URL** | {{PRODUCTION_URL}} |
-| **Current sprint** | {{CURRENT_SPRINT}} → `project-management/sprints/{{CURRENT_SPRINT}}/index.md` |
-| **Dev port** | {{DEV_PORT}} (`{{DEV_COMMAND}}`) |
+| **Name** | SYNAPSE |
+| **Purpose** | A second brain for your repos — index the markdown scattered across repositories into one wikilinked knowledge graph; summarize any node/subtree (model #1) and render the summary as an image (model #2). |
+| **Production URL** | — (local-first demo; no deploy target yet) |
+| **Current sprint** | sprint_01 → `project-management/sprints/sprint_01/index.md` |
+| **Dev ports** | 8000 backend · 5173 frontend (`./start.sh`) |
+| **Source concept** | natural20.com "second brain / LLM wiki" (Karpathy pattern: wiki = codebase, LLM = librarian) — see `project-management/0k_PRD.md` |
 
-## Key commands  <!-- CUSTOMIZE -->
+## Key commands
 
 ```bash
-{{DEV_COMMAND}}          # Start dev server → http://localhost:{{DEV_PORT}}
-{{BUILD_COMMAND}}        # Production build
-{{LINT_COMMAND}}         # Lint
-{{TEST_UNIT_COMMAND}}    # Unit tests
-{{TEST_E2E_COMMAND}}     # E2E — real Chromium (npx playwright install chromium first)
+./start.sh setup         # install/update deps, create .env, drift guard + tests — sprint-1 ready
+./start.sh               # dev: backend :8000 (/docs, /health) + frontend :5173
+./start.sh test          # unit tests (backend/)
+./start.sh status|stop   # health check / kill servers      (Windows: .\start.cmd, same flags)
+python3 scripts/check_adapters.py   # agent-layer drift guard
 ```
 
-## Definition of done (project-local; extends the P0 gates)  <!-- CUSTOMIZE -->
+## Definition of done (project-local; extends the P0 gates)
 
 A feature is **done** only with evidence:
 - Unit + type checks pass; dev server runs.
 - User-visible web/UI change → **real-Chromium E2E** on the affected flow (`page.goto()`) + screenshots
   in `tests/screenshots/`. Never `request.get()` as a stand-in. (`.claude/policies/e2e-doctrine.md`)
-- No regressions on the full suite.
-- Reuse-first respected (`.claude/policies/reuse-first.md`).
+- Model calls (summarizer / image) are **mockable and mocked in tests** — no paid API calls in CI.
+- No regressions on the full suite; reuse-first respected (`.claude/policies/reuse-first.md`).
 - Human-owner sign-off.
 
-## Architecture non-negotiables  <!-- CUSTOMIZE: add your stack's hard rules -->
+## Architecture non-negotiables
 
-- {{ARCHITECTURE_NON_NEGOTIABLE_1}}
+- **The vault is the source of truth; the graph is derived.** Markdown in the vault is local-first
+  and human-readable; the JSON graph index must always be rebuildable from the vault alone.
+- **Two-model seam stays clean.** Summarization (Anthropic) and image generation (OpenAI) sit
+  behind one provider interface each — no vendor SDK calls outside those modules.
 - Before building anything new, check `project-management/03_MODULE_CONTRACTS.md` — don't duplicate
   a capability.
 - No new infra dependency without a flagged decision to the human owner.
 
-## Environment  <!-- CUSTOMIZE -->
+## Environment
 
-Copy `.env.example` → `.env` (or your local file). Required vars: {{ENV_VARS_LIST}}.
-Real values never go in git.
+Copy `.env.example` → `backend/.env` (or run `./start.sh setup`). Required vars:
+`ANTHROPIC_API_KEY` (summarizer), `OPENAI_API_KEY` (image model), `SYNAPSE_SOURCE_REPOS`
+(comma-separated local repo paths to index). Real values never go in git.

@@ -60,10 +60,10 @@ if ($ScriptDir -match '^(?:Microsoft\.PowerShell\.Core\\FileSystem::)?\\\\wsl(?:
 # ============================================================================
 # CONFIGURATION — Edit this section per project
 # ============================================================================
-$ProjectName     = "{{PROJECT_NAME}}"          # e.g. "My Project"
-$ProjectTagline  = "One brain, every CLI - synaptix-scaffold template"  # CUSTOMIZE
-$RepoUrl         = "https://github.com/SynaptixLabs/scaffold"           # CUSTOMIZE: your repo
-$OrgUrl          = "https://synaptixlabs.ai"                            # CUSTOMIZE: your org/site
+$ProjectName     = "SYNAPSE"
+$ProjectTagline  = "A second brain for your repos"
+$RepoUrl         = "https://github.com/SynaptixLabs/Synapse"
+$OrgUrl          = "https://synaptixlabs.ai"
 $LicenseName     = "MIT"
 $BackendType     = "python"                     # "python" | "node"
 $BackendDir      = "backend"                    # Relative to repo root ("." for monolith)

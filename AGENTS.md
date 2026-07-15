@@ -7,8 +7,10 @@
 
 ## 1. What this repo is
 
-This is the **SynaptixLabs scaffold** — a tool-agnostic template for running a small team of AI
-agents across any coding CLI, with one source of truth instead of one config per tool.
+This is **SYNAPSE** — a second brain for your repos: it indexes the markdown scattered across
+repositories into one wikilinked knowledge graph, summarizes any node/subtree (Anthropic) and
+renders the summary as an image (gpt-image-1). Built on the **SynaptixLabs scaffold** (one
+canonical agent brain, every CLI); project truth lives in `project-management/` (PRD, sprint 1).
 
 **The architecture in one line:** `.claude/` is the **canonical brain**; every other agent
 surface (this `AGENTS.md`, `.agents/skills/`, `.cursor/`, `.gemini/`, `CLAUDE.md`, `GEMINI.md`) is a

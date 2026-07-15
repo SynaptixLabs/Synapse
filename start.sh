@@ -19,10 +19,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ============================================================================
 # CONFIGURATION — Edit this section per project
 # ============================================================================
-PROJECT_NAME="{{PROJECT_NAME}}"
-PROJECT_TAGLINE="One brain, every CLI — synaptix-scaffold template"   # CUSTOMIZE
-REPO_URL="https://github.com/SynaptixLabs/scaffold"                   # CUSTOMIZE: your repo
-ORG_URL="https://synaptixlabs.ai"                                     # CUSTOMIZE: your org/site
+PROJECT_NAME="SYNAPSE"
+PROJECT_TAGLINE="A second brain for your repos"
+REPO_URL="https://github.com/SynaptixLabs/Synapse"
+ORG_URL="https://synaptixlabs.ai"
 LICENSE_NAME="MIT"
 BACKEND_TYPE="python"           # "python" | "node"
 BACKEND_DIR="backend"           # "." for monolith

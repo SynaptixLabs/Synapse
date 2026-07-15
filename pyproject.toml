@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "synaptix-scaffold"
+name = "synapse"
 version = "1.0.0"
-description = "Tool-agnostic template for running a team of AI coding agents — one canonical brain (.claude/), thin adapters for Claude Code, Codex, Cursor, Gemini CLI, and Devin"
+description = "SYNAPSE — a second brain for your repos: index scattered markdown into a wikilinked knowledge graph; summarize any node/subtree and render it as an image"
 authors = ["Avidor Rabinovich <avidor@synaptixlabs.ai>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/SynaptixLabs/scaffold"
-repository = "https://github.com/SynaptixLabs/scaffold"
+homepage = "https://github.com/SynaptixLabs/Synapse"
+repository = "https://github.com/SynaptixLabs/Synapse"
 keywords = ["agents", "ai", "template", "claude-code", "codex", "cursor", "gemini-cli", "devin", "agents-md"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

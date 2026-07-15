@@ -1,19 +1,54 @@
-# {{PROJECT_NAME}} — PRD
+# SYNAPSE — PRD
 
 > Owned by `cpto` (JANUS). Product truth: the problem and the users, not the implementation.
 
 ## Problem
-{{What problem are we solving, for whom, and why now?}}
+
+Knowledge about our projects already exists — but it's scattered across `README.md`s,
+`project-management/` folders, and design docs in a dozen repos. Nobody can see the whole,
+connections between projects stay invisible, and "what do we know about X?" means grepping
+N repositories. The second-brain pattern (Karpathy: *the wiki is the codebase, the LLM is the
+librarian* — via natural20.com's "Using Claude Code to set up a second brain / LLM wiki")
+solves this for personal notes; SYNAPSE applies it to **repos as the source**.
 
 ## Users & jobs-to-be-done
-- {{persona}} needs to {{job}} so that {{outcome}}.
 
-## Scope (this release)
-- In: {{...}}
-- Out (explicitly): {{...}}
+- **The founder** needs to point SYNAPSE at existing repos and get one navigable knowledge
+  graph, so cross-project knowledge stops living only in his head.
+- **A developer/agent** needs to query the graph (Index-first, with citations) instead of
+  grepping repos, so context loads in seconds.
+- **Anyone presenting/deciding** needs a distilled view of a node or a whole subtree —
+  as text AND as a generated image — so a branch of knowledge can be *seen* at a glance.
+
+## Scope (v0.1 — this release)
+
+- **In:**
+  - Ingest: scan configured local repo paths (`SYNAPSE_SOURCE_REPOS`) for `.md` files → vault
+    entries with YAML frontmatter (source repo, path, dates, tags).
+  - Graph: nodes = documents (+ first-class entities later), edges = wikilinks/relative links/
+    shared-repo membership; derived JSON graph index, rebuildable from the vault alone.
+  - Index: generated `Index.md` catalog (the librarian's entry point).
+  - Explore: frontend graph view (pan/zoom, click a node → its content + neighbors).
+  - **Distill (model #1):** summarize a selected node OR its subtree (configurable depth) via
+    Anthropic; summaries saved back into the vault as `S — <name>` notes.
+  - **Render (model #2):** turn a distilled summary into a generated image (OpenAI gpt-image-1)
+    shown beside the node.
+- **Out (explicitly):** auth/multi-user, cloud deploy, non-markdown sources, automatic "ripple"
+  maintenance of existing pages, Obsidian plugin, scheduled re-indexing.
 
 ## Acceptance criteria (measurable, testable)
-- [ ] {{criterion — how we'll verify it, with evidence}}
+
+- [ ] `synapse ingest` (CLI or API) over ≥2 real repos produces a vault + graph where every `.md`
+      became exactly one node; evidence: counts + spot-check citations.
+- [ ] Graph view renders the real graph in a real browser (Chromium E2E + screenshots): nodes
+      clickable, neighbor panel shows actual content.
+- [ ] Summarize-node and summarize-subtree return grounded summaries (citations to vault paths);
+      mocked-model unit tests + one live smoke run as evidence.
+- [ ] Image render produces an image file for a summary and the UI displays it (E2E screenshot).
+- [ ] All model calls sit behind provider interfaces; test suite green with zero paid calls.
 
 ## Non-goals
-- {{things we are deliberately not doing}}
+
+- Replacing Obsidian or being a general note-taking app — SYNAPSE reads *repos*, not journals.
+- Perfect entity extraction in v0.1 — document-level graph first, entities are an iteration.
+- Chat UI — querying is Index-first via agents/CLI in v0.1.
