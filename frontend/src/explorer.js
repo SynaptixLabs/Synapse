@@ -97,13 +97,31 @@ function renderResults() {
     ? hits.map((n, i) =>
         `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${esc(n.id)}">
            <span class="dot" style="background:${colors.get(grpOf.get(n.id) ?? n.repo)}"></span>
-           <span>${esc(n.title)}</span><small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
+           <span>${n.repo === '✦ summaries' ? '✦ ' : ''}${esc(n.title)}</span><small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
     : `<div class="r" style="color:var(--dim)">no notes match “${esc(q)}”</div>`;
   box.classList.add('open');
 }
 document.addEventListener('click', (ev) => {
-  if (!ev.target.closest('.searchwrap')) { $('sresults').classList.remove('open'); selIdx = -1; }
+  if (!ev.target.closest('.searchwrap') && !ev.target.closest('#distillsBtn')) {
+    $('sresults').classList.remove('open'); selIdx = -1;
+  }
 });
+
+// ── quick distills view: every ✦ summary, one click away (founder ask) ─────
+window.viewDistills = () => {
+  const list = nodes.filter(n => n.kind === 'note' && n.repo === '✦ summaries')
+    .sort((a, b) => a.title.localeCompare(b.title));
+  const box = $('sresults');
+  const color = graph.repoColors().get('✦ summaries') ?? 'var(--dim)';
+  box.innerHTML = (list.length
+    ? list.map(n =>
+        `<div class="r" data-open="${esc(n.id)}">
+           <span class="dot" style="background:${color}"></span>
+           <span>✦ ${esc(n.title.replace(/^\s*S\s*—\s*/, ''))}</span><small>${n.in_degree + n.out_degree} links</small></div>`).join('')
+    : `<div class="r" style="color:var(--dim)">no distills yet — open a note and hit ✦ Distill</div>`)
+    + `<div class="r" style="color:var(--dim);font-size:0.75rem">${list.length} distill(s) in ✦ summaries — deletable from the reader (🗑)</div>`;
+  box.classList.add('open');
+};
 
 // picking a search result = SINGLE selection: clear the multi-match, fly to the node
 document.addEventListener('click', (ev) => {
@@ -252,15 +270,19 @@ window.runIngest = async () => {
 // Relevance scoring — an exact/prefix hit ("ARIA") must never lose to an accidental
 // substring ("InvARIAnts", "adversARIAl"). Degree only breaks ties within a tier.
 function scoreNote(n, q) {
-  const t = n.title.toLowerCase();
+  // a summary scores by its SUBJECT ("S — ARIA…" answers "aria"), and as a user artifact it
+  // gets a boost so it never drowns under better-connected source mirrors (founder repro)
+  const isSummary = n.repo === '✦ summaries';
+  const t = (isSummary ? n.title.replace(/^\s*S\s*—\s*/, '') : n.title).toLowerCase();
   const id = n.id.toLowerCase();
   const stem = (n.source_path?.split('/').pop() ?? '').replace(/\.md$/, '').toLowerCase();
-  if (t === q || stem === q) return 100;
-  if (t.startsWith(q) || stem.startsWith(q)) return 80;
-  if (t.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) return 60;
-  if (id.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) return 40;
-  if (t.includes(q) || id.includes(q)) return 15;
-  return 0;
+  let sc = 0;
+  if (t === q || stem === q) sc = 100;
+  else if (t.startsWith(q) || stem.startsWith(q)) sc = 80;
+  else if (t.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) sc = 60;
+  else if (id.split(/[^a-z0-9]+/).some(w => w.startsWith(q))) sc = 40;
+  else if (t.includes(q) || id.includes(q)) sc = 15;
+  return sc && isSummary ? sc + 25 : sc;
 }
 const matchList = (q) => nodes
   .filter(n => n.kind === 'note')
