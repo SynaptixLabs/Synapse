@@ -32,18 +32,29 @@ class IngestService:
         self.ignore_dirs = set(ignore_dirs)
 
     # ── discovery ─────────────────────────────────────────────────────────
-    def scan_repo(self, repo_root: Path) -> list[SourceFile]:
-        """All .md files under `repo_root`, skipping ignore-dirs at any depth."""
+    def scan_repo(self, repo_root: Path, errors: list[str] | None = None) -> list[SourceFile]:
+        """All .md files under `repo_root`. os.walk (not rglob): prunes ignore-dirs WITHOUT
+        descending (fast on huge trees), never follows symlinks (no loops), and unreadable
+        directories are RECORDED as errors instead of crashing the whole ingest."""
+        import os
         repo_root = Path(repo_root).resolve()
         vault = self.vault_path.resolve()
         found: list[SourceFile] = []
-        for path in sorted(repo_root.rglob("*.md")):
-            if path.is_relative_to(vault):
+
+        def onerr(e: OSError) -> None:
+            if errors is not None:
+                errors.append(f"{getattr(e, 'filename', repo_root)}: {getattr(e, 'strerror', e)}")
+
+        for dirpath, dirnames, filenames in os.walk(repo_root, onerror=onerr, followlinks=False):
+            dirnames[:] = [d for d in dirnames if d not in self.ignore_dirs]
+            dp = Path(dirpath)
+            if dp == vault or vault in dp.parents:
+                dirnames[:] = []
                 continue   # never ingest the vault itself (a repo may contain it)
-            rel_parts = path.relative_to(repo_root).parts
-            if any(part in self.ignore_dirs for part in rel_parts):
-                continue
-            found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=path))
+            for fn in filenames:
+                if fn.endswith(".md"):
+                    found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=dp / fn))
+        found.sort(key=lambda f: f.path)
         return found
 
     # ── note writing ──────────────────────────────────────────────────────
@@ -102,8 +113,9 @@ class IngestService:
             rr = RepoReport(repo=repo_root.name)
             report.repos.append(rr)
             if not repo_root.is_dir():
+                report.errors.append(f"{repo_root}: not a directory on this machine")
                 continue   # honest: 0 files found for a missing path
-            for src in self.scan_repo(repo_root):
+            for src in self.scan_repo(repo_root, errors=report.errors):
                 rr.files_found += 1
                 outcome = self.write_note(src)
                 if outcome == "written":

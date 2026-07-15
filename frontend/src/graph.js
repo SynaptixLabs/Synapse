@@ -16,6 +16,9 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   let matchSet = null;   // Set of note ids matching the filter (null = no filter)
 
   const W = () => canvas.clientWidth, H = () => canvas.clientHeight || 340;
+  // Beyond the POC budget (~2k nodes) the O(n²) physics + full edge draw would freeze the tab:
+  // degrade honestly — spring/gravity-only layout, wikilink-only edges until zoomed, no hulls.
+  const big = () => nodes.filter(n => n.kind === 'note').length > 3000;
   const hue = (repo) => repoHue.get(repo) ?? 220;
   const noteColor = (n) => `hsl(${hue(n.repo)} 65% ${52 + Math.min(n.in_degree + n.out_degree, 12) * 2.2}%)`;
 
@@ -49,6 +52,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     for (const n of nodes) {
       const p = sim.p.get(n.id); if (!p) continue;
       const g = n.kind === 'repo' ? '__hubs__' : n.repo;
+      if (big() && g !== '__hubs__') continue;   // big mode: springs+gravity only (O(E+N))
       (byGroup.get(g) ?? byGroup.set(g, []).get(g)).push(p);
     }
     for (const [g, pts] of byGroup) {
@@ -140,6 +144,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   }
 
   function drawHulls() {
+    if (big()) return;   // 18k-point hulls per frame are not worth the burn
     const byRepo = new Map();
     for (const n of nodes) {
       if (n.kind !== 'note' || hiddenRepos.has(n.repo)) continue;
@@ -183,10 +188,13 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342' };
     const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13 };
     ctx.lineWidth = 0.75;
+    const bigMode = big();
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
+      const lit0 = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
+      if (bigMode && !lit0 && e.type !== 'wikilink' && sim.view.k < 1.2) continue;
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
-      const lit = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
+      const lit = lit0;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
       ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (BASE[e.type] ?? 0.3) * Math.min(1, 240 / d);
@@ -221,7 +229,12 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       ctx.fillStyle = noteColor(n);
       if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
       const r = 2.8 + Math.min(deg, 14) * 0.5;
-      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+      if (big() && !inMatch && sim.hover !== n.id) {
+        ctx.shadowBlur = 0;
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);   // fast path: 18k arcs/frame won't fly
+      } else {
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+      }
       ctx.shadowBlur = 0;
       if (inMatch && !dim) {            // search selection: accent ring on EVERY match
         ctx.strokeStyle = 'rgba(124,158,255,0.85)'; ctx.lineWidth = 1.4;
@@ -245,7 +258,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       }
       ctx.globalAlpha = 1;
     }
-    if (infoEl) infoEl.textContent =
+    if (infoEl) infoEl.textContent = big() ? 'large brain: simplified rendering (zoom in for detail)' :
       `${nodes.filter(n => n.kind === 'note' && visibleNode(n)).length} notes · ${edges.filter(visibleEdge).length} edges shown · hue = repo · brightness/size = connectedness`;
   }
 

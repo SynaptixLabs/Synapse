@@ -155,6 +155,10 @@
 
       .statusbar { border-top:1px solid var(--border); background:var(--panel); padding:0.35rem 1rem; font-size:0.75rem; color:var(--dim); display:flex; gap:1.4rem; align-items:center; }
       .statusbar .msg { color:var(--ok); }
+      #busyspin { display:none; }
+      html[data-apibusy="1"] #busyspin { display:inline-block; animation:spin 1.1s linear infinite; }
+      html[data-apibusy="1"] { cursor:progress; }
+      @keyframes spin { to { transform:rotate(360deg); } }
       .statusbar .vault { margin-left:auto; }
 
       @media (max-width:700px) {
@@ -276,6 +280,7 @@
 
     <div id="tooltip"></div>
     <div class="statusbar">
+      <span id="busyspin" title="working…">⏳</span>
       <span id="st-notes">–</span><span id="st-edges">–</span><span id="st-unres">–</span>
       <span class="msg" id="st-msg"></span>
       <span class="vault">vault: <code>data/vault/</code> · MIT</span>

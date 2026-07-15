@@ -27,6 +27,17 @@ app.add_middleware(
 )
 
 
+from fastapi.requests import Request  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Never a bare 500: the browser needs a JSON body AND the CORS headers (a naked crash
+    bypasses the CORS middleware and shows up as a misleading CORS error in the console)."""
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+
+
 @app.get("/health")
 async def health() -> dict:
     """Liveness probe — `start.sh status` / `start.ps1 -Status` read this."""

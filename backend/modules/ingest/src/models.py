@@ -40,6 +40,7 @@ class IngestReport:
 
     repos: list[RepoReport] = field(default_factory=list)
     pruned: int = 0            # notes removed by the sync (disabled roots / deleted sources)
+    errors: list[str] = field(default_factory=list)   # unreadable paths etc. — reported, never fatal
 
     @property
     def files_found(self) -> int:
@@ -67,6 +68,7 @@ class IngestReport:
                 "skipped": self.skipped,
                 "pruned": self.pruned,
             },
+            "errors": self.errors[:50],
         }
 
     def render(self) -> str:
@@ -81,4 +83,7 @@ class IngestReport:
             f"  TOTAL: {t['files_found']} found → {t['notes_written']} written, "
             f"{t['unchanged']} unchanged, {t['skipped']} skipped, {t['pruned']} pruned"
         )
+        if self.errors:
+            lines.append(f"  ERRORS ({len(self.errors)}): " + "; ".join(self.errors[:5]) +
+                         (" …" if len(self.errors) > 5 else ""))
         return "\n".join(lines)
