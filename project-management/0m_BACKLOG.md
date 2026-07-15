@@ -36,5 +36,11 @@
    `./start.sh smoke` with recorded transcripts under the active sprint's `reports/`.
 10. **Vault export/import** — the vault is portable markdown by design; add a zip
     export + import checksum manifest so brains can move between machines verifiably.
+11. **Foreign-vault exclusion** — `scan_repo` excludes only the CONFIGURED vault; a source
+    repo that contains a *different* vault directory (e.g. an old `data/vault` while the
+    active vault lives elsewhere) gets notes-of-notes ingested. Detect vault-shaped dirs
+    (`graph.json` + `notes/` with `synapse.*` frontmatter) and skip them with a recorded
+    warning. (Found 2026-07-15 while re-shooting README screenshots; fresh clones are
+    unaffected — `data/` is git-ignored.)
 
 — `cpto` (JANUS), 2026-07-15
