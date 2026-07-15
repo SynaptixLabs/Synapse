@@ -17,7 +17,7 @@ from modules.graph.src.services import GraphService
 
 from .providers import SourceNote, Summarizer
 
-_CITE_RE = re.compile(r"\(vault:\s*[^)]+\)")
+_CITE_RE = re.compile(r"\(vault:\s*([^)]+?)\s*\)")
 SUMMARY_REPO = "✦ summaries"
 
 
@@ -49,6 +49,8 @@ class DistillService:
         if scope == "subtree":
             seen, frontier = {node_id}, [node_id]
             for _ in range(depth):
+                if not frontier:
+                    break   # exhausted — never keep scanning all edges for empty rings
                 nxt = []
                 for e in g.edges:
                     if e.type == "sibling":
@@ -56,6 +58,7 @@ class DistillService:
                     for a, b in ((e.src, e.dst), (e.dst, e.src)):
                         if a in frontier and b not in seen and b in g.nodes and g.nodes[b].kind == "note":
                             seen.add(b); nxt.append(b)
+                nxt.sort()   # edges live in a set — sort so cap truncation is deterministic
                 frontier = nxt
                 wanted.extend(nxt)
         notes, budget, truncated = [], self.hard_cap_chars, False
@@ -83,9 +86,18 @@ class DistillService:
 
         subject = notes[0].title if notes else node_id
         result = self.summarizer.summarize(subject, notes, scope)
-        citations = len(_CITE_RE.findall(result.markdown))
-        if citations == 0:
+        cited = [c.strip() for c in _CITE_RE.findall(result.markdown)]
+        if not cited:
             raise GroundingError("The summary contains zero (vault: ...) citations — rejected as ungrounded.")
+        # grounded means grounded: every cited id must BE one of the source notes — a
+        # hallucinated `(vault: made-up.md)` must not pass the gate
+        known = {n.note_id.lower() for n in notes} | {n.title.strip().lower() for n in notes}
+        unknown = sorted({c for c in cited if c.lower() not in known and f"{c.lower()}.md" not in known})
+        if unknown:
+            raise GroundingError(
+                "The summary cites notes that are NOT in the source set (hallucinated citations): "
+                + ", ".join(unknown[:5]) + (" …" if len(unknown) > 5 else "") + " — rejected.")
+        citations = len(cited)
 
         note_id = self._write_summary(subject, node_id, scope, depth, notes, truncated, result)
         return {"summary_note_id": note_id, "citations": citations, "truncated": truncated,

@@ -11,6 +11,7 @@ content; the roots list is app config). Precedence for what ingest uses:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .config import REPO_ROOT, Settings
@@ -24,7 +25,12 @@ def load_roots(settings: Settings) -> list[dict]:
     """[{path, enabled, exists, source}] — source tells the UI where the entry came from."""
     f = roots_file(settings)
     if f.is_file():
-        entries = json.loads(f.read_text(encoding="utf-8"))
+        try:
+            entries = json.loads(f.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            raise RuntimeError(
+                f"{f} is corrupt ({e}) — fix or delete it; the next Sources change writes a fresh one."
+            ) from e
         src = "file"
     elif settings.env_source_repos:
         entries = [{"path": str(p), "enabled": True} for p in settings.env_source_repos]
@@ -39,9 +45,11 @@ def load_roots(settings: Settings) -> list[dict]:
 def save_roots(settings: Settings, entries: list[dict]) -> None:
     f = roots_file(settings)
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(
+    tmp = f.parent / (f.name + ".tmp")   # atomic — a crash mid-write must not corrupt the store
+    tmp.write_text(json.dumps(
         [{"path": e["path"], "enabled": bool(e.get("enabled", True))} for e in entries],
         indent=1, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, f)
 
 
 def enabled_paths(settings: Settings) -> tuple[Path, ...]:

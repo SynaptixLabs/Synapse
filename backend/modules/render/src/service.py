@@ -45,7 +45,9 @@ class RenderService:
             raise KeyError(f"No note '{summary_note_id}' in the vault.")
         path = self.graph.notes_dir / summary_note_id
         raw = path.read_text(encoding="utf-8")
-        if "synapse.kind: summary" not in raw.split("---", 2)[1]:
+        parts = raw.split("---", 2)
+        if not raw.startswith("---") or len(parts) < 3 or "synapse.kind: summary" not in parts[1]:
+            # covers hand-dropped notes with no frontmatter at all — a 422, never a 500
             raise NotASummary("Render works on `S — ` summary notes — distill first.")
 
         prompt = self.derive_prompt(note["body"])
@@ -58,6 +60,12 @@ class RenderService:
 
         # embed: frontmatter marker + image at the top of the body (idempotent re-render swaps it)
         fm, body = raw.split("---\n", 2)[1], raw.split("---\n", 2)[2]
+        # a re-render replaces the previous PNG — delete it or media/ grows forever
+        old = re.search(r"^synapse\.image:\s*(media/[A-Za-z0-9_.\-]+)\s*$", fm, re.MULTILINE)
+        if old and old.group(1) != f"media/{fname}":
+            old_file = self.vault_path / old.group(1)
+            if old_file.is_file():
+                old_file.unlink()
         fm = re.sub(r"^synapse\.image:.*\n", "", fm, flags=re.MULTILINE)
         fm += f"synapse.image: media/{fname}\n"
         body = re.sub(r"^!\[the idea, rendered\]\([^)]*\)\n\n", "", body, flags=re.MULTILINE)

@@ -66,3 +66,23 @@ class TestRender:
             service.render(ALPHA)
         with pytest.raises(KeyError):
             service.render("ghost.md")
+
+    def test_note_without_frontmatter_is_not_a_summary_not_a_500(self, service, vault):
+        """GBU P2: a hand-dropped vault note with no frontmatter must 422, never IndexError."""
+        (vault / "notes" / "handdropped.md").write_text("# Just text\n", encoding="utf-8")
+        with pytest.raises(NotASummary):
+            service.render("handdropped.md")
+
+    def test_rerender_deletes_the_orphaned_previous_png(self, service, vault, summary_id):
+        """GBU ugly: a re-render replaces the PNG — the old file must not pile up in media/."""
+        note_path = vault / "notes" / summary_id
+        old = vault / "media" / "old_render.png"
+        old.parent.mkdir(exist_ok=True)
+        old.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+        raw = note_path.read_text(encoding="utf-8")
+        fm, body = raw.split("---\n", 2)[1], raw.split("---\n", 2)[2]
+        note_path.write_text(f"---\n{fm}synapse.image: media/old_render.png\n---\n{body}",
+                             encoding="utf-8")
+        out = service.render(summary_id)
+        assert (vault / out["image"]).is_file()
+        assert not old.exists()

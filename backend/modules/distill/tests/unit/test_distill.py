@@ -73,6 +73,15 @@ class TestDistill:
         with pytest.raises(GroundingError):
             DistillService(vault, Ungrounded()).distill(ALPHA)
 
+    def test_hallucinated_citation_is_rejected(self, vault):
+        """GBU P2: grounded means grounded — a citation of a note that is NOT in the source
+        set is a hallucination, not a receipt."""
+        class Hallucinator(Summarizer):
+            def summarize(self, subject, notes, scope):
+                return GroundedSummary(markdown="Confident claim (vault: made-up-note.md).", model="bad")
+        with pytest.raises(GroundingError, match="NOT in the source set"):
+            DistillService(vault, Hallucinator()).distill(ALPHA)
+
     def test_truncation_is_disclosed(self, vault):
         svc = DistillService(vault, MockSummarizer())
         svc.hard_cap_chars = 150                     # tiny safety cap → the subtree must be cut

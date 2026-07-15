@@ -65,7 +65,8 @@ def delete_note(note_id: str) -> dict:
             "ingest sync (disable or remove their root in Sources)."))
     import re as _re
     deleted_media = []
-    for m in _re.finditer(r"^synapse\.image:\s*(media/\S+)\s*$", fm, _re.MULTILINE):
+    # flat-name pattern only — never a path (a hand-edited `media/../…` must not traverse)
+    for m in _re.finditer(r"^synapse\.image:\s*(media/[A-Za-z0-9_.\-]+)\s*$", fm, _re.MULTILINE):
         media = service.vault_path / m.group(1)
         if media.is_file():
             media.unlink()

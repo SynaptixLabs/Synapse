@@ -28,6 +28,17 @@ but the canvas physics is O(n²) — **kill-criteria hit for the hand-rolled lay
 Options for the founder: scope roots per-repo (recommended for the POC) or fund a
 library-evaluation decision for v0.2.
 
+## GBU fix wave (2026-07-15, same-session)
+
+The fresh-eyes GBU returned **REVISE** — 4×P1 + 7×P2
+([review + full ledger](../reviews/2026-07-15_gbu_fresh_eyes_sprint03.md)). **All 11 fixed and
+verified same-session**, headlines: XSS via indexed-repo note titles (esc() everywhere +
+end-to-end injection proof), 500s now carry CORS (the founder's "backend unreachable" illusion),
+same-name roots can no longer cross-delete each other's notes, and in-reader wikilink/Back
+navigation now drives the AI panel (a Distill after navigating would have spent tokens on the
+WRONG note). Backend suite 60/60 (+9 regression tests) · sprint-3 e2e green on an isolated mock
+stack · founder stack restored (18,828 notes, real keys).
+
 ## External gates (founder actions)
 
 1. **Anthropic credits** — live distill returned `credit balance is too low` (clean error, seam

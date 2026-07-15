@@ -7,6 +7,7 @@ Replace it with your real application; keep `/health`.
 """
 
 import os
+import re
 from datetime import datetime, timezone
 
 from fastapi import FastAPI
@@ -18,10 +19,14 @@ app = FastAPI(
     description="A second brain for your repos — ingest markdown, derive the knowledge graph, distill and render.",
 )
 
-# Template default so the dev frontend (:5173) can call the API — tighten per project.
+# Only the dev frontend (:5173 on any host — localhost AND the LAN IP the founder tests from)
+# may read this API from a browser. A wildcard would let any web page you visit drive an API
+# that browses your filesystem and spends model tokens.
+_ALLOWED_ORIGIN = r"https?://[^/]+:5173"
+_ALLOWED_ORIGIN_RE = re.compile(rf"^{_ALLOWED_ORIGIN}$")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=_ALLOWED_ORIGIN,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -33,9 +38,14 @@ from fastapi.responses import JSONResponse  # noqa: E402
 
 @app.exception_handler(Exception)
 async def unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
-    """Never a bare 500: the browser needs a JSON body AND the CORS headers (a naked crash
-    bypasses the CORS middleware and shows up as a misleading CORS error in the console)."""
-    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+    """Never a bare 500: the browser needs a JSON body AND the CORS header. This handler runs on
+    the OUTERMOST middleware (starlette's ServerErrorMiddleware), i.e. OUTSIDE CORSMiddleware —
+    so it must attach Access-Control-Allow-Origin itself or the crash shows up as a misleading
+    CORS error in the console."""
+    origin = request.headers.get("origin", "")
+    headers = {"Access-Control-Allow-Origin": origin} if _ALLOWED_ORIGIN_RE.match(origin) else {}
+    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"},
+                        headers=headers)
 
 
 @app.get("/health")

@@ -75,6 +75,30 @@ class TestIngest:
         second = service.ingest([repo])          # vault now has notes inside the repo
         assert second.files_found == 1 and second.unchanged == 1
 
+    def test_transient_read_failure_never_prunes_the_good_note(self, service, tmp_path):
+        """GBU P2: a source file that fails to READ this pass ('skipped') still exists —
+        the sync prune must keep the good note we already hold."""
+        import os
+        if os.geteuid() == 0:
+            pytest.skip("permission bits don't bind as root")
+        repo = tmp_path / "flaky_repo"; repo.mkdir()
+        f = repo / "keep.md"; f.write_text("# Keep\n", encoding="utf-8")
+        service.ingest([repo], managed_names={"flaky_repo"})
+        note = service.notes_dir / "flaky_repo__keep.md"
+        assert note.is_file()
+        f.chmod(0)                                   # unreadable THIS pass only
+        try:
+            report = service.ingest([repo], managed_names={"flaky_repo"})
+        finally:
+            f.chmod(0o644)
+        assert report.skipped == 1 and report.pruned == 0
+        assert note.is_file()                        # survived the bad pass
+
+    def test_uppercase_md_is_markdown_too(self, service, tmp_path):
+        repo = tmp_path / "shouty"; repo.mkdir()
+        (repo / "README.MD").write_text("# Shout\n", encoding="utf-8")
+        assert service.ingest([repo]).files_found == 1
+
     def test_changed_source_is_rewritten(self, service, tmp_path):
         repo = tmp_path / "live_repo"
         repo.mkdir()

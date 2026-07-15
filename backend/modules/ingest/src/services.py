@@ -13,6 +13,7 @@ Binding constraints (see project-management/sprints/sprint_01/todo/EPIC_A_ingest
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,18 @@ from .models import IngestReport, RepoReport, SourceFile
 _HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
 _REPO_RE = re.compile(r"^synapse\.source_repo:\s*(.+?)\s*$", re.MULTILINE)
 FRONTMATTER_END = "---"
+
+
+def note_repo(note_path: Path) -> str | None:
+    """The `synapse.source_repo` a vault note belongs to (frontmatter head only) — THE prune
+    key. Pruning must always key on this, never on filename shape: a `{name}__*` glob
+    over-matches other roots whose name shares the prefix."""
+    try:
+        head = note_path.read_text(encoding="utf-8", errors="replace")[:600]
+    except FileNotFoundError:
+        return None   # deleted between glob and read (racing tab) — nothing to prune
+    m = _REPO_RE.search(head)
+    return m.group(1) if m else None
 
 
 class IngestService:
@@ -36,7 +49,6 @@ class IngestService:
         """All .md files under `repo_root`. os.walk (not rglob): prunes ignore-dirs WITHOUT
         descending (fast on huge trees), never follows symlinks (no loops), and unreadable
         directories are RECORDED as errors instead of crashing the whole ingest."""
-        import os
         repo_root = Path(repo_root).resolve()
         vault = self.vault_path.resolve()
         found: list[SourceFile] = []
@@ -52,7 +64,7 @@ class IngestService:
                 dirnames[:] = []
                 continue   # never ingest the vault itself (a repo may contain it)
             for fn in filenames:
-                if fn.endswith(".md"):
+                if fn.lower().endswith(".md"):   # README.MD is markdown too
                     found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=dp / fn))
         found.sort(key=lambda f: f.path)
         return found
@@ -95,7 +107,10 @@ class IngestService:
         except UnicodeDecodeError:
             return "skipped"   # not honest UTF-8 markdown — report, don't mangle
         self.notes_dir.mkdir(parents=True, exist_ok=True)
-        note_path.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
+        # atomic: a concurrent rebuild must never index a half-written note
+        tmp = note_path.parent / (note_path.name + ".tmp")
+        tmp.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
+        os.replace(tmp, note_path)
         return "written"
 
     # ── the pipeline ──────────────────────────────────────────────────────
@@ -124,15 +139,18 @@ class IngestService:
                     rr.unchanged += 1
                 else:
                     rr.skipped += 1
-                if outcome in ("written", "unchanged"):
+                if outcome in ("written", "unchanged") or (
+                    outcome == "skipped" and (self.notes_dir / src.note_id).is_file()
+                ):
+                    # a transient read failure ('skipped') must never prune the good note we
+                    # already hold — the source file still exists, it just didn't read this pass
                     expected.add(src.note_id)
         if managed_names is not None and self.notes_dir.is_dir():
             for note in self.notes_dir.glob("*.md"):
-                head = note.read_text(encoding="utf-8", errors="replace")[:600]
-                m = _REPO_RE.search(head)
-                if not m or m.group(1) not in managed_names:
+                repo = note_repo(note)
+                if repo is None or repo not in managed_names:
                     continue   # not managed by the roots list (summaries etc.) — keep
-                if m.group(1) not in enabled_names or note.name not in expected:
-                    note.unlink()
+                if repo not in enabled_names or note.name not in expected:
+                    note.unlink(missing_ok=True)
                     report.pruned += 1
         return report

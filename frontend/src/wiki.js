@@ -9,6 +9,12 @@ import { API, api } from './api.js';
 
 export const WIKILINK_RE = /\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|([^\[\]]*))?\]\]/g;
 
+/** HTML-escape for template-literal interpolation. Note titles/repos/paths come from the
+ *  USER'S indexed repos (arbitrary third-party markdown) — a heading like
+ *  `# <img src=x onerror=…>` must never become live DOM in this app's origin. */
+export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 export function buildNamespace(nodes) {
   const exact = new Map(), stems = new Map();
   const put = (map, key, id) => {
@@ -28,16 +34,16 @@ export function buildNamespace(nodes) {
 export function noteInfobox(n, meta) {
   const deg = meta ? `<dt>Links</dt><dd>${meta.in_degree} in · ${meta.out_degree} out</dd>` : '';
   return `<div class="wiki-infobox"><h3>Note</h3><dl>
-    <dt>Repo</dt><dd>${n.repo}</dd>
-    <dt>Source</dt><dd>${n.source_path}</dd>
-    <dt>Vault id</dt><dd>${n.id}</dd>${deg}</dl></div>`;
+    <dt>Repo</dt><dd>${esc(n.repo)}</dd>
+    <dt>Source</dt><dd>${esc(n.source_path)}</dd>
+    <dt>Vault id</dt><dd>${esc(n.id)}</dd>${deg}</dl></div>`;
 }
 
 /**
  * A reader instance bound to concrete DOM elements. Both the popup (dashboard) and the
  * docked panel (explorer) are readers — only the surrounding chrome differs.
  */
-export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow, onError }) {
+export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow, onOpen, onError }) {
   let stack = [], currentNote = null;
 
   const resolveWiki = (target) => {
@@ -115,6 +121,10 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       if (push) stack.push(id);
       const meta = getNodes().find(x => x.id === id);
       render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta) });
+      // EVERY successful open — including in-body wikilink clicks and Back, which call this
+      // internal function directly — must notify the host, or its "current note" goes stale
+      // (and a Distill would spend real tokens on the WRONG note).
+      onOpen?.(id);
     } catch (e) { onError?.(e.message); }
   }
 
@@ -124,6 +134,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       currentNote = null;
       stack = ['__index__'];
       render({ crumb: 'Index.md — the front door of this brain', mdBody: d.markdown, infobox: '' });
+      onOpen?.(null);
     } catch (e) { onError?.(e.message); }
   }
 

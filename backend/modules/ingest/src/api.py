@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from app.core.config import load_settings
 from app.core.roots import load_roots, save_roots
 
-from .services import IngestService
+from .services import IngestService, note_repo
 
 router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
@@ -113,6 +113,12 @@ def add_root(req: RootRequest) -> list[dict]:
     entries = load_roots(settings)
     if any(Path(e["path"]) == p.resolve() for e in entries):
         raise HTTPException(status_code=409, detail="That root is already in the list.")
+    if any(Path(e["path"]).name == p.resolve().name for e in entries):
+        # note ids are keyed by the root's folder NAME — a second root with the same name
+        # would silently clobber and cross-delete the first one's notes
+        raise HTTPException(status_code=409, detail=(
+            f"A root named '{p.resolve().name}' is already in the list — two roots with the "
+            "same folder name would collide in the vault. Rename one of the folders."))
     entries.append({"path": str(p.resolve()), "enabled": True})
     save_roots(settings, entries)
     return load_roots(settings)
@@ -142,7 +148,10 @@ def remove_root(req: RootRequest) -> dict:
     pruned = 0
     notes_dir = settings.vault_path / "notes"
     if notes_dir.is_dir():
-        for note in notes_dir.glob(f"{repo_name}__*.md"):
-            note.unlink()
-            pruned += 1
+        # prune by FRONTMATTER repo equality, never a filename glob — `{name}__*` would
+        # over-match another root whose name merely starts with this one's
+        for note in notes_dir.glob("*.md"):
+            if note_repo(note) == repo_name:
+                note.unlink(missing_ok=True)
+                pruned += 1
     return {"roots": load_roots(settings), "pruned_notes": pruned}

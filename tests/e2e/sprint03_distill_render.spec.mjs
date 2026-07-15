@@ -12,7 +12,13 @@ await page.waitForTimeout(1500);
 await page.fill('#filter', process.env.E2E_FILTER ?? 'alpha');
 await page.press('#filter', 'Enter');
 await page.waitForFunction(() => !document.getElementById('ai-distill-tree').disabled);
-page.on('dialog', (d) => d.accept());               // cost-guard confirm, if it fires
+// cost-guard confirm, if it fires — the app uses its OWN modal (#appmodal), never a native dialog
+(async () => {
+  try {
+    await page.waitForSelector('#appmodal.open #am-ok', { timeout: 25000 });
+    await page.click('#am-ok');
+  } catch { /* the gate didn't fire for this corpus — fine */ }
+})();
 await page.click('#ai-distill-tree');
 await page.waitForFunction(() => document.getElementById('reader-crumb').textContent.includes('S — '), null, { timeout: 30000 });
 const summaryCrumb = await page.locator('#reader-crumb').textContent();

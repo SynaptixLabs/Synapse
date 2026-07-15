@@ -1,6 +1,6 @@
 /** SYNAPSE explorer — sprint-02 Epic C, implements ui_kit/explorer KIT.md REV 2 1:1. */
 import { api, health } from './api.js';
-import { buildNamespace, createReader } from './wiki.js';
+import { buildNamespace, createReader, esc } from './wiki.js';
 import { createGraph } from './graph.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,6 +14,16 @@ const reader = createReader({
   getNodes: () => nodes,
   getNs: () => ns,
   onShow: () => { if (innerWidth <= 700) document.body.dataset.reader = 'open'; else expandReader(); },
+  // fires on EVERY open — including in-body wikilink clicks and Back, which never go through
+  // reader.openNote — so the AI panel / delete button always act on the note actually shown
+  onOpen: (id) => {
+    currentOpenId = id;
+    aiButtons(); updateDeleteBtn();
+    if (!id) return;   // null = the Index view
+    ac.notesOpened.add(id); acSave();
+    graph.focusOn(id, { zoom: window.__zoomNext ?? false });   // show WHERE the note lives
+    window.__zoomNext = false;
+  },
   onError: (m) => setMsg(m, true),
 });
 window.readerBack = () => reader.back();
@@ -83,10 +93,10 @@ function renderResults() {
   const hits = matchList(q).slice(0, 12);
   box.innerHTML = hits.length
     ? hits.map((n, i) =>
-        `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${n.id}">
+        `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${esc(n.id)}">
            <span class="dot" style="background:${colors.get(n.repo)}"></span>
-           <span>${n.title}</span><small>${n.repo} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
-    : `<div class="r" style="color:var(--dim)">no notes match “${q}”</div>`;
+           <span>${esc(n.title)}</span><small>${esc(n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
+    : `<div class="r" style="color:var(--dim)">no notes match “${esc(q)}”</div>`;
   box.classList.add('open');
 }
 document.addEventListener('click', (ev) => {
@@ -212,12 +222,12 @@ async function buildSources() {
     const rows = roots.map(r => {
       const name = r.path.split('/').pop();
       return `
-      <div class="row" title="${r.path}" style="${r.enabled ? '' : 'opacity:0.5'}">
-        <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="${r.enabled ? 'enabled — ingested on Apply' : 'disabled — pruned on Apply'}" />
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.path}</span>
+      <div class="row" title="${esc(r.path)}" style="${r.enabled ? '' : 'opacity:0.5'}">
+        <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${esc(r.path)}" title="${r.enabled ? 'enabled — ingested on Apply' : 'disabled — pruned on Apply'}" />
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.path)}</span>
         <span class="rootcount">${counts[name] ?? 0} notes</span>
         ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
-        <span class="tg" data-del-root="${r.path}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
+        <span class="tg" data-del-root="${esc(r.path)}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
       </div>`;
     }).join('');
     $('sources').innerHTML =
@@ -237,7 +247,7 @@ async function buildSources() {
          files are pruned (✦ summaries are never touched).</p>`;
     setDirty(srcDirty);
     await browseTo(fsPath);
-  } catch (e) { $('sources').innerHTML = `<h4>Sources</h4><div class="row">${e.message}</div>`; }
+  } catch (e) { $('sources').innerHTML = `<h4>Sources</h4><div class="row">${esc(e.message)}</div>`; }
 }
 
 // ── one surface: the folder list answers the input (file-manager model) ────
@@ -257,18 +267,18 @@ function renderCrumbs() {
   let acc = '';
   $('fscrumbs').innerHTML =
     `<span class="seg" data-crumb="/">/</span>` +
-    parts.map(p => { acc += '/' + p; return `<span class="seg" data-crumb="${acc}">${p}</span><span>/</span>`; }).join('') +
-    `<span class="addcur" data-use-root="${fsPath}">＋ Add this folder</span>`;
+    parts.map(p => { acc += '/' + p; return `<span class="seg" data-crumb="${esc(acc)}">${esc(p)}</span><span>/</span>`; }).join('') +
+    `<span class="addcur" data-use-root="${esc(fsPath)}">＋ Add this folder</span>`;
 }
 function renderFsRows() {
   const q = fsPrefix.toLowerCase();
   const list = fsDirs.filter(x => !q || x.name.toLowerCase().startsWith(q) || x.name.toLowerCase().includes(q));
   $('fsls').innerHTML = list.map(x => `
-    <div class="row" data-fs="${x.path}">
-      <span>📁 ${x.name}</span>
+    <div class="row" data-fs="${esc(x.path)}">
+      <span>📁 ${esc(x.name)}</span>
       ${x.is_repo ? '<span class="repo-badge">git repo</span>' : ''}
-      <span class="use" data-use-root="${x.path}">+ Add</span>
-    </div>`).join('') || `<div class="row" style="color:var(--dim)">no folders match “${fsPrefix}”</div>`;
+      <span class="use" data-use-root="${esc(x.path)}">+ Add</span>
+    </div>`).join('') || `<div class="row" style="color:var(--dim)">no folders match “${esc(fsPrefix)}”</div>`;
 }
 
 // the location-and-filter bar: '/' = navigate (last segment prefix-filters), bare = filter here
@@ -350,7 +360,7 @@ function buildDrawer() {
   $('drawer').innerHTML =
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
-      `<div class="row" data-repo="${r}"><span class="dot" style="background:${colors.get(r)}"></span> ${r} <span class="tg">${c} · on</span></div>`).join('') +
+      `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${colors.get(r)}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
     `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
     Object.entries(EDGE).map(([t, c]) => {
       const off = graph.state().hiddenEdges.includes(t);
@@ -359,7 +369,7 @@ function buildDrawer() {
     }).join('') +
     `<h4>Unresolved (${unresolved.length}) — click opens the note</h4>` +
     (unresolved.slice(0, 40).map(({ u, n }) =>
-      `<div class="row" data-open-note="${n.id}"><span class="unres">${u.replace(/</g, '&lt;')}<small>in ${n.repo} / ${n.source_path}</small></span></div>`).join('')
+      `<div class="row" data-open-note="${esc(n.id)}"><span class="unres">${esc(u)}<small>in ${esc(n.repo)} / ${esc(n.source_path)}</small></span></div>`).join('')
       || `<div class="row" style="color:var(--dim)">none — every link resolves 🎉</div>`);
 }
 
@@ -506,17 +516,8 @@ function aiButtons() {
   $('ai-status').textContent = isSummary ? 'a summary is open — render it as an image'
     : isNote ? 'distill the open note (or its subtree)' : 'open a note to distill it';
 }
-const _openNote = reader.openNote;
-reader.openNote = (id, push) => {
-  ac.notesOpened.add(id); acSave();
-  currentOpenId = id; aiButtons();
-  graph.focusOn(id, { zoom: window.__zoomNext ?? false });   // show WHERE the note lives
-  window.__zoomNext = false;
-  updateDeleteBtn();
-  return _openNote(id, push);
-};
-const _loadIndex = reader.loadIndex;
-reader.loadIndex = () => { currentOpenId = null; aiButtons(); return _loadIndex(); };
+// note-open side effects (AI buttons, graph focus, acceptance) live in the reader's onOpen
+// callback (top of this file) — a monkey-patch here would miss in-body wikilink clicks + Back.
 
 window.aiDistill = async (scope) => {
   if (!currentOpenId) return;

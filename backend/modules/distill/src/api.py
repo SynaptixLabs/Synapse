@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.config import load_settings
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/v1", tags=["distill"])
 class DistillRequest(BaseModel):
     node_id: str
     scope: str = "node"          # node | subtree
-    depth: int = 2
+    depth: int = Field(2, ge=0, le=10)   # bounded — an unbounded int would pin the worker
     confirm: bool = False
 
 

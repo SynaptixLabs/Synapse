@@ -41,7 +41,10 @@ class GraphService:
         if not self.notes_dir.is_dir():
             return notes
         for path in sorted(self.notes_dir.glob("*.md")):
-            text = path.read_text(encoding="utf-8", errors="replace")
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except FileNotFoundError:
+                continue   # pruned/deleted between glob and read (racing tab) — not an error
             fm = _FM_RE.match(text)
             fields = dict(_FM_FIELD_RE.findall(fm.group(1))) if fm else {}
             body = text[fm.end():] if fm else text
@@ -156,7 +159,10 @@ class GraphService:
         path = self.notes_dir / note_id
         if not path.is_file() or path.parent.resolve() != self.notes_dir.resolve():
             return None   # unknown id or a path-traversal attempt
-        text = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            return None   # deleted between check and read (racing tab)
         fm = _FM_RE.match(text)
         fields = dict(_FM_FIELD_RE.findall(fm.group(1))) if fm else {}
         return {

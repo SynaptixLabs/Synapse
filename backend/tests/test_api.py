@@ -158,6 +158,59 @@ def test_fs_complete_and_dot_folders(client, tmp_path):
     assert [c["name"] for c in comp["completions"]] == ["docs"]
 
 
+def test_unhandled_500_carries_cors_for_the_frontend(client):
+    """GBU P1: the catch-all handler runs OUTSIDE CORSMiddleware — it must attach the CORS
+    grant itself, or a crashed server reads as 'backend unreachable' in the frontend."""
+    from app.main import app
+    if not any(getattr(r, "path", "") == "/__boom" for r in app.routes):
+        @app.get("/__boom")
+        def _boom():
+            raise RuntimeError("kaboom")
+    raw = TestClient(app, raise_server_exceptions=False)
+    r = raw.get("/__boom", headers={"Origin": "http://192.168.1.7:5173"})
+    assert r.status_code == 500 and "kaboom" in r.json()["detail"]
+    assert r.headers.get("access-control-allow-origin") == "http://192.168.1.7:5173"
+    # an untrusted origin gets the JSON but NO cross-origin read grant
+    evil = raw.get("/__boom", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in evil.headers
+
+
+def test_duplicate_basename_root_is_rejected(client, tmp_path):
+    """GBU P1: note ids are keyed by the root's folder name — same-name roots would silently
+    clobber and cross-delete each other's notes."""
+    a = tmp_path / "one" / "app"; a.mkdir(parents=True)
+    b = tmp_path / "two" / "app"; b.mkdir(parents=True)
+    assert client.post("/api/v1/roots", json={"path": str(a)}).status_code == 200
+    r = client.post("/api/v1/roots", json={"path": str(b)})
+    assert r.status_code == 409 and "same folder name" in r.json()["detail"]
+
+
+def test_remove_root_prunes_by_frontmatter_not_prefix_glob(client, tmp_path):
+    """GBU P1: removing root `foo` must NOT delete notes of a root named `foo__bar`
+    (the old `foo__*.md` glob over-matched the prefix)."""
+    foo = tmp_path / "foo"; foo.mkdir(); (foo / "a.md").write_text("# A\n", encoding="utf-8")
+    foobar = tmp_path / "foo__bar"; foobar.mkdir(); (foobar / "b.md").write_text("# B\n", encoding="utf-8")
+    client.post("/api/v1/roots", json={"path": str(foo)})
+    client.post("/api/v1/roots", json={"path": str(foobar)})
+    client.post("/api/v1/ingest")
+    out = client.request("DELETE", "/api/v1/roots", json={"path": str(foo)}).json()
+    assert out["pruned_notes"] == 1                  # ONLY foo's note
+    client.post("/api/v1/rebuild")
+    graph = client.get("/api/v1/graph").json()
+    assert any(n["repo"] == "foo__bar" for n in graph["nodes"])      # neighbor survived
+    assert not any(n["repo"] == "foo" for n in graph["nodes"])
+
+
+def test_distill_depth_is_bounded(client, monkeypatch):
+    """GBU P2: an unbounded depth would pin the worker scanning all edges forever."""
+    monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
+    client.post("/api/v1/ingest")
+    client.post("/api/v1/rebuild")
+    r = client.post("/api/v1/distill",
+                    json={"node_id": "repo_a__docs__alpha.md", "scope": "subtree", "depth": 10**9})
+    assert r.status_code == 422                      # pydantic bound, before any work
+
+
 def test_delete_summary_only(client, monkeypatch):
     monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
     client.post("/api/v1/ingest")
