@@ -40,10 +40,27 @@ git clone https://github.com/SynaptixLabs/Synapse.git && cd Synapse
 Then set in `backend/.env`: `ANTHROPIC_API_KEY` (summarizer), `OPENAI_API_KEY` (images), and
 `SYNAPSE_SOURCE_REPOS` (comma-separated local repo paths to index).
 
-## Status
+## Status & roadmap
 
-**v0.1 in development** — see the PRD ([`project-management/0k_PRD.md`](project-management/0k_PRD.md))
-and the active sprint ([`project-management/sprints/sprint_01/index.md`](project-management/sprints/sprint_01/index.md)).
+**v0.1 (POC) in development — 3 sprints**, each closing on a two-stage acceptance gate:
+the dev team proves the sprint's acceptance goals with evidence (tests, real-Chromium E2E
+screenshots, a GBU review), then the **founder runs a step-by-step acceptance script** on their
+own machine and vault. No gate closes on assertion.
+
+| Sprint | Codename | You get | API keys | Status |
+|---|---|---|---|---|
+| [01](project-management/sprints/sprint_01/index.md) | **The Brain** | `synapse ingest` your repos → readable vault + derived graph + `Index.md` | none | 🟢 active |
+| [02](project-management/sprints/sprint_02/index.md) | **The Explorer** | browse your brain: interactive graph, node panel, filter | none | ⚪ planned |
+| [03](project-management/sprints/sprint_03/index.md) | **The Twist** | distill any node/subtree (Anthropic) + see it as an image (gpt-image-1); POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | ⚪ planned |
+
+Product truth: [`project-management/0k_PRD.md`](project-management/0k_PRD.md) ·
+architecture: [`project-management/01_ARCHITECTURE.md`](project-management/01_ARCHITECTURE.md) ·
+decisions: [`project-management/0l_DECISIONS.md`](project-management/0l_DECISIONS.md).
+
+**API keys** live only in your local `backend/.env` (git-ignored), and only sprint 3 needs them:
+`ANTHROPIC_API_KEY` for summarization, `OPENAI_API_KEY` for images (gpt-image-1 requires a
+verified OpenAI organization). The test suite never spends money — model calls are mocked;
+live smokes are opt-in flags.
 
 ## Working on SYNAPSE (agents)
 

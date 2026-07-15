@@ -36,6 +36,19 @@ solves this for personal notes; SYNAPSE applies it to **repos as the source**.
 - **Out (explicitly):** auth/multi-user, cloud deploy, non-markdown sources, automatic "ripple"
   maintenance of existing pages, Obsidian plugin, scheduled re-indexing.
 
+## Release plan — 3 sprints, two-stage acceptance each (D-1)
+
+| Sprint | Codename | Delivers | Keys |
+|---|---|---|---|
+| 01 | **The Brain** | ingest → vault → derived graph + `Index.md` (Epics A, B) | none |
+| 02 | **The Explorer** | interactive graph UI: canvas, node panel, filter (Epic C) | none |
+| 03 | **The Twist** | distill (Anthropic) + render (gpt-image-1) + POC close (Epics D, E, F) | both |
+
+Every sprint closes on the same gate: **dev acceptance** (tests, E2E screenshots, GBU APPROVE —
+evidence in `sprints/sprint_<N>/reports|reviews/`) and then **founder acceptance** (the
+step-by-step script in `sprints/sprint_<N>/acceptance/`, executed by the founder on their own
+machine and vault). Full plan: [`sprints/00_index.md`](sprints/00_index.md).
+
 ## Acceptance criteria (measurable, testable)
 
 - [ ] `synapse ingest` (CLI or API) over ≥2 real repos produces a vault + graph where every `.md`
