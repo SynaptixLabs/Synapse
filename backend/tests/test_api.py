@@ -156,3 +156,23 @@ def test_fs_complete_and_dot_folders(client, tmp_path):
     # search mode: bare substring within base
     comp = client.get("/api/v1/fs/complete", params={"q": "oc", "base": str(tmp_path)}).json()
     assert [c["name"] for c in comp["completions"]] == ["docs"]
+
+
+def test_delete_summary_only(client, monkeypatch):
+    monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
+    client.post("/api/v1/ingest")
+    client.post("/api/v1/rebuild")
+    out = client.post("/api/v1/distill", json={"node_id": "repo_a__docs__alpha.md"}).json()
+    sid = out["summary_note_id"]
+    img = client.post("/api/v1/render", json={"summary_note_id": sid}).json()
+
+    # source-mirror notes refuse deletion (managed by the sync)
+    assert client.delete("/api/v1/note/repo_a__docs__alpha.md").status_code == 422
+
+    # summary deletes, media goes with it, graph forgets it after rebuild
+    res = client.delete(f"/api/v1/note/{sid}").json()
+    assert res["deleted"] == sid and img["image"] in res["media"]
+    assert client.get(f"/api/v1/note/{sid}").status_code == 404
+    client.post("/api/v1/rebuild")
+    graph = client.get("/api/v1/graph").json()
+    assert not any(n["id"] == sid for n in graph["nodes"])

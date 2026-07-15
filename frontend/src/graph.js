@@ -296,12 +296,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const n = nodeAt(toWorld(ev));
     if (n && pinned.has(n.id)) { pinned.delete(n.id); kick(0.4); }
   });
-  canvas.addEventListener('dblclick', (ev) => {
-    const n = nodeAt(toWorld(ev));
-    if (!n || n.kind !== 'note') return;
-    const p = sim.p.get(n.id); if (!p) return;
-    // zoom to the node: center it at 1.7x (smooth-ish: 8 animation steps)
-    const targetK = 1.7;
+  function animTo(p, targetK = 1.7) {
     const tx = W() / 2 - p.x * targetK, ty = H() / 2 - p.y * targetK;
     const s = { x: sim.view.x, y: sim.view.y, k: sim.view.k };
     let step = 0;
@@ -313,6 +308,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (step < 8) requestAnimationFrame(anim);
     };
     requestAnimationFrame(anim);
+  }
+  canvas.addEventListener('dblclick', (ev) => {
+    const n = nodeAt(toWorld(ev));
+    if (!n || n.kind !== 'note') return;
+    const p = sim.p.get(n.id); if (p) animTo(p);
   });
   canvas.addEventListener('mouseleave', () => { sim.hover = null; if (tooltipEl) tooltipEl.style.display = 'none'; });
   canvas.addEventListener('wheel', (ev) => {
@@ -332,6 +332,13 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     redraw: draw,
     reflow,
     reset() { pinned.clear(); sim.focus = null; setData(nodes, edges); },   // fresh layout, all pins released
+    /** Highlight a node (persistent focus); zoom=true also flies the camera to it. */
+    focusOn(id, { zoom = false } = {}) {
+      if (!sim.p.has(id)) return;
+      sim.focus = id;
+      if (zoom) animTo(sim.p.get(id));
+      else draw();
+    },
     setMatch(set) { matchSet = set; draw(); },
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },

@@ -140,11 +140,13 @@
       .fsbar .cur { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; flex:1; color:var(--dim); }
       .fsls { max-height:34vh; overflow:auto; }
       .fsls .row .use { margin-left:auto; color:var(--accent); font-size:0.72rem; cursor:pointer; }
-      .fscompwrap { position:relative; flex:1; }
-      #fscomp { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--panel2); border:1px solid var(--border); border-radius:8px; z-index:12; display:none; max-height:32vh; overflow:auto; box-shadow:0 10px 30px rgba(0,0,0,.5); }
-      #fscomp.open { display:block; }
-      #fscomp .row { padding:0.35rem 0.55rem; font-size:0.78rem; }
-      #fscomp .row.sel { background:var(--panel); }
+      .srcbtns button.glow { border-color:var(--accent); color:var(--accent); box-shadow:0 0 10px rgba(124,158,255,.35); }
+      .crumbs { display:flex; flex-wrap:wrap; align-items:center; gap:1px; font-size:0.74rem; color:var(--dim); margin:0.45rem 0 0.3rem; }
+      .crumbs .seg { cursor:pointer; padding:1px 3px; border-radius:4px; }
+      .crumbs .seg:hover { color:var(--accent); background:var(--panel2); }
+      .crumbs .addcur { margin-left:auto; color:var(--accent); cursor:pointer; font-size:0.72rem; white-space:nowrap; }
+      .fsls .row.off { opacity:1; }
+      .rootcount { color:var(--dim); font-size:0.7rem; white-space:nowrap; }
       .repo-badge { font-size:0.6rem; background:#12281a; color:#4ade80; border:1px solid #1d4029; padding:0 5px; border-radius:999px; }
       .check { list-style:none; padding:0; margin:0; font-size:0.84rem; }
       .check li { display:flex; gap:0.5rem; padding:0.3rem 0; align-items:baseline; }
@@ -250,6 +252,7 @@
         <div class="reader-top">
           <button id="reader-back" onclick="readerBack()" style="display:none">← back</button>
           <span class="crumb" id="reader-crumb">nothing open</span>
+          <button id="reader-del" onclick="deleteSummary()" style="display:none;color:#ba0000" title="delete this summary from the vault">🗑</button>
           <button class="x" onclick="toggleReader()">⟩ hide</button>
         </div>
         <div class="reader-body" id="reader-body">

@@ -17,6 +17,23 @@ const reader = createReader({
   onError: (m) => setMsg(m, true),
 });
 window.readerBack = () => reader.back();
+function updateDeleteBtn() {
+  $('reader-del').style.display = currentOpenId?.startsWith('S — ') ? '' : 'none';
+}
+window.deleteSummary = async () => {
+  if (!currentOpenId?.startsWith('S — ')) return;
+  if (!(await appConfirm(`${currentOpenId}\n\nThis distilled summary (and its rendered image) will be deleted from the vault.`,
+                          { title: 'Delete this summary?', ok: 'Delete', danger: true }))) return;
+  try {
+    await api(`/note/${encodeURIComponent(currentOpenId)}`, { method: 'DELETE' });
+    await api('/rebuild', { method: 'POST' });
+    currentOpenId = null; aiButtons(); updateDeleteBtn();
+    $('reader-crumb').textContent = 'nothing open';
+    $('reader-body').innerHTML = '<p class="reader-empty">Summary deleted.</p>';
+    await refresh();
+    setMsg('summary deleted + graph rebuilt');
+  } catch (e) { setMsg(e.message, true); }
+};
 window.viewIndex = () => reader.loadIndex();
 
 // ── graph ───────────────────────────────────────────────────────────────────
@@ -129,6 +146,7 @@ window.runIngest = async () => {
     await api('/rebuild', { method: 'POST' });
     const t = rep.totals;
     setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned`);
+    setDirty(false);
     await refresh();
   } catch (e) { setMsg('ingest failed: ' + e.message, true); }
 };
@@ -154,127 +172,132 @@ $('filter').addEventListener('keydown', (ev) => {
   }
   if (ev.key !== 'Enter') return;
   const target = rows[selIdx]?.dataset.open ?? rows[0]?.dataset.open;
-  if (target) { reader.openNote(target); $('sresults').classList.remove('open'); }
+  if (target) { window.__zoomNext = true; reader.openNote(target); $('sresults').classList.remove('open'); }
 });
 
 // ── sources (roots) CRUD drawer — D-6 ─────────────────────────────────────
 async function buildSources() {
   try {
     const roots = await api('/roots');
-    const rows = roots.map(r => `
-      <div class="row" title="${r.path}">
-        <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="enable/disable" />
+    const counts = {};
+    for (const n of nodes) if (n.kind === 'note') counts[n.repo] = (counts[n.repo] ?? 0) + 1;
+    const rows = roots.map(r => {
+      const name = r.path.split('/').pop();
+      return `
+      <div class="row" title="${r.path}" style="${r.enabled ? '' : 'opacity:0.5'}">
+        <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${r.path}" title="${r.enabled ? 'enabled — ingested on Apply' : 'disabled — pruned on Apply'}" />
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.path}</span>
+        <span class="rootcount">${counts[name] ?? 0} notes</span>
         ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
         <span class="tg" data-del-root="${r.path}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     $('sources').innerHTML =
       `<h4 style="display:flex">Sources — the repos this brain ingests
          <span style="margin-left:auto;cursor:pointer;color:var(--dim)" onclick="toggleSources()">✕</span></h4>
        <div class="srcbtns">
          <button onclick="bulkRoots(true)">✓ Select all</button>
          <button onclick="bulkRoots(false)">◻ Deselect all</button>
-         <button onclick="runIngest()">⟳ Apply (ingest)</button>
+         <button id="applyBtn" onclick="runIngest()">⟳ Apply (ingest)</button>
        </div>` + rows +
-      `<h4>Add a root</h4>
-       <div style="display:flex;gap:0.4rem">
-         <div class="fscompwrap">
-           <input type="text" id="newroot" placeholder="type a path (autocomplete) or a folder name (search) — or browse ↓" autocomplete="off" />
-           <div id="fscomp"></div>
-         </div>
-         <button class="mi" style="border:1px solid var(--border)" onclick="addRoot()">+ Add</button>
-       </div>
-       <div class="fsbar"><span style="cursor:pointer" onclick="browseUp()" title="up one folder">⬆</span>
-         <span class="cur" id="fscur">…</span></div>
+      `<h4>Add a root — the list below answers what you type</h4>
+       <input type="text" id="newroot" placeholder="type a path to navigate, or a name to filter this folder" autocomplete="off" style="width:100%" />
+       <div class="crumbs" id="fscrumbs"></div>
        <div class="fsls" id="fsls"></div>
        <p style="color:var(--dim);font-size:0.72rem;margin-top:0.5rem">
          Ingest is a <b>sync</b>: enabled roots are added/updated, disabled roots and deleted
-         files are pruned (✦ summaries are never touched). Default with nothing configured:
-         this project itself.</p>`;
+         files are pruned (✦ summaries are never touched).</p>`;
+    setDirty(srcDirty);
     await browseTo(fsPath);
   } catch (e) { $('sources').innerHTML = `<h4>Sources</h4><div class="row">${e.message}</div>`; }
 }
 
-// server-side folder browser (a local web app can't read absolute paths from a file dialog)
-let fsPath = null;
-async function browseTo(path) {
+// ── one surface: the folder list answers the input (file-manager model) ────
+let fsPath = null, fsDirs = [], fsPrefix = '', srcDirty = false;
+function setDirty(v) {
+  srcDirty = v;
+  $('applyBtn')?.classList.toggle('glow', v);
+}
+async function browseTo(path, prefix = '') {
   const d = await api('/fs' + (path ? `?path=${encodeURIComponent(path)}` : ''));
-  fsPath = d.path;
-  $('fscur').textContent = d.path;
-  $('fscur').dataset.parent = d.parent;
-  $('fsls').innerHTML = d.dirs.map(x => `
+  fsPath = d.path; fsDirs = d.dirs; fsPrefix = prefix;
+  renderCrumbs();
+  renderFsRows();
+}
+function renderCrumbs() {
+  const parts = fsPath.split('/').filter(Boolean);
+  let acc = '';
+  $('fscrumbs').innerHTML =
+    `<span class="seg" data-crumb="/">/</span>` +
+    parts.map(p => { acc += '/' + p; return `<span class="seg" data-crumb="${acc}">${p}</span><span>/</span>`; }).join('') +
+    `<span class="addcur" data-use-root="${fsPath}">＋ Add this folder</span>`;
+}
+function renderFsRows() {
+  const q = fsPrefix.toLowerCase();
+  const list = fsDirs.filter(x => !q || x.name.toLowerCase().startsWith(q) || x.name.toLowerCase().includes(q));
+  $('fsls').innerHTML = list.map(x => `
     <div class="row" data-fs="${x.path}">
       <span>📁 ${x.name}</span>
       ${x.is_repo ? '<span class="repo-badge">git repo</span>' : ''}
-      <span class="use" data-use-root="${x.path}">+ use</span>
-    </div>`).join('') || '<div class="row" style="color:var(--dim)">no subfolders</div>';
+      <span class="use" data-use-root="${x.path}">+ Add</span>
+    </div>`).join('') || `<div class="row" style="color:var(--dim)">no folders match “${fsPrefix}”</div>`;
 }
-window.browseUp = () => browseTo($('fscur').dataset.parent);
 
-// autocomplete: '/'-paths complete shell-style; bare names SEARCH the current browse folder
-let compT = null, compSel = -1;
-async function completeRoot() {
-  const q = $('newroot').value.trim();
-  const box = $('fscomp');
-  if (!q) { box.classList.remove('open'); return; }
-  const d = await api(`/fs/complete?q=${encodeURIComponent(q)}&base=${encodeURIComponent(fsPath ?? '')}`);
-  compSel = -1;
-  box.innerHTML = d.completions.map(c => `
-    <div class="row" data-comp="${c.path}">
-      <span>📁 ${c.path}</span>${c.is_repo ? '<span class="repo-badge">git repo</span>' : ''}
-      <span class="use" data-use-root="${c.path}">+ use</span>
-    </div>`).join('') || '<div class="row" style="color:var(--dim)">no matching folders</div>';
-  box.classList.add('open');
-}
+// the location-and-filter bar: '/' = navigate (last segment prefix-filters), bare = filter here
+let srcT = null;
 $('sources').addEventListener('input', (ev) => {
   if (ev.target.id !== 'newroot') return;
-  clearTimeout(compT);
-  compT = setTimeout(completeRoot, 160);
+  clearTimeout(srcT);
+  srcT = setTimeout(async () => {
+    const v = ev.target.value.trim();
+    try {
+      if (!v) { fsPrefix = ''; renderFsRows(); return; }
+      if (v.includes('/')) {
+        const cut = v.lastIndexOf('/');
+        await browseTo(v.slice(0, cut + 1) || '/', v.slice(cut + 1));
+      } else {
+        fsPrefix = v; renderFsRows();
+      }
+    } catch { /* nonexistent path while typing — keep the current list */ }
+  }, 150);
 });
 $('sources').addEventListener('keydown', (ev) => {
   if (ev.target.id !== 'newroot') return;
-  const rows = [...$('fscomp').querySelectorAll('.row[data-comp]')];
-  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
-    ev.preventDefault();
-    compSel = ev.key === 'ArrowDown' ? Math.min(compSel + 1, rows.length - 1) : Math.max(compSel - 1, 0);
-    rows.forEach((r, i) => r.classList.toggle('sel', i === compSel));
-    rows[compSel]?.scrollIntoView({ block: 'nearest' });
-  } else if (ev.key === 'Tab' && rows.length) {
-    ev.preventDefault();
-    $('newroot').value = rows[Math.max(compSel, 0)].dataset.comp + '/';
-    completeRoot();
-  } else if (ev.key === 'Enter') {
-    const pick = rows[compSel]?.dataset.comp ?? (rows.length === 1 ? rows[0].dataset.comp : null);
-    if (pick) addRoot(pick);
+  if (ev.key === 'Enter') {
+    const first = $('fsls').querySelector('.row[data-fs]');
+    if (first) browseTo(first.dataset.fs).then(() => { $('newroot').value = fsPath + '/'; });
   } else if (ev.key === 'Escape') {
-    $('fscomp').classList.remove('open');
+    ev.stopPropagation();
+    $('newroot').value = ''; fsPrefix = ''; renderFsRows();
   }
 });
+
 window.bulkRoots = async (enabled) => {
   await api('/roots/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }) });
   await buildSources();
+  setDirty(true);
   setMsg(enabled ? 'all roots enabled — Apply (ingest) to sync' : 'all roots disabled — Apply (ingest) will empty their notes');
 };
 window.toggleSources = () => { const el = $('sources'); el.classList.toggle('open'); if (el.classList.contains('open')) buildSources(); };
 window.addRoot = async (path) => {
-  const p = path ?? $('newroot').value.trim();
-  if (!p) return;
+  if (!path) return;
   try {
-    await api('/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: p }) });
+    await api('/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
     await buildSources();
+    setDirty(true);
     setMsg('root added — Apply (ingest) to bring its notes in');
   } catch (e) { setMsg(e.message, true); }
 };
 $('sources').addEventListener('click', async (ev) => {
   const t = ev.target;
   try {
-    if (t.dataset.useRoot) { await addRoot(t.dataset.useRoot); $('fscomp')?.classList.remove('open'); return; }
-    const comp = t.closest('.row[data-comp]');
-    if (comp) { $('newroot').value = comp.dataset.comp + '/'; completeRoot(); return; }
+    if (t.dataset.useRoot) { await addRoot(t.dataset.useRoot); return; }
+    if (t.dataset.crumb) { await browseTo(t.dataset.crumb); $('newroot').value = ''; return; }
     const fsrow = t.closest('.row[data-fs]');
-    if (fsrow && !t.dataset.useRoot) { await browseTo(fsrow.dataset.fs); return; }
+    if (fsrow) { await browseTo(fsrow.dataset.fs); $('newroot').value = ''; return; }
     if (t.dataset.toggleRoot) {
       await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.toggleRoot }) });
+      setDirty(true);
       setMsg('root toggled — Apply (ingest) to sync');
     } else if (t.dataset.delRoot) {
       if (!(await appConfirm(`${t.dataset.delRoot}\n\nIts notes will be pruned from the vault (no ghost nodes).`,
@@ -456,7 +479,14 @@ function aiButtons() {
     : isNote ? 'distill the open note (or its subtree)' : 'open a note to distill it';
 }
 const _openNote = reader.openNote;
-reader.openNote = (id, push) => { ac.notesOpened.add(id); acSave(); currentOpenId = id; aiButtons(); return _openNote(id, push); };
+reader.openNote = (id, push) => {
+  ac.notesOpened.add(id); acSave();
+  currentOpenId = id; aiButtons();
+  graph.focusOn(id, { zoom: window.__zoomNext ?? false });   // show WHERE the note lives
+  window.__zoomNext = false;
+  updateDeleteBtn();
+  return _openNote(id, push);
+};
 const _loadIndex = reader.loadIndex;
 reader.loadIndex = () => { currentOpenId = null; aiButtons(); return _loadIndex(); };
 
