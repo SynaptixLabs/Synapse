@@ -8,6 +8,9 @@
 .env
 .env.local
 .env.*.local
+# in-app key-save temp files (atomic-write intermediates — carry real key values)
+.env.*.tmp
+.env.tmp
 # Uncomment below to also ignore the per-env shape files if your workflow uses secrets managers exclusively
 # .env.development
 # .env.staging

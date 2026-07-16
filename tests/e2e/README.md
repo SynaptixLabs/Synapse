@@ -9,6 +9,7 @@ visibility assertions, screenshots to `../screenshots/`. Never `request.get()`.
 ./start.sh                      # live stack with an ingested vault (run ingest once)
 npm i -D playwright && npx playwright install chromium   # one-time, anywhere convenient
 node tests/e2e/sprint01_dashboard.spec.mjs               # acceptance flow: ingest×2, invariance, index
+node tests/e2e/keys_panel.spec.mjs                       # model-keys UX (write flow needs a SCRATCH stack + E2E_KEYS_WRITE_OK=1)
 node tests/e2e/sprint01_wiki_popup.spec.mjs              # wiki popup: wikilink nav, infobox, Esc
 ```
 

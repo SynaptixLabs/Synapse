@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `pip install` / `npm install` failures inside the launchers now stop with an actionable
   message instead of continuing half-set-up.
+- **In-app keys GBU wave** (internal + Codex cross-vendor review, all findings fixed):
+  placeholder pastes now 422 instead of a false "live now"; a placeholder loaded at startup
+  no longer blocks a real key from a manual `.env` edit; concurrent saves are serialized
+  (unique 0600 temp file, no crash-window leftovers, `.gitignore`d); the keys E2E assertions
+  can actually fail and its write flow is double-gated (`E2E_KEYS_WRITE_OK=1` + keyless);
+  API tests no longer read the developer's real `backend/.env`.
 
 Further v0.2 candidates live in
 [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).

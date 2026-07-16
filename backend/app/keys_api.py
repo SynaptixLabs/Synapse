@@ -8,14 +8,20 @@ Key values are never returned, logged, or echoed — only presence plus a 4-char
 from __future__ import annotations
 
 import os
+import tempfile
+import threading
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core.config import REPO_ROOT, env_file_path, load_settings
+from app.core.config import REPO_ROOT, _is_placeholder, env_file_path, load_settings
 
 router = APIRouter(prefix="/api/v1", tags=["models"])
+
+# One writer at a time: concurrent saves (double-click, two tabs) must not race the
+# read-modify-replace or interleave the env publish (GBU 2026-07-16).
+_ENV_LOCK = threading.Lock()
 
 
 def _hint(key: str | None) -> str | None:
@@ -62,6 +68,10 @@ def _clean(name: str, value: str | None) -> str | None:
         raise HTTPException(status_code=422, detail=(
             f"{name} does not look like an API key (expected 8+ characters, no spaces) — "
             "paste the key exactly as issued."))
+    if _is_placeholder(v):
+        raise HTTPException(status_code=422, detail=(
+            f"{name} is the template placeholder, not a real key — paste the key from your "
+            "provider's console (Anthropic: console.anthropic.com · OpenAI: platform.openai.com)."))
     return v
 
 
@@ -85,9 +95,16 @@ def _upsert_env(path: Path, updates: dict[str, str]) -> None:
         if k not in done:
             out.append(f"{k}={v}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
+    # unique 0600 temp in the same dir (atomic replace; no shared-name race), and never
+    # leave a key-bearing temp file behind on failure — this is a public-repo worktree
+    fd, tmp_name = tempfile.mkstemp(prefix=".env.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write("\n".join(out) + "\n")
+        os.replace(tmp_name, path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
 
 
 @router.post("/models/keys")
@@ -101,6 +118,7 @@ def save_keys(req: KeysRequest) -> dict:
         updates["OPENAI_API_KEY"] = openai
     if not updates:
         raise HTTPException(status_code=422, detail="Provide anthropic_key and/or openai_key.")
-    _upsert_env(env_file_path(), updates)
-    os.environ.update(updates)   # providers read env at call time → live without a restart
+    with _ENV_LOCK:
+        _upsert_env(env_file_path(), updates)
+        os.environ.update(updates)   # providers read env at call time → live without a restart
     return _status()

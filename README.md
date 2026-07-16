@@ -94,7 +94,9 @@ is missing you get a **＋ Add keys here** form right in the panel — paste a k
 `backend/.env` (git-ignored) and **applied immediately, no restart**. Key values never come
 back from the API — only a masked tail (`…abcd`).
 
-Prefer files? Put the keys in `backend/.env` yourself (created by setup, never committed):
+Prefer files? Put the keys in `backend/.env` yourself (created by setup, never committed).
+On a fresh install the edit is picked up automatically on the next action; if you're *replacing*
+a key that's already live, restart (or just use the in-app form — it always applies immediately):
 
 ```ini
 ANTHROPIC_API_KEY=sk-ant-...      # model #1 — Distill (default: claude-sonnet-5)
@@ -211,6 +213,7 @@ Chromium E2E job is opt-in via the `ENABLE_E2E_CI` repo variable (see
 | Windows: `npm.cmd is not recognized` | Node.js isn't installed — re-run `.\start.cmd` (preflight now offers the install), or `winget install --id OpenJS.NodeJS.LTS`, then open a **new** terminal |
 | Windows: `python` opens the Microsoft Store | That's Windows' fake `python.exe`, not an interpreter — preflight detects it and offers the real install (`winget install --id Python.Python.3.12`) |
 | WSL: `env: 'bash\r': No such file or directory` | The clone was made by **Windows git** before `.gitattributes` existed, so `start.sh` got CRLF endings. Fix in place: `sed -i 's/\r$//' start.sh && ./start.sh` — or `git pull` + re-checkout (current `main` pins `*.sh` to LF, so fresh clones are immune) |
+| A key saved in-app "comes back wrong" after restart | A shell-exported `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` overrides `backend/.env` on startup — `unset` the export (or update it) and restart |
 
 ## Status & roadmap
 

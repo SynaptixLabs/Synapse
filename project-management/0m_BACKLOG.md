@@ -42,5 +42,13 @@
     (`graph.json` + `notes/` with `synapse.*` frontmatter) and skip them with a recorded
     warning. (Found 2026-07-15 while re-shooting README screenshots; fresh clones are
     unaffected — `data/` is git-ignored.)
+12. **Loopback-by-default bind (flagged decision)** — the backend binds `0.0.0.0`, which the
+    documented WSL direct-IP fallback *needs*, but it leaves the (unauthenticated, local-first
+    by design) API — including `POST /models/keys` — reachable from the LAN. Both external
+    reviewers of the in-app-keys GBU (2026-07-16) flagged it. Decision wanted: default
+    `127.0.0.1` + explicit `--lan` opt-in, weighed against WSL relay UX.
+13. **CI coverage for the keyless save flow** — `keys_panel.spec.mjs` in CI exercises only the
+    mock badge (Codex finding); a second keyless backend on a scratch `SYNAPSE_ENV_FILE` with
+    `E2E_KEYS_WRITE_OK=1` would cover the browser write path end-to-end.
 
-— `cpto` (JANUS), 2026-07-15
+— `cpto` (JANUS), 2026-07-15 (items 12–13 appended 2026-07-16)

@@ -15,6 +15,9 @@ def client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setenv(
         "SYNAPSE_SOURCE_REPOS", f"{FIXTURES / 'repo_a'},{FIXTURES / 'repo_b'}"
     )
+    # NEVER read the developer's real backend/.env: tests must not depend on (or leak
+    # into) dev-machine state — a real key there would flip "keyless" scenarios (GBU 2026-07-16)
+    monkeypatch.setenv("SYNAPSE_ENV_FILE", str(tmp_path / "envdir" / ".env"))
     from app.main import app
     return TestClient(app)
 
@@ -284,3 +287,42 @@ class TestModelKeys:
         assert keyless.post("/api/v1/models/keys", json={"anthropic_key": "   "}).status_code == 422
         assert keyless.post("/api/v1/models/keys", json={"anthropic_key": "has spaces"}).status_code == 422
         assert keyless.post("/api/v1/models/keys", json={"openai_key": "short"}).status_code == 422
+
+    # ── GBU 2026-07-16 fix wave (fresh-eyes + Codex cross-vendor findings) ──────
+
+    def test_placeholder_paste_is_rejected_not_half_saved(self, keyless):
+        """Both reviews P1: the .env.example placeholder returned 200 + 'live now' while
+        status honestly said unconfigured — AND poisoned os.environ so a manual .env fix
+        went inert until restart. Now: a clean 422 naming the mistake."""
+        r = keyless.post("/api/v1/models/keys", json={"anthropic_key": "sk-ant-REPLACE-ME"})
+        assert r.status_code == 422 and "placeholder" in r.json()["detail"]
+        s = keyless.get("/api/v1/models/status").json()
+        assert s["distill"]["configured"] is False
+
+    def test_placeholder_in_process_env_never_blocks_a_real_key_from_the_file(
+            self, keyless, tmp_path, monkeypatch):
+        """Fresh-eyes P1: startup loads the .env.example placeholder into os.environ; the
+        loader's 'env wins' rule then blocked a real key manually written to .env until
+        restart. A placeholder must never win over a real value."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-REPLACE-ME")
+        env_file = tmp_path / "envdir" / ".env"
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.write_text("ANTHROPIC_API_KEY=sk-ant-manual-1234real\n", encoding="utf-8")
+        s = keyless.get("/api/v1/models/status").json()
+        assert s["distill"]["configured"] is True and s["distill"]["key_hint"] == "…real"
+
+    def test_concurrent_saves_lose_no_key_and_never_500(self, keyless, tmp_path):
+        """Both reviews: two saves racing on a shared temp filename could 500 or drop one
+        provider's key from the file. Serialized now — all succeed, both keys land."""
+        from concurrent.futures import ThreadPoolExecutor
+        payloads = [{"anthropic_key": "sk-ant-th-1234aaaa"} if i % 2 == 0
+                    else {"openai_key": "sk-th-9999bbbb"} for i in range(16)]
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            codes = list(ex.map(
+                lambda p: keyless.post("/api/v1/models/keys", json=p).status_code, payloads))
+        assert codes == [200] * 16
+        env = (tmp_path / "envdir" / ".env").read_text(encoding="utf-8")
+        assert "ANTHROPIC_API_KEY=sk-ant-th-1234aaaa" in env
+        assert "OPENAI_API_KEY=sk-th-9999bbbb" in env
+        leftovers = list((tmp_path / "envdir").glob(".env.*.tmp"))
+        assert leftovers == []                      # no key-bearing temp files left behind

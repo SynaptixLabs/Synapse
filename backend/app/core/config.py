@@ -26,7 +26,10 @@ DEFAULT_IGNORE_DIRS = {
 
 def _load_dotenv(path: Path) -> None:
     """Minimal .env loader: KEY=VALUE lines, `#` comments, no interpolation.
-    Existing environment variables always win (so CI/shell overrides work)."""
+    Existing REAL environment variables always win (so CI/shell overrides work) — but a
+    placeholder never blocks a real value arriving from the file: fresh installs load
+    `sk-ant-REPLACE-ME` into the process env at startup, and a manual `.env` edit (or an
+    in-app key save) must take effect on the next read, not after a restart (GBU 2026-07-16)."""
     if not path.is_file():
         return
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -35,7 +38,7 @@ def _load_dotenv(path: Path) -> None:
             continue
         key, _, value = line.partition("=")
         key, value = key.strip(), value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        if key and (key not in os.environ or _is_placeholder(os.environ[key])):
             os.environ[key] = value
 
 
