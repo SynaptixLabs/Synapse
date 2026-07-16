@@ -22,6 +22,15 @@ gist as an image the distill itself describes.
 - Clean-machine first run: preflight installs prerequisites only after explicit consent (Win/WSL/Linux/macOS).
 - Reviewed: internal + cross-vendor (Codex) adversarial review, all findings fixed (`project-management/reviews/`).
 
+**Competitive positioning (if graphify comes up — it will, they're the 800-lb gorilla of the
+category):** graphify builds *a map of your files for your AI assistant* — code-first,
+brilliant at ingestion, and their actual product (Penpax) is closed/waitlisted while the open
+repo ships a CLI. SYNAPSE builds *a second brain you read and grow*: the vault is a persistent
+knowledge store (not a derived cache), AI summaries must cite real sources or they're rejected
+by code, and **the entire product is open source**. Never trash them — "great tool, different
+job; we happily borrowed their ingestion patterns, the repo says so in the open" is the
+confident answer.
+
 **Honesty guardrails (never violate):** it's a v0.1.x POC, not a mature product — say so
 proudly ("young, moving fast, contributions shape it"). Local-first single-user — no cloud, no
 telemetry. AI features cost the user's own API tokens (keys optional). Don't promise roadmap

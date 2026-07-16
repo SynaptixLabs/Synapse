@@ -63,5 +63,21 @@
     markdown source of truth) carrying metadata + an AI-derived description through the
     existing model seams (mockable, cost-guarded). Staged: PDFs + images first, video/audio
     later. This graduates SYNAPSE from repo-brain to *household* brain — positioning-relevant.
+    → **Sprint 05 scope** (stage 1); video stage later gets faster-whisper LOCAL transcription
+    (zero API cost — graphify-proven).
 
-— `cpto` (JANUS), 2026-07-15 (12–13 appended, 14–15 founder wave, 2026-07-16)
+## Graphify wave 2026-07-16 (source: [reference/2026-07-16_graphify_learnings.md](reference/2026-07-16_graphify_learnings.md))
+
+16. **MCP server over the brain** — `python -m synapse.serve` (stdio): `query_graph` /
+    `get_note` / `get_neighbors` / `shortest_path`, so Claude Code & co. answer from YOUR
+    vault. Skill-first distribution is graphify's 89k-star lesson. → **Sprint 04 Epic I**.
+17. **Obsidian interop** — the vault opens cleanly as an Obsidian vault (layout, frontmatter,
+    wikilink flavor); lands on the PKM audience. → **Sprint 05 Epic M**.
+18. **Leiden communities + brain report** — structure-based clustering (LLM-free labels) beyond
+    folder-based D-9 groups; auto whole-brain report (god nodes · surprising connections ·
+    suggested questions). Later v0.2 wave (T8).
+
+Items 1 (entity extraction) and 8 gain the **edge-confidence vocabulary** prerequisite
+(`EXTRACTED`/`INFERRED`+score/`AMBIGUOUS`) — adopted as schema groundwork in Sprint 04 Epic J.
+
+— `cpto` (JANUS), 2026-07-15 (12–13 appended, 14–15 founder wave, 16–18 graphify wave, 2026-07-16)
