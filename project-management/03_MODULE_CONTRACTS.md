@@ -75,14 +75,26 @@ contract changes are a `cpto`-gated decision (log them in [`0l_DECISIONS.md`](0l
 
 | Module | Path | Owns (capability) | Public interface / entrypoint | Called by | Direction (one-way) |
 |---|---|---|---|---|---|
-| `ingest` | `backend/modules/ingest` | repos → vault notes (frontmatter, idempotent, vault-self-exclusion) | `IngestService.ingest(repos)` · `POST /api/v1/ingest` | CLI, app | app/CLI → `ingest` |
-| `graph` | `backend/modules/graph` | vault → deterministic graph.json + Index.md + stats | `GraphService.rebuild()/build()/load()` · `GET /api/v1/graph|stats`, `POST /api/v1/rebuild` | CLI, app, frontend (via API) | app/CLI → `graph` (reads vault only) |
+| `ingest` | `backend/modules/ingest` | repos → vault notes (frontmatter, idempotent, vault-self-exclusion); ignore files (`.gitignore` + `.synapseignore`, `ignore.py`); auto-sync (`hooks.py`: git hooks + watch) *(sprint 4)* | `IngestService.ingest(repos)` · `POST /api/v1/ingest` · `synapse hook|watch` | CLI, app | app/CLI → `ingest` |
+| `graph` | `backend/modules/graph` | vault → deterministic graph.json + Index.md + stats; **the query trio** (`query.py`: query/path/explain — deterministic retrieval, zero model calls) *(sprint 4)* | `GraphService.rebuild()/build()/load()` · `GET /api/v1/graph|stats|query|path|explain`, `POST /api/v1/rebuild` | CLI, app, frontend (via API), MCP server | app/CLI → `graph` (reads vault only) |
 | `distill` | `backend/modules/distill` *(sprint 3)* | node/subtree → grounded summary → `S —` note | `Summarizer.summarize(...)` | app | app → `distill` |
 | `render` | `backend/modules/render` *(sprint 3)* | summary note → image in `media/` | `ImageRenderer.render(...)` | app | app → `render` |
 
 `ingest` and `graph` never import each other — the **vault directory layout** is their shared
-contract (see `01_ARCHITECTURE.md`). The CLI (`backend/synapse/`) and FastAPI app are thin
-dispatchers over the module services.
+contract (see `01_ARCHITECTURE.md`). The CLI (`backend/synapse/`), the FastAPI app, and the
+MCP server (`backend/synapse/serve.py`, stdio JSON-RPC — sprint 4) are thin dispatchers over
+the module services.
+
+### graph.json schema v3 (sprint 4, Epic J)
+
+Every edge carries a `confidence` tag — the honest-status doctrine in graph form, adopted
+**before** the first AI-derived edge ships:
+
+| Tag | Meaning | `confidence_score` |
+|---|---|---|
+| `EXTRACTED` | parsed directly from source (wikilink, relative link, pathref, sibling) | implicit 1.0 (field absent) |
+| `INFERRED` | AI-derived (reserved — nothing emits it yet) | discrete rubric 0.95/0.85/0.75/0.65/0.55 |
+| `AMBIGUOUS` | uncertain — flagged for manual review (reserved) | absent |
 
 ### Standard module interface (optional convention)
 

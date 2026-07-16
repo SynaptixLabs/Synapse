@@ -19,11 +19,15 @@ const reader = createReader({
   onOpen: (id) => {
     currentOpenId = id;
     aiButtons(); updateDeleteBtn();
+    // a note opened via search/wikilink while path mode is armed → disarm (the armed
+    // prompt would otherwise go stale and the next canvas click surprise-picks)
+    if (pathSel) { pathSel = null; $('pathBtn').dataset.on = ''; }
     if (!id) return;   // null = the Index view
     ac.notesOpened.add(id); acSave();
     pullIntoWindow(id);   // off-window note? bring it (+ neighbors) into the picture first
     graph.focusOn(id, { zoom: window.__zoomNext ?? false });   // show WHERE the note lives
     window.__zoomNext = false;
+    renderExplain(id);    // Epic G: the note's connections, grouped, as a wiki footer
   },
   onError: (m) => setMsg(m, true),
 });
@@ -51,10 +55,62 @@ window.viewIndex = () => reader.loadIndex();
 const graph = createGraph($('graph'), {
   tooltipEl: $('tooltip'),
   infoEl: null,
-  onNodeClick: (id) => reader.openNote(id),
+  onNodeClick: (id) => { if (!pathPick(id)) reader.openNote(id); },
 });
 window.__synapse = { graph: () => graph.state(), counts: () => ({ nodes: nodes.length, edges: edges.length }) };
+// camera framing seam (E2E + debugging): fit the view to ids exactly like a search
+// multi-select does, then clear the match without moving the camera
+window.__synapseFit = (ids) => graph.setMatch(ids?.length ? new Set(ids) : null);
 window.resetLayout = () => { graph.reset(); setMsg('layout reset — all pins released'); };
+
+// ── Path mode (Epic G): ⇢ button → click two notes → the shortest path glows ──
+let pathSel = null;   // null = off · [] = picking first · [a] = picking second
+window.togglePathMode = () => {
+  pathSel = pathSel ? null : [];
+  $('pathBtn').dataset.on = pathSel ? '1' : '';
+  graph.setPath(null);
+  setMsg(pathSel ? 'path: click the FIRST note' : 'path mode off');
+};
+function pathPick(id) {
+  if (!pathSel || id.startsWith('repo:')) return false;
+  pathSel.push(id);
+  if (pathSel.length === 1) { setMsg(`path: ${id} ⇢ … click the SECOND note`); return true; }
+  const [a, b] = pathSel;
+  pathSel = null; $('pathBtn').dataset.on = '';
+  api(`/path?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`).then((out) => {
+    if (!out.found) { setMsg(`no path between ${a} and ${b} (repo-hub links don't count)`, true); return; }
+    // D-7 windowed brain (GBU P2-5): intermediate hops are usually low-degree notes OUTSIDE
+    // the importance window — pull every hop in first, or the glow renders with holes
+    out.hops.forEach((h) => pullIntoWindow(h.id));
+    graph.setPath(out.hops.map((h) => h.id));
+    setMsg(`path: ${out.length} hop${out.length === 1 ? '' : 's'} — ${a} ⇢ ${b} (click empty canvas to clear)`);
+  }).catch((e) => setMsg(e.message, true));
+  return true;
+}
+
+// ── Explain block (Epic G): the open note's connections as a wiki footer ─────
+async function renderExplain(id) {
+  document.getElementById('explain')?.remove();
+  if (!id) return;
+  try {
+    const out = await api(`/explain?id=${encodeURIComponent(id)}`);
+    // sibling edges are repo plumbing, not knowledge — the footer shows real links only
+    const groups = (out.connections ?? []).filter((g) => g.type !== 'sibling');
+    if (currentOpenId !== id || !groups.length) return;
+    const shown = groups.reduce((s, g) => s + g.nodes.length, 0);
+    const rows = groups.map((g) => {
+      const arrow = g.direction === 'out' ? '→' : '←';
+      const links = g.nodes.slice(0, 12)
+        .map((n) => `<a data-wl="${esc(n.id)}">${esc(n.title || n.id)}</a>`).join(' · ');
+      const more = g.nodes.length > 12 ? ` <span class="muted">+${g.nodes.length - 12} more</span>` : '';
+      return `<div class="exrow">${arrow} <b>${esc(g.type)}</b> · ${links}${more}</div>`;
+    }).join('');
+    const el = document.createElement('div');
+    el.id = 'explain';
+    el.innerHTML = `<h4>⛓ Connections · ${shown}</h4>${rows}`;
+    $('reader-body').appendChild(el);
+  } catch { /* no graph yet — the empty state already guides the user */ }
+}
 
 /** In-app confirm (output doctrine: the APP's popup, never the browser's native dialog). */
 function appConfirm(msg, { title = 'Confirm', ok = 'Confirm', danger = false } = {}) {

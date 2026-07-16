@@ -19,12 +19,12 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 
 ## Active sprint
 
-- **None — the POC (v0.1.0) is CLOSED** (2026-07-15, sprint 03 founder PASS + release-gate GO).
-  What v0.2 wants: [`../0m_BACKLOG.md`](../0m_BACKLOG.md) — every item is a flagged founder
-  decision before it becomes sprint scope.
-- **Next up (PLANNED, founder gate to open):** sprint 04 **The Open Brain** → sprint 05
-  **Everything In** — scoped 2026-07-16 from the
-  [graphify learnings](../reference/2026-07-16_graphify_learnings.md) take-list (T1–T7).
+- **Sprint 04 — The Open Brain** ([`sprint_04/index.md`](sprint_04/index.md)) — opened
+  2026-07-16 on founder go ("Build the Epics and TODOs; GBU; implement and acceptance test").
+  Scope source: [graphify learnings](../reference/2026-07-16_graphify_learnings.md) T1–T5.
+- **Next up (PLANNED):** sprint 05 **Everything In** (multimedia stage 1, T6–T7).
+- POC v0.1.0 CLOSED 2026-07-15 (sprint 03 founder PASS + release-gate GO); backlog:
+  [`../0m_BACKLOG.md`](../0m_BACKLOG.md).
 
 ## All sprints
 
@@ -33,7 +33,7 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 | 01 | ✅ Closed 2026-07-15 · PASS · 4.5 | **The Brain** | Repos' `.md` → vault → derived graph + `Index.md`; rebuildable proven; + acceptance dashboard, wiki popup, Obsidian-class graph (pulled forward) | A — Ingest & Vault · B — Graph & Index | none | [`sprint_01/index.md`](sprint_01/index.md) |
 | 02 | ✅ Closed 2026-07-15 · PASS · 4.6 | **The Explorer** | Explorer page (kit REV 2→2.3): accordion, glossary, immersive placeable graph, persistent focus, in-UI acceptance | C — Explorer UI | none | [`sprint_02/index.md`](sprint_02/index.md) |
 | 03 | ✅ Closed 2026-07-15 · PASS · **POC closed (v0.1.0)** | **The Twist** | Two models end-to-end: summarize node/subtree (Anthropic) + render summary as image (gpt-image-1); POC close | D — Distill · E — Render · F — POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | [`sprint_03/index.md`](sprint_03/index.md) |
-| 04 | 📋 PLANNED (~160V) | **The Open Brain** | The brain becomes infrastructure: deterministic query/path/explain, `.synapseignore` + git-hook freshness, MCP server (your brain as an assistant tool), edge-confidence schema | G — Query trio · H — Freshness · I — MCP · J — Confidence schema | none | [`sprint_04/index.md`](sprint_04/index.md) |
+| 04 | 🟢 ACTIVE (~160V) | **The Open Brain** | The brain becomes infrastructure: deterministic query/path/explain, `.synapseignore` + git-hook freshness, MCP server (your brain as an assistant tool), edge-confidence schema | G — Query trio · H — Freshness · I — MCP · J — Confidence schema | none | [`sprint_04/index.md`](sprint_04/index.md) |
 | 05 | 📋 PLANNED (~200V) | **Everything In** | Multimedia stage 1: images + PDFs as sidecar-note first-class citizens; vision pass behind the seams (cost-guarded); extras packaging + Obsidian interop | K — Assets · L — Seeing pass · M — Extras/Obsidian | optional (vision) | [`sprint_05/index.md`](sprint_05/index.md) |
 
 ## Sprint anatomy (each `sprint_<N>/` node)

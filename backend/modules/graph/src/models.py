@@ -5,7 +5,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 2   # v2 (D-5): + `pathref` edges — backticked `*.md` pointers (adapter convention)
+SCHEMA_VERSION = 3   # v3 (Epic J): + edge `confidence` — EXTRACTED (parsed, 1.0) | INFERRED
+#                      (AI-derived, discrete score 0.55–0.95) | AMBIGUOUS (flagged for review).
+#                      Adopted BEFORE the first AI-derived edge ships (honest-status doctrine).
+#                      v2 (D-5): + `pathref` edges — backticked `*.md` pointers.
 
 
 @dataclass
@@ -34,9 +37,14 @@ class Edge:
     src: str
     dst: str
     type: str                   # wikilink | relative | pathref | sibling
+    confidence: str = "EXTRACTED"          # EXTRACTED | INFERRED | AMBIGUOUS (schema v3)
+    confidence_score: float | None = None  # INFERRED only — discrete rubric 0.55–0.95
 
     def to_dict(self) -> dict:
-        return {"src": self.src, "dst": self.dst, "type": self.type}
+        d = {"src": self.src, "dst": self.dst, "type": self.type, "confidence": self.confidence}
+        if self.confidence_score is not None:
+            d["confidence_score"] = self.confidence_score
+        return d
 
 
 @dataclass

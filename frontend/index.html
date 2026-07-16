@@ -66,6 +66,11 @@
       canvas { position:absolute; inset:0; width:100%; height:100%; }
       .hint { position:absolute; bottom:8px; left:12px; color:var(--dim); font-size:0.74rem; pointer-events:none; }
       .edgeBtn { position:absolute; top:8px; font-size:0.8rem; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; z-index:3; }
+      #pathBtn[data-on="1"] { color:#ffd479; border-color:#ffd479; }
+      #explain { margin-top:1.4rem; padding-top:0.8rem; border-top:1px solid var(--border); font-size:0.82rem; }
+      #explain h4 { margin:0 0 0.4rem; color:var(--dim); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em; }
+      #explain .exrow { margin:0.25rem 0; color:var(--dim); }
+      #explain a { color:var(--accent); cursor:pointer; }
       #tooltip { position:fixed; pointer-events:none; background:#0b0d12; border:1px solid var(--border); border-radius:6px; padding:0.25rem 0.55rem; font-size:0.78rem; display:none; z-index:20; max-width:40ch; }
       .empty { position:absolute; inset:0; display:grid; place-items:center; }
       .empty .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.5rem; text-align:center; max-width:44ch; }
@@ -231,6 +236,7 @@
         <button class="edgeBtn" style="left:8px" onclick="toggleLhs()" title="hide/show menu">⟨</button>
         <button class="edgeBtn" style="right:8px" onclick="toggleReader()" title="hide/show reader">⟩</button>
         <button class="edgeBtn" style="left:50%; transform:translateX(-50%)" onclick="resetLayout()" title="release all pins, fresh layout">⟲ reset layout</button>
+        <button class="edgeBtn" id="pathBtn" style="left:calc(50% + 78px)" onclick="togglePathMode()" title="trace the shortest path: click this, then two notes">⇢ path</button>
         <span class="hint">drag = place &amp; pin (right-click releases) · click = focus + read · click empty = defocus · wheel zooms · <b>/</b> filters</span>
         <div class="empty" id="empty" style="display:none">
           <div class="card">

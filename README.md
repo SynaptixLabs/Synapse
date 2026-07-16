@@ -121,6 +121,15 @@ were disabled, reports counts honestly (`written / unchanged / skipped / pruned`
 ledger), and can never be aborted by one bad file. Your distilled `✦` summaries are user
 artifacts — the sync never touches them.
 
+**Ignoring files:** your repos' `.gitignore` files are respected automatically, and a
+`.synapseignore` (same syntax; evaluated after `.gitignore`, so it wins) adds brain-specific
+rules — e.g. one line, `Archive/`, keeps an archive folder out of the graph. Supported subset:
+`#` comments, `*`/`?` globs (never crossing `/` — `**` crosses, and `**/x` matches at depth 0
+too), trailing `/` for directories, leading `/` anchoring, `!` negation with last-match-wins,
+per-subdirectory files scoped to their subtree. (Not the full gitignore spec — escaping like
+`\#` is not supported.) Notes under a newly-ignored path are pruned on the next sync, with
+honest counts.
+
 ## Using the explorer
 
 - **Search** — ranked results (exact > prefix > word-start > substring), typing multi-selects
@@ -155,14 +164,38 @@ artifacts — the sync never touches them.
 ./synapse ingest      # scan the configured roots → vault, then rebuild graph + Index
 ./synapse rebuild     # vault → graph.json + Index.md (no repo access)
 ./synapse stats       # nodes/edges by type, unresolved links, top-connected notes
+
+# The query trio — deterministic graph retrieval: no embeddings, no model calls, no cost.
+./synapse query "what connects auth to the database?"   # → scoped subgraph (seeds ★ + neighbors)
+./synapse path "ARIA" "CORE"                            # → shortest chain of links, hop by hop
+./synapse explain "adapters"                            # → one note's connections, grouped
+
+# Keep the brain fresh without clicking:
+./synapse hook install    # post-commit/post-checkout auto-sync in every git root (no daemon)
+./synapse watch           # polling fallback for non-git roots (photo folders etc.)
 ```
 
-(Windows: `python -m synapse <cmd>` from `backend\`.)
+(Windows: `python -m synapse <cmd>` from `backend\`. Names are fuzzy — `path alpha beta`
+resolves to the best-matching notes. All three answer in <100ms on a 21k-note brain.)
 
 The FastAPI backend serves interactive docs at **http://localhost:8000/docs**. Key endpoints:
-`/api/v1/{ingest,graph,stats,rebuild,note/{id},index,distill,render,roots}` + `/media/*` for
-generated images. CORS is restricted to explorer pages (`*:5173`) — a random website you visit
-cannot drive an API that reads your filesystem and spends your tokens.
+`/api/v1/{ingest,graph,stats,rebuild,note/{id},index,query,path,explain,distill,render,roots}` +
+`/media/*` for generated images. CORS is restricted to explorer pages (`*:5173`) — a random
+website you visit cannot drive an API that reads your filesystem and spends your tokens.
+
+## Use your brain from Claude Code (MCP)
+
+SYNAPSE ships an MCP server, so your coding agent answers questions from **your** second brain:
+
+```bash
+# run from the SYNAPSE repo root — script path, so it works from ANY project afterwards
+claude mcp add synapse -- "$(pwd)/backend/.venv/bin/python" "$(pwd)/backend/synapse/serve.py"
+```
+
+Then just ask Claude Code things only your vault knows — it gets four tools: `query_graph`
+(plain-language question → relevant notes + how they connect), `get_note` (full markdown),
+`get_neighbors`, and `shortest_path`. Read-only, deterministic, zero model calls and zero keys
+inside the server itself.
 
 ## Configuration
 

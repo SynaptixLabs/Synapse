@@ -57,15 +57,28 @@ class IngestService:
             if errors is not None:
                 errors.append(f"{getattr(e, 'filename', repo_root)}: {getattr(e, 'strerror', e)}")
 
+        from .ignore import IgnoreMatcher
+        matcher = IgnoreMatcher()
+
         for dirpath, dirnames, filenames in os.walk(repo_root, onerror=onerr, followlinks=False):
-            dirnames[:] = [d for d in dirnames if d not in self.ignore_dirs]
             dp = Path(dirpath)
             if dp == vault or vault in dp.parents:
                 dirnames[:] = []
                 continue   # never ingest the vault itself (a repo may contain it)
+            rel_dir = "" if dp == repo_root else dp.relative_to(repo_root).as_posix()
+            matcher.load_dir(dp, rel_dir)   # .gitignore/.synapseignore scoped to this subtree
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in self.ignore_dirs
+                and not matcher.ignored(f"{rel_dir}/{d}" if rel_dir else d, is_dir=True)
+            ]
             for fn in filenames:
-                if fn.lower().endswith(".md"):   # README.MD is markdown too
-                    found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=dp / fn))
+                if not fn.lower().endswith(".md"):   # README.MD is markdown too
+                    continue
+                rel_f = f"{rel_dir}/{fn}" if rel_dir else fn
+                if matcher.ignored(rel_f, is_dir=False):
+                    continue
+                found.append(SourceFile(repo_name=repo_root.name, repo_root=repo_root, path=dp / fn))
         found.sort(key=lambda f: f.path)
         return found
 

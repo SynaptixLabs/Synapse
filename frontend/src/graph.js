@@ -14,6 +14,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const hiddenEdges = new Set(['sibling']);   // grouping is shown as hulls, not spaghetti
   const hiddenRepos = new Set();
   let matchSet = null;   // Set of note ids matching the filter (null = no filter)
+  let pathIds = null;    // ordered node ids of a traced path (Epic G) — drawn as a glowing route
 
   // Semantic zoom (D-8): the z-axis of a 2D map — zoom level = importance altitude. The
   // long tail (notes outside the importance window) lives here as STATIC dots haloed around
@@ -267,6 +268,18 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     }
     ctx.globalAlpha = 1;
 
+    // path overlay (Epic G): the traced route glows on top of everything, hop by hop
+    if (pathIds && pathIds.length > 1) {
+      ctx.strokeStyle = '#ffd479'; ctx.lineWidth = 2.6 / K; ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      for (let i = 0; i < pathIds.length - 1; i++) {
+        const a = sim.p.get(pathIds[i]), b = sim.p.get(pathIds[i + 1]);
+        if (!a || !b) continue;
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+
     for (const n of nodes) {
       const p = sim.p.get(n.id); if (!p || !visibleNode(n)) continue;
       if (n.kind !== 'repo' && !inView(p.x, p.y) && sim.focus !== n.id) continue;   // culled
@@ -415,7 +428,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     } else if (!sim.moved) {
       if (sim.drag.id?.startsWith('repo:')) sim.focus = sim.drag.id;         // hub → focus cluster
       else if (sim.drag.id) { sim.focus = sim.drag.id; onNodeClick?.(sim.drag.id); }
-      else sim.focus = null;             // clicked empty canvas → defocus
+      else { sim.focus = null; if (pathIds) { pathIds = null; matchSet = null; } }   // empty canvas → defocus + clear path
       draw();
     }
     sim.drag = null;
@@ -480,10 +493,16 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (zoom) animTo(sim.p.get(id));
       else draw();
     },
-    setMatch(set) { matchSet = set; if (set?.size) fitTo([...set]); else draw(); },
+    setMatch(set) { pathIds = null; matchSet = set; if (set?.size) fitTo([...set]); else draw(); },
+    /** Glow an ordered route (Epic G path mode); null clears. Dims the rest like a match. */
+    setPath(ids) {
+      pathIds = ids?.length > 1 ? [...ids] : null;
+      matchSet = pathIds ? new Set(pathIds) : null;
+      if (pathIds) fitTo(pathIds); else draw();
+    },
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
-    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }) }),
+    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, path: pathIds ? [...pathIds] : null, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }), posOf: (id) => ({ ...(sim.p.get(id) ?? {}) }) }),
   };
 }

@@ -140,13 +140,20 @@ class GraphService:
 
     # ── outputs ───────────────────────────────────────────────────────────
     def rebuild(self) -> Graph:
-        """Vault → graph.json + Index.md. graph.json stays deterministic (no timestamps)."""
+        """Vault → graph.json + Index.md. graph.json stays deterministic (no timestamps).
+        Writes are ATOMIC (tmp + os.replace): git-hook auto-sync makes background rebuilds
+        routine, and a reader (explorer refresh, MCP tool call) must never see a
+        half-written file (GBU sprint-04 P2-4)."""
+        import os as _os
         g = self.build()
         self.vault_path.mkdir(parents=True, exist_ok=True)
-        self.graph_file.write_text(
-            json.dumps(g.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8"
-        )
-        self.index_file.write_text(self._render_index(g), encoding="utf-8")
+        for target, content in (
+            (self.graph_file, json.dumps(g.to_dict(), ensure_ascii=False, indent=1)),
+            (self.index_file, self._render_index(g)),
+        ):
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_text(content, encoding="utf-8")
+            _os.replace(tmp, target)
         return g
 
     def load(self) -> dict | None:

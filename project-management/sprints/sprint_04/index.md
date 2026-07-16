@@ -1,4 +1,4 @@
-# Sprint 04 — **The Open Brain** (PLANNED — founder gate to open)
+# Sprint 04 — **The Open Brain** (ACTIVE — opened 2026-07-16)
 
 > **Graph node.** Up: [`../00_index.md`](../00_index.md) · Scope source:
 > [graphify learnings T1–T5](../../reference/2026-07-16_graphify_learnings.md) +

@@ -31,6 +31,51 @@ def get_stats() -> dict:
     return _service().build().stats()
 
 
+# ── The query trio (Epic G): deterministic retrieval, zero model calls ──────────
+
+def _loaded_graph() -> dict:
+    graph = _service().load()
+    if graph is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No graph yet — run `./synapse ingest` (or POST /api/v1/ingest) first.",
+        )
+    return graph
+
+
+@router.get("/query")
+def graph_query(q: str, budget: int = 30) -> dict:
+    """Plain-language question → scoped subgraph (lexical seeds + 1-hop, budget-capped)."""
+    if not q.strip():
+        raise HTTPException(status_code=422, detail="Give me a question: /query?q=…")
+    from .query import query as run_query
+    return run_query(_loaded_graph(), q, budget=max(5, min(budget, 200)))
+
+
+@router.get("/path")
+def graph_path(a: str, b: str) -> dict:
+    """Shortest path between two notes (names are fuzzy-resolved; sibling edges excluded)."""
+    from .query import resolve, shortest_path
+    graph = _loaded_graph()
+    ra, rb = resolve(graph, a), resolve(graph, b)
+    missing = [ref for ref, r in ((a, ra), (b, rb)) if r is None]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"No note matches: {', '.join(missing)}")
+    return {"a": ra, "b": rb, **shortest_path(graph, ra, rb)}
+
+
+@router.get("/explain")
+def graph_explain(id: str) -> dict:
+    """One node's card: identity + connections grouped by direction and edge type."""
+    from .query import explain, resolve
+    graph = _loaded_graph()
+    rid = resolve(graph, id)
+    result = explain(graph, rid) if rid else None
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"No note matches '{id}'.")
+    return result
+
+
 @router.post("/rebuild")
 def rebuild(fresh: bool = False) -> dict:
     """Rebuild graph + Index from the vault. `?fresh=true` deletes graph.json FIRST — the UI's

@@ -5,10 +5,32 @@ All notable changes to **SYNAPSE** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — sprint 04 "The Open Brain" (dev-complete, founder acceptance pending)
 
-Nothing yet — v0.2 candidates live in
-[`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
+The brain becomes infrastructure — queryable, always fresh, reachable from your AI assistant:
+
+### Added
+- **The query trio** (deterministic retrieval — no embeddings, no model calls, <100ms warm on
+  a 21k-note brain): `synapse query "…"` (scoped subgraph), `synapse path A B` (shortest chain,
+  hop by hop), `synapse explain ID` (connections grouped) — also as `GET /api/v1/{query,path,explain}`.
+- **Explorer:** ⇢ path mode (click two notes → the shortest path glows gold, statusbar reports
+  hops) and a **⛓ Connections footer** on every open note (grouped by link type, clickable).
+- **MCP server** (`backend/synapse/serve.py`, stdlib stdio): register once —
+  `claude mcp add synapse -- <venv-python> <repo>/backend/synapse/serve.py` — and your coding
+  agent answers from YOUR vault (`query_graph`, `get_note`, `get_neighbors`, `shortest_path`).
+- **Ignore files:** repos' `.gitignore` respected automatically + `.synapseignore` overrides
+  (gitignore-style documented subset; `Archive/` = one line); newly-ignored notes prune on the
+  next sync with honest counts.
+- **Auto-sync:** `synapse hook install` (post-commit/post-checkout, no daemon, output logged,
+  `hook status` honestly reports a broken interpreter) and `synapse watch` for non-git roots.
+- **graph.json schema v3:** every edge carries a `confidence` tag (`EXTRACTED` now;
+  `INFERRED`/`AMBIGUOUS` reserved) — adopted before the first AI-derived edge ships.
+- Atomic graph.json/Index.md writes (background hook rebuilds can never expose a half-written file).
+
+Reviewed: internal fresh-eyes GBU (REVISE → all P1/P2 fixed same session, APPROVE 4.5);
+Codex cross-vendor pass quota-deferred. Evidence: 112/112 backend · 6/6 real-Chromium E2E.
+
+Further v0.2 candidates: [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
 
 ## [0.1.1] — 2026-07-16 · **the clean-machine release**
 

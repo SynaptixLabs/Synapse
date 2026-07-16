@@ -1,0 +1,95 @@
+"""Sprint 04 Epic G/J unit tests — the query trio + schema v3. Zero network, zero models."""
+
+from pathlib import Path
+
+import pytest
+
+from modules.graph.src.query import explain, query, resolve, shortest_path
+from modules.graph.src.services import GraphService
+from modules.ingest.src.services import IngestService
+
+FIXTURES = Path(__file__).resolve().parents[4] / "tests" / "fixtures"
+IGNORE = frozenset({"node_modules", ".venv", ".git", "__pycache__"})
+
+
+@pytest.fixture(scope="module")
+def graph(tmp_path_factory) -> dict:
+    v = tmp_path_factory.mktemp("qvault")
+    IngestService(v, IGNORE).ingest([FIXTURES / "repo_a", FIXTURES / "repo_b"])
+    return GraphService(v).rebuild().to_dict()
+
+
+class TestSchemaV3:
+    def test_edges_carry_confidence_extracted_by_default(self, graph):
+        assert graph["schema_version"] == 3
+        assert graph["edges"], "fixture graph must have edges"
+        assert all(e["confidence"] == "EXTRACTED" for e in graph["edges"])
+        assert all("confidence_score" not in e for e in graph["edges"])   # EXTRACTED = 1.0 implicit
+
+
+class TestResolve:
+    def test_exact_id_wins(self, graph):
+        assert resolve(graph, "repo_a__docs__alpha.md") == "repo_a__docs__alpha.md"
+
+    def test_fuzzy_title(self, graph):
+        assert resolve(graph, "alpha") == "repo_a__docs__alpha.md"
+
+    def test_garbage_is_none(self, graph):
+        assert resolve(graph, "zzznope-nothing") is None
+
+
+class TestExplain:
+    def test_groups_by_direction_and_type(self, graph):
+        out = explain(graph, "repo_a__docs__alpha.md")
+        assert out["node"]["id"] == "repo_a__docs__alpha.md"
+        assert out["degree"] >= 2
+        directions = {g["direction"] for g in out["connections"]}
+        assert "out" in directions and "in" in directions
+
+    def test_unknown_is_none(self, graph):
+        assert explain(graph, "ghost.md") is None
+
+
+class TestPath:
+    def test_cross_repo_path_found_and_deterministic(self, graph):
+        out1 = shortest_path(graph, "repo_a__docs__alpha.md", "repo_b__beta.md")
+        out2 = shortest_path(graph, "repo_a__docs__alpha.md", "repo_b__beta.md")
+        assert out1["found"] and out1 == out2
+        assert out1["hops"][0]["id"] == "repo_a__docs__alpha.md"
+        assert out1["hops"][-1]["id"] == "repo_b__beta.md"
+        assert out1["length"] == len(out1["hops"]) - 1
+
+    def test_sibling_edges_never_carry_a_path(self, graph):
+        """Two notes whose ONLY connection is sharing a repo hub must be unreachable —
+        pathing through 'sibling' would make every same-repo pair trivially connected."""
+        out = shortest_path(graph, "repo_a__docs__alpha.md", "repo_b__beta.md")
+        assert all(h["via"] is None or h["via"]["type"] != "sibling" for h in out["hops"])
+
+    def test_same_node_is_zero_hops(self, graph):
+        out = shortest_path(graph, "repo_a__docs__alpha.md", "repo_a__docs__alpha.md")
+        assert out["found"] and out["length"] == 0
+
+
+class TestQuery:
+    def test_scoped_subgraph_with_seeds_and_neighbors(self, graph):
+        out = query(graph, "what connects alpha to beta?")
+        assert "alpha" in out["terms"] and "beta" in out["terms"]
+        ids = {n["id"] for n in out["nodes"]}
+        assert "repo_a__docs__alpha.md" in ids
+        assert out["seeds"][0] in ids                    # seeds always survive the budget
+        assert all(e["src"] in ids and e["dst"] in ids for e in out["edges"])
+
+    def test_budget_is_honest(self, graph):
+        out = query(graph, "alpha beta readme", budget=5)
+        assert len(out["nodes"]) <= 5
+        # if anything was cut, the result SAYS so
+        full = query(graph, "alpha beta readme", budget=200)
+        if len(full["nodes"]) > 5:
+            assert out["truncated"] is True
+
+    def test_stopword_only_question_is_empty_not_crashy(self, graph):
+        out = query(graph, "what is the of and")
+        assert out["nodes"] == [] and out["seeds"] == []
+
+    def test_deterministic(self, graph):
+        assert query(graph, "alpha readme") == query(graph, "alpha readme")
