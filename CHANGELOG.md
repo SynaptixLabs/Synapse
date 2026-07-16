@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet — v0.2 candidates live in
+### Added
+- **Layman-proof first run** (from a clean-laptop field report): both launchers now run a
+  preflight that names any missing prerequisite (Python 3.11–3.13, Node 20.19+/22+, venv
+  module), shows the exact fix, and offers to install it **only after an explicit yes**
+  (winget on Windows · apt/NodeSource on Linux & WSL). `./start.sh preflight` /
+  `.\start.cmd -Preflight` runs the check standalone. Windows preflight also detects the
+  Microsoft Store's fake `python.exe`.
+- Dev mode now verifies itself: an explicit `✔ Backend is UP` / `✔ Explorer is UP — open
+  http://localhost:5173` line once each server actually answers (or a clear failure after 90s).
+- `.gitattributes` pinning `*.sh` to LF — a Windows-git clone (autocrlf) used to corrupt
+  `start.sh` into `env: 'bash\r'` when run from WSL.
+
+### Fixed
+- `pip install` / `npm install` failures inside the launchers now stop with an actionable
+  message instead of continuing half-set-up.
+
+Further v0.2 candidates live in
 [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
 
 ## [0.1.0] — 2026-07-15 · **the POC** (sprints 01–03, each closed on founder acceptance PASS)

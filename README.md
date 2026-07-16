@@ -64,6 +64,12 @@ git clone https://github.com/SynaptixLabs/Synapse.git && cd Synapse
 
 Windows: `.\start.cmd -Setup` then `.\start.cmd` (same flags: `-Test`, `-Status`, `-Stop`).
 
+**Clean machine?** Both launchers check prerequisites first. Anything missing (Python, Node.js)
+is named with the exact command that fixes it and offered for install **only after you say yes**
+(winget on Windows · apt/NodeSource on Linux & WSL). Once running, the launcher confirms with an
+explicit `✔ Backend is UP` / `✔ Explorer is UP — open http://localhost:5173` line. To check
+without starting anything: `./start.sh preflight` (or `.\start.cmd -Preflight`).
+
 Open **http://localhost:5173** — with nothing configured, SYNAPSE indexes **its own repository**,
 so you get a working brain out of the box: search it, click around the graph, read notes as
 wiki articles.
@@ -194,6 +200,9 @@ Chromium E2E job is opt-in via the `ENABLE_E2E_CI` repo variable (see
 | Graph shows "top N by links" instead of everything | Working as designed above ~1,500 notes — zoom in to reveal the long tail, or scope your Sources per-repo |
 | `pytest` collects nothing | Run via `./start.sh test` (or from `backend/`), not from an arbitrary directory |
 | Windows: stale code after editing `.py` | Use `start.ps1` (sets `PYTHONDONTWRITEBYTECODE`); full-stop with `.\start.ps1 -Stop` and restart |
+| Windows: `npm.cmd is not recognized` | Node.js isn't installed — re-run `.\start.cmd` (preflight now offers the install), or `winget install --id OpenJS.NodeJS.LTS`, then open a **new** terminal |
+| Windows: `python` opens the Microsoft Store | That's Windows' fake `python.exe`, not an interpreter — preflight detects it and offers the real install (`winget install --id Python.Python.3.12`) |
+| WSL: `env: 'bash\r': No such file or directory` | The clone was made by **Windows git** before `.gitattributes` existed, so `start.sh` got CRLF endings. Fix in place: `sed -i 's/\r$//' start.sh && ./start.sh` — or `git pull` + re-checkout (current `main` pins `*.sh` to LF, so fresh clones are immune) |
 
 ## Status & roadmap
 

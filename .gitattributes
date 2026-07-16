@@ -1,0 +1,18 @@
+# Line-ending discipline.
+# POSIX scripts MUST check out with LF even on Windows clones (core.autocrlf=true
+# would turn the start.sh shebang into "bash\r" — instant breakage when the same
+# clone is run from WSL). Windows scripts get CRLF for cmd.exe's benefit.
+* text=auto
+*.sh   text eol=lf
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# Binary assets — never eol-converted
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary

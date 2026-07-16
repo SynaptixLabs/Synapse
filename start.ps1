@@ -33,6 +33,7 @@ param(
     [switch]$BackendOnly,
     [switch]$Test,
     [switch]$Status,
+    [switch]$Preflight,
     [switch]$Help,
     [int]$Port = 0
 )
@@ -50,7 +51,7 @@ if ($ScriptDir -match '^(?:Microsoft\.PowerShell\.Core\\FileSystem::)?\\\\wsl(?:
     $wslPath   = $Matches[2] -replace '\\', '/'
     $wslCmd = if ($Setup) { 'setup' } elseif ($Test) { 'test' } elseif ($Status) { 'status' }
               elseif ($Stop) { 'stop' } elseif ($Help) { 'help' } elseif ($Production) { 'production' }
-              elseif ($BackendOnly) { 'dev' } else { $null }
+              elseif ($Preflight) { 'preflight' } elseif ($BackendOnly) { 'dev' } else { $null }
     Write-Host "[start.ps1] WSL-hosted repo ($wslDistro`:$wslPath) - delegating to ./start.sh $wslCmd" -ForegroundColor Cyan
     if ($wslCmd) { & wsl.exe -d $wslDistro --cd $wslPath -- ./start.sh $wslCmd }
     else         { & wsl.exe -d $wslDistro --cd $wslPath -- ./start.sh }
@@ -126,9 +127,104 @@ function Get-BackendDir {
 }
 
 function Find-SystemPython {
-    if (Get-Command python -ErrorAction SilentlyContinue) { return "python" }
-    if (Get-Command py -ErrorAction SilentlyContinue) { return "py" }
+    $py = Get-RealPython
+    if ($py) { return $py.Cmd }
     return $null
+}
+
+# ── Preflight — check prerequisites, offer consented installs ─────────────────
+# Layman-first: name exactly what's missing, offer the fix (winget) only after an
+# explicit yes, refresh PATH so the fix takes effect in THIS session, re-verify.
+# SYNAPSE_SKIP_PREFLIGHT=1 skips all checks.
+
+function Update-SessionPath {
+    # A fresh winget install lands on the Machine/User PATH but not in this session
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
+                [Environment]::GetEnvironmentVariable('Path', 'User')
+}
+
+function Get-RealPython {
+    # Clean Windows ships a FAKE python.exe that opens the Microsoft Store — a real
+    # interpreter must answer --version with "Python 3.x". Supported: 3.11 - 3.13.
+    foreach ($cmd in @('python', 'py')) {
+        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { continue }
+        $v = ((& $cmd --version 2>&1) | Out-String).Trim()
+        if ($v -match 'Python 3\.(\d+)') {
+            $minor = [int]$Matches[1]
+            if ($minor -ge 11 -and $minor -le 13) { return @{ Cmd = $cmd; Version = $v } }
+            $script:PyWrongVersion = $v
+        }
+    }
+    return $null
+}
+
+function Get-NodeState {
+    # vite 7 floor: ^20.19 || >=22.12
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) { return $null }
+    $v = ((& node --version 2>&1) | Out-String).Trim() -replace '^v', ''
+    if ($v -notmatch '^\d+\.\d+') { return $null }
+    $parts = $v -split '\.'
+    $maj = [int]$parts[0]; $min = [int]$parts[1]
+    $ok = ($maj -ge 23) -or ($maj -eq 22 -and $min -ge 12) -or ($maj -eq 20 -and $min -ge 19)
+    return @{ Version = $v; Ok = $ok }
+}
+
+function Install-WithWinget([string]$DisplayName, [string]$WingetId) {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-Host "  winget is not available on this machine - install $DisplayName manually, then re-run." -ForegroundColor Yellow
+        return $false
+    }
+    if ([Console]::IsInputRedirected) {
+        Write-Host "  (non-interactive session - run yourself: winget install --id $WingetId)" -ForegroundColor Yellow
+        return $false
+    }
+    $answer = Read-Host "  $DisplayName is missing. Install it now via winget? [Y/n]"
+    if ($answer -match '^[nN]') { return $false }
+    Write-Host "  Installing $DisplayName (this can take a few minutes)..." -ForegroundColor Cyan
+    & winget install --id $WingetId -e --accept-source-agreements --accept-package-agreements
+    Update-SessionPath
+    return $true
+}
+
+function Confirm-Prerequisites {
+    param([bool]$NeedNode = $true)
+    if ($env:SYNAPSE_SKIP_PREFLIGHT -eq '1') { return }
+    Write-Host "[start.ps1] Checking prerequisites..." -ForegroundColor Cyan
+    $fatal = @()
+
+    $py = Get-RealPython
+    if (-not $py) {
+        if ($script:PyWrongVersion) {
+            Write-Host "  [!] Found $script:PyWrongVersion - supported range is 3.11 - 3.13" -ForegroundColor Yellow
+        }
+        if (Install-WithWinget "Python 3.12" "Python.Python.3.12") { $py = Get-RealPython }
+    }
+    if ($py) { Write-Host "  [OK] $($py.Version) ($($py.Cmd))" -ForegroundColor Green }
+    else { $fatal += "Python 3.11 - 3.13  ->  winget install --id Python.Python.3.12  (or https://www.python.org/downloads/)" }
+
+    if ($NeedNode) {
+        $node = Get-NodeState
+        if ((-not $node) -or (-not $node.Ok)) {
+            if ($node) { Write-Host "  [!] Found Node.js v$($node.Version) - need 20.19+ / 22.12+" -ForegroundColor Yellow }
+            if (Install-WithWinget "Node.js LTS" "OpenJS.NodeJS.LTS") { $node = Get-NodeState }
+        }
+        $npmOk = $null -ne (Get-Command npm.cmd -ErrorAction SilentlyContinue)
+        if ($node -and $node.Ok -and $npmOk) {
+            Write-Host "  [OK] Node.js v$($node.Version) + npm" -ForegroundColor Green
+        } elseif ($node -and $node.Ok) {
+            $fatal += "npm is not on this session's PATH yet - close this terminal, open a NEW one, run .\start.cmd again"
+        } else {
+            $fatal += "Node.js 20.19+/22+ with npm  ->  winget install --id OpenJS.NodeJS.LTS  (or https://nodejs.org), then open a NEW terminal"
+        }
+    }
+
+    if ($fatal.Count -gt 0) {
+        Write-Host ""
+        Write-Host "[start.ps1] Cannot start yet - missing prerequisites:" -ForegroundColor Red
+        foreach ($f in $fatal) { Write-Host "  [X] $f" -ForegroundColor Red }
+        Write-Host "[start.ps1] Fix the above (a NEW terminal picks up fresh installs), then run .\start.cmd again." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Create/refresh the backend venv. Cheap when current: a stamp file tracks the last
@@ -149,7 +245,11 @@ function Update-BackendEnv {
     $stamp = Join-Path $venv ".deps-stamp"
     if ((-not (Test-Path $stamp)) -or ((Get-Item $req).LastWriteTime -gt (Get-Item $stamp).LastWriteTime)) {
         Write-Host "[start.ps1] Installing/updating backend deps (requirements.txt)..." -ForegroundColor Yellow
-        & $venvPy -m pip install -q -r $req
+        & $venvPy -m pip install -q --disable-pip-version-check -r $req
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[start.ps1] [X] pip install failed - fix the error above, then re-run .\start.cmd" -ForegroundColor Red
+            exit 1
+        }
         New-Item -ItemType File -Path $stamp -Force | Out-Null
     }
 }
@@ -163,7 +263,14 @@ function Update-FrontendEnv {
     $stamp = Join-Path (Join-Path $feDir "node_modules") ".deps-stamp"
     if ((-not (Test-Path $stamp)) -or ((Get-Item $pkg).LastWriteTime -gt (Get-Item $stamp).LastWriteTime)) {
         Write-Host "[start.ps1] Installing/updating frontend deps (package.json)..." -ForegroundColor Yellow
-        Push-Location $feDir; npm.cmd install --silent; Pop-Location
+        Push-Location $feDir
+        & npm.cmd install --silent
+        $npmExit = $LASTEXITCODE
+        Pop-Location
+        if ($npmExit -ne 0) {
+            Write-Host "[start.ps1] [X] npm install failed (exit $npmExit) - fix the error above, then re-run .\start.cmd" -ForegroundColor Red
+            exit 1
+        }
         New-Item -ItemType File -Path $stamp -Force | Out-Null
     }
 }
@@ -190,6 +297,7 @@ if ($Help) {
     Write-Host "     .\start.ps1 -BackendOnly   backend only   -   .\start.ps1 -Production"
     Write-Host "     .\start.ps1 -Test       run the test suite"
     Write-Host "     .\start.ps1 -Status     ports + health   -   .\start.ps1 -Stop"
+    Write-Host "     .\start.ps1 -Preflight  check prerequisites only (Python, Node) - offers installs"
     Write-Host ""
     Write-InfoLinks "next"
     Write-Host ""
@@ -230,6 +338,14 @@ if ($Status) {
     }
     return
 }
+
+# ── Preflight (runs for every path that builds/launches: Setup, Test, dev, prod) ──
+# Node/npm only matter when the frontend is in play; -Test/-BackendOnly/-Production
+# must not block on it.
+$needNode = -not ($Test -or $BackendOnly -or $Production)
+if ($Preflight) { $needNode = $true }
+Confirm-Prerequisites -NeedNode $needNode
+if ($Preflight) { Write-Host "[start.ps1] All prerequisites OK." -ForegroundColor Green; return }
 
 # ── Setup command ─────────────────────────────────────
 if ($Setup) {
@@ -362,6 +478,31 @@ if ($startFrontend) {
 }
 Write-Host "  ====================================================" -ForegroundColor DarkCyan
 Write-Host ""
+
+# ═══════════════════════════════════════════════════════
+# STEP 5b: Live verification watcher — prints an explicit "[OK] ... is UP" line
+# (with the URL to open) once each server actually answers, or a clear failure.
+# Runs as a sibling process sharing this console, so it can report while the
+# backend below holds the foreground.
+# ═══════════════════════════════════════════════════════
+if (-not $Production) {
+    $watchUi = if ($startFrontend) { '$true' } else { '$false' }
+    $watchScript = @"
+`$ProgressPreference = 'SilentlyContinue'
+`$ui = $watchUi; `$be = `$false; `$fe = `$false
+for (`$i = 0; `$i -lt 90; `$i++) {
+    if (-not `$be) { try { Invoke-RestMethod 'http://localhost:$Port$HealthPath' -TimeoutSec 2 | Out-Null; `$be = `$true; Write-Host '[start.ps1] [OK] Backend is UP - http://localhost:$Port (docs: http://localhost:$Port/docs)' -ForegroundColor Green } catch {} }
+    if (`$ui -and -not `$fe) { try { Invoke-WebRequest 'http://localhost:$UIPort' -UseBasicParsing -TimeoutSec 2 | Out-Null; `$fe = `$true; Write-Host '[start.ps1] [OK] Explorer is UP - open http://localhost:$UIPort in your browser' -ForegroundColor Green } catch {} }
+    if (`$be -and ((-not `$ui) -or `$fe)) { exit }
+    Start-Sleep 1
+}
+if (-not `$be) { Write-Host '[start.ps1] [X] Backend did not answer on :$Port within 90s - scroll up for the first error.' -ForegroundColor Red }
+if (`$ui -and -not `$fe) { Write-Host '[start.ps1] [X] Explorer did not answer on :$UIPort within 90s - scroll up for the first error.' -ForegroundColor Red }
+"@
+    $watchFile = Join-Path $env:TEMP "synapse-watch-$PID.ps1"
+    Set-Content -Path $watchFile -Value $watchScript -Encoding ASCII
+    Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $watchFile) -NoNewWindow | Out-Null
+}
 
 $beDir = if ($BackendDir -eq ".") { $ScriptDir } else { Join-Path $ScriptDir $BackendDir }
 Push-Location $beDir

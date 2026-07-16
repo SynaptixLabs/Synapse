@@ -94,6 +94,148 @@ cleanup() { log "Shutting down..."; jobs -p 2>/dev/null | xargs -r kill 2>/dev/n
 
 backend_dir() { [ "$BACKEND_DIR" = "." ] && echo "$SCRIPT_DIR" || echo "$SCRIPT_DIR/$BACKEND_DIR"; }
 
+# ── Preflight — check prerequisites, offer consented installs ────────────────
+# Layman-first: name exactly what's missing, show the exact command that fixes it,
+# run NOTHING without an explicit yes, and re-verify afterwards.
+# SYNAPSE_SKIP_PREFLIGHT=1 skips all checks.
+PY_RANGE="3.11 – 3.13"
+
+pick_python() {
+  # newest supported interpreter on PATH (README: Python 3.11–3.13)
+  local c
+  for c in python3.13 python3.12 python3.11 python3 python; do
+    command -v "$c" >/dev/null 2>&1 || continue
+    "$c" -c 'import sys; raise SystemExit(0 if (3,11) <= sys.version_info[:2] <= (3,13) else 1)' 2>/dev/null \
+      && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
+node_ok() {
+  # vite 7 floor: ^20.19 || >=22.12
+  command -v node >/dev/null 2>&1 || return 1
+  local v maj min
+  v=$(node --version 2>/dev/null); v=${v#v}
+  maj=${v%%.*}; min=$(echo "$v" | cut -d. -f2)
+  case "$maj" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$maj" -ge 23 ] && return 0
+  [ "$maj" -eq 22 ] && [ "${min:-0}" -ge 12 ] && return 0
+  [ "$maj" -eq 20 ] && [ "${min:-0}" -ge 19 ] && return 0
+  return 1
+}
+
+preflight() {
+  [ "${SYNAPSE_SKIP_PREFLIGHT:-}" = "1" ] && return 0
+  local need_node="${1:-true}" missing=() apt_pkgs=() need_nodesource=false
+
+  # WSL: a clone under /mnt/<drive> works but is much slower than a clone inside WSL
+  case "$SCRIPT_DIR" in /mnt/*)
+    echo "   ${C_DIM}Tip: this clone lives on the Windows drive — it works, but a clone inside WSL (~/) is much faster.${C_OFF}" ;;
+  esac
+
+  local py=""
+  py=$(pick_python) || true
+  if [ -n "$py" ]; then
+    log "${C_GR}✔${C_OFF} Python $("$py" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])') ($py)"
+    if ! "$py" -c 'import ensurepip' >/dev/null 2>&1; then
+      missing+=("the Python venv module — Debian/Ubuntu ships it as a separate package")
+      apt_pkgs+=("${py##*/}-venv")
+    fi
+  else
+    if command -v python3 >/dev/null 2>&1; then
+      missing+=("a supported Python ($PY_RANGE — found $(python3 --version 2>&1))")
+    else
+      missing+=("Python $PY_RANGE")
+    fi
+    apt_pkgs+=("python3" "python3-venv")
+  fi
+
+  if [ "$need_node" = true ]; then
+    if node_ok && command -v npm >/dev/null 2>&1; then
+      log "${C_GR}✔${C_OFF} Node $(node --version) · npm $(npm --version 2>/dev/null)"
+    else
+      if command -v node >/dev/null 2>&1; then
+        missing+=("a supported Node.js (20.19+ / 22.12+ — found $(node --version 2>/dev/null || echo '?'))")
+      else
+        missing+=("Node.js 20.19+ / 22.12+ (with npm) — needed for the explorer UI")
+      fi
+      need_nodesource=true
+    fi
+  fi
+
+  [ ${#missing[@]} -eq 0 ] && return 0
+
+  echo ""
+  log "Missing prerequisites:"
+  local m; for m in "${missing[@]}"; do echo "     ✖ $m"; done
+  echo ""
+  if [ "${_PREFLIGHT_RETRIED:-}" = "1" ]; then
+    log "✖ Still missing after the install — open a NEW terminal and run ./start.sh again."
+    exit 1
+  fi
+
+  # Build the install plan for THIS machine (shown in full before anything runs)
+  local plan=()
+  if command -v apt-get >/dev/null 2>&1; then
+    # curl/lsof ride along: nodesource needs curl; status/stop use lsof
+    command -v curl >/dev/null 2>&1 || apt_pkgs+=("curl")
+    command -v lsof >/dev/null 2>&1 || apt_pkgs+=("lsof")
+    [ ${#apt_pkgs[@]} -gt 0 ] && plan+=("sudo apt-get update -qq && sudo apt-get install -y ${apt_pkgs[*]}")
+    if $need_nodesource; then
+      plan+=("curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -")
+      plan+=("sudo apt-get install -y nodejs")
+    fi
+  elif command -v brew >/dev/null 2>&1; then
+    [ ${#apt_pkgs[@]} -gt 0 ] && plan+=("brew install python@3.12")
+    $need_nodesource && plan+=("brew install node@22 && brew link --overwrite node@22")
+  else
+    log "No supported package manager found (apt-get / brew) — install manually, then re-run ./start.sh:"
+    echo "     Python $PY_RANGE:  https://www.python.org/downloads/"
+    echo "     Node.js 22 LTS:    https://nodejs.org/"
+    exit 1
+  fi
+
+  log "These commands will fix it (nothing runs without your OK):"
+  local p; for p in "${plan[@]}"; do echo "     ${C_CY}$p${C_OFF}"; done
+  echo ""
+  if [ ! -t 0 ]; then
+    log "Non-interactive session — run the commands above yourself, then re-run ./start.sh"
+    exit 1
+  fi
+  printf "[start.sh] Install now? [Y/n] "
+  local answer; read -r answer
+  case "$answer" in [nN]*) log "Skipped — run the commands above, then re-run ./start.sh"; exit 1 ;; esac
+  for p in "${plan[@]}"; do
+    log "Running: $p"
+    bash -c "$p" || { log "✖ Install step failed — fix the error above, then re-run ./start.sh"; exit 1; }
+  done
+
+  _PREFLIGHT_RETRIED=1
+  preflight "$need_node"   # honest re-verify — success prints the ✔ lines
+}
+
+# Background verifier for dev mode: report when the stack ACTUALLY answers,
+# so a first-time user gets an explicit "it works, open this URL" (or a clear failure).
+watch_stack() {
+  local want_ui="$1" be_ok=false fe_ok=false i=0
+  command -v curl >/dev/null 2>&1 || return 0
+  while [ $i -lt 90 ]; do
+    if ! $be_ok && curl -sf -o /dev/null "http://localhost:$PORT$HEALTH_PATH" 2>/dev/null; then
+      be_ok=true
+      echo "[start.sh] ${C_GR}✔ Backend is UP${C_OFF} — http://localhost:$PORT (docs: /docs)"
+    fi
+    if [ "$want_ui" = true ] && ! $fe_ok && curl -sf -o /dev/null "http://localhost:$UI_PORT" 2>/dev/null; then
+      fe_ok=true
+      echo "[start.sh] ${C_GR}✔ Explorer is UP${C_OFF} — open ${C_CY}http://localhost:$UI_PORT${C_OFF} in your browser"
+    fi
+    if $be_ok && { [ "$want_ui" != true ] || $fe_ok; }; then return 0; fi
+    sleep 1; i=$((i + 1))
+  done
+  $be_ok || echo "[start.sh] ✖ Backend did not answer on :$PORT within 90s — scroll up for the first error." >&2
+  [ "$want_ui" = true ] && ! $fe_ok && echo "[start.sh] ✖ Explorer did not answer on :$UI_PORT within 90s — scroll up for the first error." >&2
+  return 0
+}
+
 # Create/refresh the backend venv. Cheap when current: a stamp file tracks the last install,
 # so deps re-install only when requirements.txt is newer (that's the "update" in update-the-env).
 ensure_backend_env() {
@@ -103,12 +245,15 @@ ensure_backend_env() {
   [ -f "$req" ] || return 0
   if [ ! -x "$venv/bin/python" ]; then
     log "Creating backend venv..."
-    python3 -m venv "$venv"
+    local sys_py; sys_py=$(pick_python) || sys_py=python3
+    "$sys_py" -m venv "$venv" || { log "✖ venv creation failed — on Debian/Ubuntu: sudo apt-get install ${sys_py##*/}-venv"; exit 1; }
   fi
   local stamp="$venv/.deps-stamp"
   if [ ! -f "$stamp" ] || [ "$req" -nt "$stamp" ]; then
     log "Installing/updating backend deps (requirements.txt)..."
-    "$venv/bin/pip" install -q -r "$req" && touch "$stamp"
+    "$venv/bin/pip" install -q --disable-pip-version-check -r "$req" \
+      || { log "✖ pip install failed — fix the error above, then re-run ./start.sh"; exit 1; }
+    touch "$stamp"
   fi
 }
 
@@ -120,7 +265,9 @@ ensure_frontend_env() {
   [ -f "$pkg" ] || return 0
   if [ ! -d "$fe_dir/node_modules" ] || [ ! -f "$stamp" ] || [ "$pkg" -nt "$stamp" ]; then
     log "Installing/updating frontend deps (package.json)..."
-    (cd "$fe_dir" && npm install --silent) && touch "$stamp"
+    (cd "$fe_dir" && npm install --silent) \
+      || { log "✖ npm install failed — fix the error above, then re-run ./start.sh"; exit 1; }
+    touch "$stamp"
   fi
 }
 
@@ -136,6 +283,7 @@ cmd_help() {
   echo "     ./start.sh production   production server (Docker/CI — no reload)"
   echo "     ./start.sh test         run the test suite"
   echo "     ./start.sh status       ports + health   ·   ./start.sh stop"
+  echo "     ./start.sh preflight    check prerequisites only (Python, Node) — offers installs"
   echo ""
   info_links next
   echo ""
@@ -145,6 +293,7 @@ cmd_help() {
 
 cmd_setup() {
   log "Setting up / updating the environment..."
+  preflight true
   ensure_backend_env
   ensure_frontend_env
   # .env from the example (never overwrites an existing one)
@@ -195,6 +344,7 @@ cmd_status() {
 }
 
 cmd_test() {
+  preflight false
   local PY; PY="$(find_python)"
   if [ "$BACKEND_TYPE" = "python" ]; then
     cd "$SCRIPT_DIR/$BACKEND_DIR"
@@ -226,6 +376,7 @@ cmd_dev() {
   trap cleanup EXIT   # dev runs a background frontend job; reap it on exit
   local with_ui=false
   [[ "${1:-}" == "--ui" ]] && with_ui=true
+  preflight "$with_ui"
 
   local PY=""
   if [ "$BACKEND_TYPE" = "python" ]; then
@@ -269,6 +420,8 @@ cmd_dev() {
   echo "  ${C_CY}════════════════════════════════════════════════════${C_OFF}"
   echo ""
 
+  ( watch_stack "$with_ui" ) &   # prints "✔ … is UP" when the stack actually answers
+
   cd "$be_dir"
   if [ "$BACKEND_TYPE" = "python" ]; then
     local reload_args="--reload"
@@ -289,7 +442,8 @@ case "${1:-}" in
   status)         cmd_status ;;
   test)           shift; cmd_test "$@" ;;
   dev)            shift; cmd_dev "$@" ;;
-  production)     cmd_production ;;
+  preflight)      preflight true && log "All prerequisites OK."; exit 0 ;;
+  production)     preflight false; cmd_production ;;
   help|-h|--help) cmd_help; exit 0 ;;
   *)              log "Unknown command: '$1'"; cmd_help; exit 2 ;;
 esac
