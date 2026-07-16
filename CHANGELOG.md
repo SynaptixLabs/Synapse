@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Nothing yet — v0.2 candidates live in
+[`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
+
+## [0.1.1] — 2026-07-16 · **the clean-machine release**
+
+First-run hardening driven by a real clean-laptop field report, plus in-app model keys —
+reviewed by an internal fresh-eyes pass **and** a Codex cross-vendor pass (all findings fixed).
+
 ### Added
 - **In-app model keys**: the AI panel now shows each model's status on load (mock badge ·
   ready with a masked key tail · "needs an … key"), and missing keys can be pasted straight
@@ -33,9 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (unique 0600 temp file, no crash-window leftovers, `.gitignore`d); the keys E2E assertions
   can actually fail and its write flow is double-gated (`E2E_KEYS_WRITE_OK=1` + keyless);
   API tests no longer read the developer's real `backend/.env`.
-
-Further v0.2 candidates live in
-[`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
 
 ## [0.1.0] — 2026-07-15 · **the POC** (sprints 01–03, each closed on founder acceptance PASS)
 

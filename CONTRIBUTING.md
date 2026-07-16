@@ -1,6 +1,11 @@
 # Contributing
 
-Thanks for improving SYNAPSE. Two areas, two rulebooks:
+Thanks for improving SYNAPSE. We follow the
+[Contributor Covenant](CODE_OF_CONDUCT.md); security issues go through
+[SECURITY.md](SECURITY.md), not public issues. Good entry points are labeled
+[`good first issue`](https://github.com/SynaptixLabs/Synapse/labels/good%20first%20issue).
+
+Two areas, two rulebooks:
 
 ## Contributing to the app (backend / frontend)
 

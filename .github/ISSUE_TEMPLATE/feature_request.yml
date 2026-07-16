@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose an improvement or a new capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Start from the user story, not the mechanism.
+      placeholder: When my brain has notes from N machines, I can't …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach (optional)
+      description: |
+        Sketch welcome. Two project invariants to design within: the **vault is the source
+        of truth** (the graph must always be rebuildable from markdown alone), and **model
+        calls stay behind the provider seams** (mockable, zero paid calls in CI).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing issues and `project-management/0m_BACKLOG.md` for overlap
+          required: true
