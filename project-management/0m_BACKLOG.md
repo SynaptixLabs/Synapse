@@ -13,8 +13,9 @@
    their sources change (staleness marks on `S —` notes whose cited sources' hashes moved).
 3. **Chat query** — the explorer's AI panel has the slot ("Chat — TBD"); querying is
    Index-first via the graph, answers grounded with the same `(vault: …)` citation gate.
-4. **Scheduled re-index** — watch mode / cron ingest; the sync semantics (prune + errors
-   ledger) are already built for it.
+4. **Scheduled re-index / auto-aware sync** — watch mode / cron ingest; the sync semantics
+   (prune + errors ledger) are already built for it. **Founder-prioritized 2026-07-16**
+   ("auto update when files are CRUDed — auto-aware") — [issue #6](https://github.com/SynaptixLabs/Synapse/issues/6).
 
 ## Earned during the POC (scale + quality debts, all founder-flagged)
 
@@ -51,4 +52,16 @@
     mock badge (Codex finding); a second keyless backend on a scratch `SYNAPSE_ENV_FILE` with
     `E2E_KEYS_WRITE_OK=1` would cover the browser write path end-to-end.
 
-— `cpto` (JANUS), 2026-07-15 (items 12–13 appended 2026-07-16)
+## Founder wave 2026-07-16 (post-contribution-launch)
+
+14. **Per-root ignore patterns** — `Archive/` and friends: user-configurable ignore dirs per
+    source root (Sources UI + `roots.json`), on top of the hardcoded `DEFAULT_IGNORE_DIRS`;
+    ignored folders' notes prune on the next sync with honest counts.
+15. **Beyond markdown — multimedia second brain (BIG, founder-flagged)** — ingest and index
+    images, PDFs, videos, office docs (family photos, scans, …), not just `.md`. Design
+    doctrine: every asset gets a **sidecar markdown note** in the vault (the vault stays the
+    markdown source of truth) carrying metadata + an AI-derived description through the
+    existing model seams (mockable, cost-guarded). Staged: PDFs + images first, video/audio
+    later. This graduates SYNAPSE from repo-brain to *household* brain — positioning-relevant.
+
+— `cpto` (JANUS), 2026-07-15 (12–13 appended, 14–15 founder wave, 2026-07-16)
