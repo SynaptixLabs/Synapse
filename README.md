@@ -64,6 +64,9 @@ git clone https://github.com/SynaptixLabs/Synapse.git && cd Synapse
 
 Windows: `.\start.cmd -Setup` then `.\start.cmd` (same flags: `-Test`, `-Status`, `-Stop`).
 
+**WSL tip:** clone inside the WSL filesystem (`cd ~ && git clone …`), not under `/mnt/c/…` —
+it's noticeably faster and immune to Windows line-ending surprises.
+
 **Clean machine?** Both launchers check prerequisites first. Anything missing (Python, Node.js)
 is named with the exact command that fixes it and offered for install **only after you say yes**
 (winget on Windows · apt/NodeSource on Linux & WSL). Once running, the launcher confirms with an
