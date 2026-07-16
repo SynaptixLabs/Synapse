@@ -89,14 +89,19 @@ This is also exactly what CI runs.
 
 ### Go live (real models)
 
-Put your keys in `backend/.env` (created by setup, never committed):
+The AI panel tells you where you stand: on load it shows each model's status, and when a key
+is missing you get a **＋ Add keys here** form right in the panel — paste a key, it's saved to
+`backend/.env` (git-ignored) and **applied immediately, no restart**. Key values never come
+back from the API — only a masked tail (`…abcd`).
+
+Prefer files? Put the keys in `backend/.env` yourself (created by setup, never committed):
 
 ```ini
 ANTHROPIC_API_KEY=sk-ant-...      # model #1 — Distill (default: claude-sonnet-5)
 OPENAI_API_KEY=sk-...             # model #2 — Render (gpt-image-1; requires a VERIFIED OpenAI org)
 ```
 
-Restart, open a note, hit **✦ Distill**. Distillations above the token threshold ask before
+Open a note, hit **✦ Distill**. Distillations above the token threshold ask before
 spending (in-app cost guard); a bad key surfaces as a clear, actionable error — not a stack trace.
 
 ## Point it at *your* repos

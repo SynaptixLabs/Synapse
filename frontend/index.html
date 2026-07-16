@@ -49,6 +49,8 @@
       .aibtn { display:block; width:100%; text-align:left; margin-top:0.35rem; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.4rem 0.6rem; font-size:0.8rem; cursor:pointer; }
       .aibtn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
       .aibtn:disabled { opacity:0.45; cursor:default; }
+      .keyinput { display:block; width:100%; box-sizing:border-box; margin-top:0.35rem; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:0.4rem 0.6rem; font-size:0.75rem; }
+      #model-status a { color:var(--accent); cursor:pointer; }
 
       /* drag handles: a visible grip pill, wide hit area, dblclick = reset width */
       .rs { cursor:col-resize; position:relative; background:transparent; }
@@ -207,6 +209,13 @@
         <div class="ai">
           <h4 style="margin:0 0 0.3rem">AI</h4>
           <div class="muted">Chat — TBD</div>
+          <div class="muted" id="model-status" style="font-size:0.72rem"></div>
+          <div id="keyform" style="display:none">
+            <input class="keyinput" type="password" id="key-anthropic" placeholder="Anthropic key (sk-ant-…) — Distill" autocomplete="off" spellcheck="false">
+            <input class="keyinput" type="password" id="key-openai" placeholder="OpenAI key (sk-…) — Render" autocomplete="off" spellcheck="false">
+            <button class="aibtn" onclick="saveModelKeys()">✔ Save keys (applied immediately)</button>
+            <div class="muted" id="keyform-note" style="font-size:0.7rem"></div>
+          </div>
           <button class="aibtn" id="ai-distill" onclick="aiDistill('node')" disabled>✦ Distill (note + neighbors)</button>
           <button class="aibtn" id="ai-distill-tree" onclick="aiDistill('subtree')" disabled>✧ Distill wider (depth 2)</button>
           <button class="aibtn" id="ai-render" onclick="aiRender()" disabled>▣ Render as image</button>

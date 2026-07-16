@@ -229,3 +229,58 @@ def test_delete_summary_only(client, monkeypatch):
     client.post("/api/v1/rebuild")
     graph = client.get("/api/v1/graph").json()
     assert not any(n["id"] == sid for n in graph["nodes"])
+
+
+# ── In-app model keys (models/status + models/keys) ─────────────────────────────
+# Status must be honest, writes atomic and file-preserving, and key VALUES must
+# never appear in any response. SYNAPSE_ENV_FILE isolates the real backend/.env.
+
+class TestModelKeys:
+    @pytest.fixture
+    def keyless(self, client, tmp_path, monkeypatch) -> TestClient:
+        monkeypatch.setenv("SYNAPSE_ENV_FILE", str(tmp_path / "envdir" / ".env"))
+        for var in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SYNAPSE_MOCK_MODELS"):
+            monkeypatch.delenv(var, raising=False)
+        return client
+
+    def test_status_reports_unconfigured_and_points_at_the_env_file(self, keyless):
+        s = keyless.get("/api/v1/models/status").json()
+        assert s["mock"] is False
+        assert s["distill"]["configured"] is False and s["distill"]["key_hint"] is None
+        assert s["render"]["configured"] is False and s["render"]["key_hint"] is None
+        assert s["env_file"]                      # the manual path stays visible in the UI
+
+    def test_mock_mode_is_reported(self, keyless, monkeypatch):
+        monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
+        assert keyless.get("/api/v1/models/status").json()["mock"] is True
+
+    def test_save_key_goes_live_without_restart_and_never_echoes(self, keyless, tmp_path):
+        import os
+        r = keyless.post("/api/v1/models/keys", json={"anthropic_key": "sk-ant-test-1234abcd"})
+        assert r.status_code == 200
+        assert "sk-ant-test-1234abcd" not in r.text            # the value NEVER comes back
+        s = r.json()
+        assert s["distill"]["configured"] is True and s["distill"]["key_hint"] == "…abcd"
+        env = (tmp_path / "envdir" / ".env").read_text(encoding="utf-8")
+        assert "ANTHROPIC_API_KEY=sk-ant-test-1234abcd" in env
+        assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-test-1234abcd"   # live process env
+
+    def test_upsert_replaces_placeholder_and_preserves_every_other_line(self, keyless, tmp_path):
+        env_file = tmp_path / "envdir" / ".env"
+        env_file.parent.mkdir(parents=True, exist_ok=True)
+        env_file.write_text(
+            "# my precious comment\nPORT=8000\nANTHROPIC_API_KEY=sk-ant-REPLACE-ME\n",
+            encoding="utf-8")
+        keyless.post("/api/v1/models/keys",
+                     json={"anthropic_key": "sk-ant-new-1234wxyz", "openai_key": "sk-test-9999zzzz"})
+        env = env_file.read_text(encoding="utf-8")
+        assert "# my precious comment" in env and "PORT=8000" in env
+        assert env.count("ANTHROPIC_API_KEY=") == 1             # replaced in place, not duplicated
+        assert "ANTHROPIC_API_KEY=sk-ant-new-1234wxyz" in env
+        assert "OPENAI_API_KEY=sk-test-9999zzzz" in env         # appended
+
+    def test_bad_keys_are_rejected(self, keyless):
+        assert keyless.post("/api/v1/models/keys", json={}).status_code == 422
+        assert keyless.post("/api/v1/models/keys", json={"anthropic_key": "   "}).status_code == 422
+        assert keyless.post("/api/v1/models/keys", json={"anthropic_key": "has spaces"}).status_code == 422
+        assert keyless.post("/api/v1/models/keys", json={"openai_key": "short"}).status_code == 422

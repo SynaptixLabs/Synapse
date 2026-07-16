@@ -61,6 +61,7 @@ async def health() -> dict:
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from app.core.config import load_settings  # noqa: E402
+from app.keys_api import router as keys_router  # noqa: E402
 from modules.distill.src.api import router as distill_router  # noqa: E402
 from modules.graph.src.api import router as graph_router  # noqa: E402
 from modules.ingest.src.api import router as ingest_router  # noqa: E402
@@ -70,6 +71,7 @@ app.include_router(ingest_router)
 app.include_router(graph_router)
 app.include_router(distill_router)
 app.include_router(render_router)
+app.include_router(keys_router)
 
 # generated images are vault artifacts — serve them for the explorer
 _media = load_settings().media_dir

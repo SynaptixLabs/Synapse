@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **In-app model keys**: the AI panel now shows each model's status on load (mock badge ·
+  ready with a masked key tail · "needs an … key"), and missing keys can be pasted straight
+  into the panel — saved to `backend/.env` and applied live, no restart
+  (`GET/POST /api/v1/models/{status,keys}`; values are never echoed back). E2E:
+  `tests/e2e/keys_panel.spec.mjs`.
 - **Layman-proof first run** (from a clean-laptop field report): both launchers now run a
   preflight that names any missing prerequisite (Python 3.11–3.13, Node 20.19+/22+, venv
   module), shows the exact fix, and offers to install it **only after an explicit yes**

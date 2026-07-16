@@ -39,6 +39,13 @@ def _load_dotenv(path: Path) -> None:
             os.environ[key] = value
 
 
+def env_file_path() -> Path:
+    """The .env file the app reads AND the in-app key editor writes.
+    Overridable via SYNAPSE_ENV_FILE (tests / scratch stacks must never touch the real one)."""
+    override = os.environ.get("SYNAPSE_ENV_FILE")
+    return Path(override) if override else BACKEND_DIR / ".env"
+
+
 def _resolve(p: str) -> Path:
     path = Path(p)
     return path if path.is_absolute() else (REPO_ROOT / path).resolve()
@@ -114,7 +121,7 @@ class Settings:
 def load_settings() -> Settings:
     """Read `backend/.env` + process env into a Settings snapshot (call-time, not import-time,
     so tests can point SYNAPSE_VAULT_PATH at tmp dirs)."""
-    _load_dotenv(BACKEND_DIR / ".env")
+    _load_dotenv(env_file_path())
     env_repos = tuple(
         _resolve(p.strip())
         for p in os.environ.get("SYNAPSE_SOURCE_REPOS", "").split(",")

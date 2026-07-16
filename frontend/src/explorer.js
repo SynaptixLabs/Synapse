@@ -662,6 +662,49 @@ function aiButtons() {
 // note-open side effects (AI buttons, graph focus, acceptance) live in the reader's onOpen
 // callback (top of this file) — a monkey-patch here would miss in-body wikilink clicks + Back.
 
+// ── Model keys — the app SAYS what's configured and takes keys in-app ─────────
+// Status on load; unconfigured models get a one-click "Add keys" form. Keys are
+// saved to the backend's env file AND applied live (no restart). Values never
+// come back from the server — only presence + a masked tail.
+async function refreshModelStatus() {
+  const el = $('model-status'); if (!el) return;
+  try {
+    const s = await api('/models/status');
+    if (s.mock) {
+      el.innerHTML = '🧪 mock mode — model calls are simulated (unset SYNAPSE_MOCK_MODELS to go live)';
+      $('keyform').style.display = 'none';
+      return;
+    }
+    const providerName = { anthropic: 'Anthropic', openai: 'OpenAI' };
+    const row = (icon, label, m) => m.configured
+      ? `<div>✓ ${icon} ${label} ready — ${esc(m.model)} (key ${esc(m.key_hint || 'set')})</div>`
+      : `<div>✗ ${icon} ${label} needs an ${esc(providerName[m.provider] || m.provider)} key</div>`;
+    const allSet = s.distill.configured && s.render.configured;
+    el.innerHTML = row('✦', 'Distill', s.distill) + row('▣', 'Render', s.render)
+      + (allSet ? '' : `<div><a onclick="showKeyForm()">＋ Add keys here</a> · or edit <b>${esc(s.env_file)}</b></div>`);
+    if (allSet) $('keyform').style.display = 'none';
+  } catch { /* backend down — the health pill already says so */ }
+}
+window.showKeyForm = () => {
+  const f = $('keyform');
+  f.style.display = f.style.display === 'none' ? '' : 'none';
+  if (f.style.display !== 'none') $('key-anthropic').focus();
+};
+window.saveModelKeys = async () => {
+  const a = $('key-anthropic').value.trim(), o = $('key-openai').value.trim();
+  const note = $('keyform-note');
+  if (!a && !o) { note.textContent = 'paste at least one key'; return; }
+  note.textContent = 'saving…';
+  try {
+    const s = await api('/models/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anthropic_key: a || null, openai_key: o || null }) });
+    $('key-anthropic').value = ''; $('key-openai').value = '';
+    note.textContent = `✓ saved to ${s.env_file} — live now, no restart needed`;
+    await refreshModelStatus();
+    setMsg('model keys saved — distill/render are live');
+  } catch (e) { note.textContent = e.message; }
+};
+
 window.aiDistill = async (scope) => {
   if (!currentOpenId) return;
   const node = currentOpenId;
@@ -731,4 +774,5 @@ refresh = async function () {
 
 health($('health'));
 refresh();
+refreshModelStatus();
 acRender();
