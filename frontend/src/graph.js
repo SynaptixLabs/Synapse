@@ -540,6 +540,6 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
-    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, path: pathIds ? [...pathIds] : null, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => ({ ...(sim.p.get(`repo:${repo}`) ?? {}) }), posOf: (id) => (nodes.some(n => n.id === id) ? { ...(sim.p.get(id) ?? {}) } : {}) }),
+    state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, path: pathIds ? [...pathIds] : null, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => (nodes.some(n => n.id === `repo:${repo}`) ? { ...(sim.p.get(`repo:${repo}`) ?? {}) } : {}), posOf: (id) => (nodes.some(n => n.id === id) ? { ...(sim.p.get(id) ?? {}) } : {}) }),
   };
 }

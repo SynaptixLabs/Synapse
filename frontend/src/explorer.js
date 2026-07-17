@@ -264,27 +264,92 @@ let vNodes = [], vEdges = [];   // the DISPLAY view (grouped); search/reader kee
 // hide/show toggle in the glossary (founder ask). Display-only: ids, search and wiki
 // resolution stay on the original fields.
 const GROUP_SPLIT = 1500;
+// ── Type lens (founder ask): filter the view by node type + regroup assets ───
+// Display-only, like everything in this pipeline: search/reader/ids never change.
+const LENS_KEY = 'synapse.lens';
+const _lens = JSON.parse(localStorage.getItem(LENS_KEY) ?? '{}');
+const hiddenTypes = new Set(_lens.hidden ?? []);
+let assetsGrouped = _lens.assetsGrouped ?? true;   // 📷 assets as their own hull, default ON
+function lensSave() {
+  localStorage.setItem(LENS_KEY, JSON.stringify({ hidden: [...hiddenTypes], assetsGrouped }));
+}
+function nodeTypeOf(n) {
+  if (n.repo === '✦ summaries' || n.repo?.startsWith('✦ summaries')) return 'distill';
+  if (n.tags?.includes('asset:image')) return 'image';
+  if (n.tags?.includes('asset:pdf')) return 'pdf';
+  return 'note';
+}
+
 function groupView() {
+  const pool = nodes.filter(n => n.kind !== 'note' || !hiddenTypes.has(nodeTypeOf(n)));
+  const isAsset = (n) => assetsGrouped && (n.tags?.[0] ?? '').startsWith('asset:');
   const counts = {};
-  for (const n of nodes) if (n.kind === 'note') counts[n.repo] = (counts[n.repo] ?? 0) + 1;
+  for (const n of pool) if (n.kind === 'note' && !isAsset(n)) counts[n.repo] = (counts[n.repo] ?? 0) + 1;
   const split = new Set(Object.keys(counts).filter(r => counts[r] > GROUP_SPLIT));
-  if (!split.size) return { vnodes: nodes, vedges: edges };
+  const anyAssets = pool.some(n => n.kind === 'note' && isAsset(n));
+  if (!split.size && !anyAssets && !hiddenTypes.size) return { vnodes: nodes, vedges: edges };
   const groups = new Set();
-  const vnotes = nodes.filter(n => n.kind === 'note').map(n => {
-    const g = split.has(n.repo)
-      ? `${n.repo} / ${n.source_path.includes('/') ? n.source_path.split('/')[0] : '·root'}`
-      : n.repo;
+  const vnotes = pool.filter(n => n.kind === 'note').map(n => {
+    const g = isAsset(n) ? `${n.repo} / 📷 assets`
+      : split.has(n.repo)
+        ? `${n.repo} / ${n.source_path.includes('/') ? n.source_path.split('/')[0] : '·root'}`
+        : n.repo;
     groups.add(g);
     return { ...n, repo: g };
   });
+  const ids = new Set(vnotes.map(n => n.id));
   const vhubs = [...groups].sort().map(g => ({
     id: `repo:${g}`, kind: 'repo', title: g.includes(' / ') ? g.split(' / ')[1] : g,
     repo: g, source_path: '', in_degree: 0, out_degree: 0, unresolved: [],
   }));
-  const vedges = edges.filter(e => e.type !== 'sibling')
+  const vedges = edges.filter(e => e.type !== 'sibling' && ids.has(e.src) && ids.has(e.dst))
     .concat(vnotes.map(n => ({ src: n.id, dst: `repo:${n.repo}`, type: 'sibling' })));
   return { vnodes: [...vnotes, ...vhubs], vedges };
 }
+
+// rebuild the display pipeline in place (type/regroup toggles) — camera/pins preserved
+function rebuildView() {
+  ({ vnodes: vNodes, vedges: vEdges } = groupView());
+  _vRepo = null;
+  const view = windowed();
+  const vg = withGhosts(view.n, view.e);
+  graph.setData(vg.n, vg.e, { preserve: true });
+  sendStatics();
+  buildTypebar();
+  const hiddenN = nodes.filter(n => n.kind === 'note' && hiddenTypes.has(nodeTypeOf(n))).length;
+  if (stats) {
+    const shown = view.n.filter(x => x.kind === 'note').length;
+    $('st-notes').textContent = `${stats.notes} notes` +
+      (hiddenN ? ` · ${hiddenN} filtered by type` : '') +
+      (winIds ? ` · graph: top ${shown} by links · zoom reveals the rest` : '');
+  }
+}
+
+function buildTypebar() {
+  const el = $('typebar'); if (!el) return;
+  const counts = { note: 0, image: 0, pdf: 0, distill: 0 };
+  for (const n of nodes) if (n.kind === 'note') counts[nodeTypeOf(n)]++;
+  const PILLS = [['note', '📝'], ['image', '📷'], ['pdf', '📄'], ['distill', '✦']];
+  let html = PILLS.filter(([t]) => counts[t] > 0)
+    .map(([t, icon]) => {
+      const off = hiddenTypes.has(t);
+      return `<button class="pill ${off ? 'off' : ''}" data-type="${t}" title="${off ? 'show' : 'hide'} ${t}s">${icon} ${counts[t]}</button>`;
+    }).join('');
+  if (counts.image + counts.pdf > 0) {
+    html += `<button class="pill ${assetsGrouped ? '' : 'off'}" data-regroup="1" title="assets as their own group (hull) vs mixed into folders">📦 ${assetsGrouped ? 'assets grouped' : 'assets mixed'}</button>`;
+  }
+  el.innerHTML = html;
+}
+window.toggleType = (t) => {
+  hiddenTypes.has(t) ? hiddenTypes.delete(t) : hiddenTypes.add(t);
+  lensSave(); rebuildView();
+  setMsg(hiddenTypes.has(t) ? `${t}s hidden from the graph (search still finds them)` : `${t}s shown`);
+};
+window.toggleAssetsGroup = () => {
+  assetsGrouped = !assetsGrouped;
+  lensSave(); rebuildView();
+  setMsg(assetsGrouped ? '📦 assets grouped into their own hull per source' : 'assets mixed into their folders');
+};
 let _vRepo = null;   // cached id → display-group map (rebuilt per refresh)
 const vRepoOf = () => (_vRepo ??= new Map(vNodes.filter(n => n.kind === 'note').map(n => [n.id, n.repo])));
 
@@ -397,6 +462,7 @@ async function refresh() {
     const vg = withGhosts(view.n, view.e);   // Epic N: ghosts ride on top when toggled
     graph.setData(vg.n, vg.e);
     sendStatics();
+    buildTypebar();
     $('st-notes').textContent = winIds
       ? `${stats.notes} notes · graph: top ${view.n.filter(x => x.kind === 'note').length} by links · zoom reveals the rest`
       : `${stats.notes} notes`;
@@ -939,3 +1005,10 @@ refreshModelStatus();
 acRender();
 // app version in the statusbar — single source of truth: package.json (via vite define)
 try { $('appver').textContent = `v${__APP_VERSION__} · `; } catch { /* dev without define */ }
+
+// type-lens pill clicks (delegated — the bar rebuilds on every refresh)
+$('typebar').addEventListener('click', (ev) => {
+  const pill = ev.target.closest('.pill'); if (!pill) return;
+  if (pill.dataset.type) toggleType(pill.dataset.type);
+  else if (pill.dataset.regroup) toggleAssetsGroup();
+});
