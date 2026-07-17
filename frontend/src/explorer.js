@@ -684,7 +684,7 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'ArrowLeft' && ev.altKey) reader.back();
 });
 
-// ── sprint-2 acceptance tracker: auto-PASS steps as the app proves them ────
+// ── silent usage flags (no UI): the E2E suites assert real user flows through these ──
 const AC_KEY = 'synapse.acceptance.s4';
 const ac = JSON.parse(localStorage.getItem(AC_KEY) ?? '{}');
 ac.notesOpened = new Set(ac.notesOpened ?? []);
@@ -693,34 +693,10 @@ function acSave() {
   localStorage.setItem(AC_KEY, JSON.stringify({ ...ac, notesOpened: [...ac.notesOpened] }));
   acRender();
 }
-function acRender() {
-  // sprint-04 checklist (The Open Brain): s41–s43 auto-PASS from app usage; s44–s45 are
-  // manual ticks (CLI/MCP live outside the page). Older sprint flags keep recording —
-  // they double as generic usage instrumentation (and sprint-02's E2E asserts them).
-  const states = {
-    s41: ac.pathFound,
-    s42: ac.explainSeen,
-    s43: ac.prunedSeen,
-    s44: ac.manual_s44,
-    s45: ac.manual_s45,
-  };
-  for (const [id, pass] of Object.entries(states)) {
-    const el = $(id); if (!el) continue;
-    if (id === 's44' || id === 's45') {
-      el.className = 'badge ' + (pass ? 'pass' : '');
-      continue;
-    }
-    el.textContent = pass ? 'PASS' : 'todo';
-    el.className = 'badge ' + (pass ? 'pass' : '');
-  }
-}
-window.manualAccept = (cb, id) => { ac['manual_' + id] = cb.checked; acSave(); };
-window.resetAccept = () => { localStorage.removeItem(AC_KEY); location.reload(); };
-window.toggleAccept = () => $('accept').classList.toggle('open');
-document.addEventListener('click', (ev) => {
-  if ($('accept').classList.contains('open') &&
-      !ev.target.closest('#accept') && !ev.target.closest('.item')) $('accept').classList.remove('open');
-});
+// The acceptance PANEL is gone (founder call 2026-07-17: no in-app acceptance ceremony).
+// The silent usage flags above stay — they cost nothing and the E2E suites assert real
+// user flows through them (localStorage `synapse.acceptance.s4`).
+function acRender() { /* no panel to render */ }
 
 // hooks into the real interactions
 let currentOpenId = null;

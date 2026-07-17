@@ -115,16 +115,13 @@ await page.click('text=⟲ reset layout');
 await page.waitForFunction(() => window.__synapse.graph().pinned.length === 0);
 await page.waitForTimeout(1200);
 
-// sprint-2's flows are still asserted (the app keeps recording them as usage flags);
-// the VISIBLE acceptance panel now belongs to the active sprint (founder UI-first doctrine)
+// sprint-2's flows are asserted through the silent usage flags (the visible acceptance
+// panel was removed entirely — founder call 2026-07-17)
 await page.waitForFunction(() => {
   const s = JSON.parse(localStorage.getItem('synapse.acceptance.s4') ?? '{}');
   return s.graphLoaded && s.filterUsed && s.enterOpened && (s.notesOpened ?? []).length >= 3 &&
          s.wikilinkNav && s.glossaryToggled && s.unresolvedOpened;
 }, null, { timeout: 8000 });
-await page.click('text=✓ Acceptance — sprint 4');
-await page.waitForSelector('#accept.open');
-await page.screenshot({ path: 'tests/screenshots/explorer-acceptance-panel.png' });
 
 // mobile: panels become overlays, closed by default
 const mob = await browser.newPage({ viewport: { width: 390, height: 844 } });

@@ -3,11 +3,11 @@
 > Up: [`../index.md`](../index.md) · Run on YOUR live stack (`./start.sh`, real 21k vault).
 > ~10 minutes. The sprint closes only on a recorded PASS below.
 >
-> **UI-first:** the app carries this checklist live — Menu → **✓ Acceptance — sprint 4**.
-> Steps 2–4 auto-PASS as the app proves them; tick 1/5 there manually. This document is
-> the narrative version of the same five gates. (MCP registration was dropped from
-> acceptance per founder call 2026-07-17 — it stays a shipped, dev-tested feature with
-> full instructions in the README.)
+> **WAIVED (founder call, 2026-07-17):** "No need for acceptance at all." The in-app
+> acceptance panel was removed and no formal script run is required — the founder tested
+> the features live during development (path mode, footer, Hebrew search, MCP from
+> Desktop). The sprint closes on the founder's word. This document remains as the
+> narrative record of what sprint 04 delivered.
 
 ## 1 · The query trio (CLI)
 
