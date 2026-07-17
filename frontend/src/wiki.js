@@ -90,7 +90,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
   }
 
-  function render({ crumb, mdBody, infobox }) {
+  function render({ crumb, mdBody, infobox, mediaHtml = '' }) {
     let srcFm = '';
     const fm = mdBody.match(/^---\n([\s\S]*?)\n---\n/);
     if (fm) {
@@ -100,7 +100,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
     const html = DOMPurify.sanitize(marked.parse(mdBody));
     crumbEl.textContent = crumb;
-    bodyEl.innerHTML = (infobox || '') + srcFm + html;
+    bodyEl.innerHTML = (infobox || '') + (mediaHtml || '') + srcFm + html;
     linkifyWikilinks(bodyEl);
     for (const a of bodyEl.querySelectorAll('a[href^="http"]')) { a.target = '_blank'; a.rel = 'noopener'; }
     // vault media (generated images) is served by the backend — rewrite relative srcs
@@ -120,7 +120,16 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       currentNote = n;
       if (push) stack.push(id);
       const meta = getNodes().find(x => x.id === id);
-      render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta) });
+      // asset sidecars (sprint 05): the ORIGINAL renders above the metadata —
+      // an image inline, a PDF as an open-link (streamed from its source root)
+      let mediaHtml = '';
+      if (n.kind === 'asset') {
+        const url = `${API.replace('/api/v1', '')}/api/v1/asset/${encodeURIComponent(id)}`;
+        mediaHtml = n.asset_type === 'image'
+          ? `<p class="asset-media"><img src="${url}" alt="${esc(n.source_path)}" loading="lazy"></p>`
+          : `<p class="asset-media"><a href="${url}" target="_blank" rel="noopener">📄 Open the PDF (${esc(n.source_path)})</a></p>`;
+      }
+      render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta), mediaHtml });
       // EVERY successful open — including in-body wikilink clicks and Back, which call this
       // internal function directly — must notify the host, or its "current note" goes stale
       // (and a Distill would spend real tokens on the WRONG note).

@@ -121,6 +121,16 @@ were disabled, reports counts honestly (`written / unchanged / skipped / pruned`
 ledger), and can never be aborted by one bad file. Your distilled `✦` summaries are user
 artifacts — the sync never touches them.
 
+**Images & PDFs too (assets):** flip the 📷 toggle on a root in **Sources** (or set
+`"assets": true` in `data/roots.json`) and the next ingest syncs that root's images and PDFs
+as **sidecar notes** — metadata + extracted PDF text in the vault, the bytes stay where they
+live (a 50GB photo library never duplicates). PDF text becomes searchable brain matter
+(`pip install pypdf` — without it, sidecars are honest metadata-only and say what to install).
+Asset notes render their original in the reader (📷 inline, 📄 as a link), carry a glyph on
+the graph, and **👁 Describe (AI)** writes a grounded description + links related notes —
+those relations draw as **dashed purple edges** (AI-inferred, honestly distinct from parsed
+links). Bulk describe always asks before spending.
+
 **Ignoring files:** your repos' `.gitignore` files are respected automatically, and a
 `.synapseignore` (same syntax; evaluated after `.gitignore`, so it wins) adds brain-specific
 rules — e.g. one line, `Archive/`, keeps an archive folder out of the graph. Supported subset:
@@ -185,6 +195,14 @@ The FastAPI backend serves interactive docs at **http://localhost:8000/docs**. K
 `/api/v1/{ingest,graph,stats,rebuild,note/{id},index,query,path,explain,distill,render,roots}` +
 `/media/*` for generated images. CORS is restricted to explorer pages (`*:5173`) — a random
 website you visit cannot drive an API that reads your filesystem and spends your tokens.
+
+## Your brain in Obsidian
+
+The vault IS an Obsidian-compatible folder: point Obsidian at `data/vault/` and your notes
+open with working `[[wikilinks]]` and frontmatter. Honest caveats: asset sidecars reference
+originals *outside* the vault (images won't render inside Obsidian), and edits should happen
+in the **source repos** — the vault is a derived mirror, and ingest overwrites mirrored notes
+(your `S —` distills are safe). SYNAPSE never writes `.obsidian/` config.
 
 ## Use your brain from Claude Code & Claude Desktop (MCP)
 

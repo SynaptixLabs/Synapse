@@ -91,10 +91,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Backend deps + fixture ingest
+      - name: Backend deps + fixture ingest (incl. an assets-enabled photo root)
         run: |
           python -m venv backend/.venv
-          backend/.venv/bin/pip install -q -r backend/requirements.txt
+          backend/.venv/bin/pip install -q -r backend/requirements.txt pypdf
+          mkdir -p data
+          cat > data/roots.json <<EOF
+          [{"path": "$GITHUB_WORKSPACE/backend/tests/fixtures/repo_a", "enabled": true},
+           {"path": "$GITHUB_WORKSPACE/backend/tests/fixtures/repo_b", "enabled": true},
+           {"path": "$GITHUB_WORKSPACE/backend/tests/fixtures/repo_photos", "enabled": true, "assets": true}]
+          EOF
           cd backend && .venv/bin/python -m synapse ingest
       - name: Frontend deps + Chromium
         run: |
@@ -114,6 +120,7 @@ jobs:
           node tests/e2e/sprint03_distill_render.spec.mjs
           node tests/e2e/keys_panel.spec.mjs
           node tests/e2e/sprint04_open_brain.spec.mjs
+          node tests/e2e/sprint05_assets.spec.mjs
       - name: Upload E2E evidence
         if: always()
         uses: actions/upload-artifact@v4

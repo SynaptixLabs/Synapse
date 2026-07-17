@@ -43,3 +43,93 @@ def distill(req: DistillRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(e.args[0]))
     except GroundingError as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+# ── The seeing pass (sprint 05, Epic L) ─────────────────────────────────────────
+
+class DescribeRequest(BaseModel):
+    note_id: str
+    confirm: bool = False
+
+
+class DescribeAllRequest(BaseModel):
+    confirm: bool = False
+
+
+def _asset_source(note: dict):
+    """Resolve the asset's original file from its root (same guard as GET /asset)."""
+    from pathlib import Path
+
+    from app.core.roots import load_roots
+    root = next((e["path"] for e in load_roots(load_settings())
+                 if Path(e["path"]).name == note["repo"]), None)
+    if root is None:
+        raise HTTPException(status_code=404, detail=f"Source root '{note['repo']}' is not configured.")
+    root_p = Path(root).resolve()
+    target = (root_p / note["source_path"]).resolve()
+    if (root_p != target and root_p not in target.parents) or not target.is_file():
+        raise HTTPException(status_code=404, detail=f"Asset file missing: {note['source_path']}")
+    return target
+
+
+def _describe_service(suffix: str = ".png"):
+    from modules.distill.src.providers import AnthropicVisionDescriber, MockVisionDescriber
+    from modules.distill.src.service import DescribeService
+    s = load_settings()
+    if s.mock_models:
+        describer = MockVisionDescriber()
+    elif s.anthropic_key:
+        describer = AnthropicVisionDescriber(
+            s.anthropic_key, s.summarizer_model, s.summarizer_max_tokens, suffix=suffix)
+    else:
+        raise HTTPException(status_code=400, detail=(
+            "No ANTHROPIC_API_KEY configured (backend/.env) — set your key, or set "
+            "SYNAPSE_MOCK_MODELS=1 to try the flow with the mock describer."))
+    return DescribeService(s.vault_path, describer, s.confirm_threshold_tokens)
+
+
+@router.post("/describe")
+def describe(req: DescribeRequest) -> dict:
+    """Describe ONE asset sidecar (vision for images, text for PDFs) — cost-guarded."""
+    from pathlib import Path
+
+    from modules.graph.src.services import GraphService
+    note = GraphService(load_settings().vault_path).read_note(req.note_id)
+    if note is None or note.get("kind") != "asset":
+        raise HTTPException(status_code=404, detail=f"No asset note '{req.note_id}' in the vault.")
+    source = _asset_source(note)
+    svc = _describe_service(suffix=Path(note["source_path"]).suffix)
+    try:
+        return svc.describe(req.note_id, source, confirm=req.confirm)
+    except ConfirmationRequired as c:
+        return {"requires_confirmation": True, "tokens_est": c.tokens_est, "threshold": c.threshold}
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e.args[0]))
+
+
+@router.post("/describe-all")
+def describe_all(req: DescribeAllRequest) -> dict:
+    """Describe EVERY not-yet-described asset. ALWAYS asks first (a 10k-photo library must
+    never auto-spend): call without confirm to get the count + estimate."""
+    from pathlib import Path
+
+    from modules.graph.src.services import GraphService
+    svc = _describe_service()
+    todo = svc.undescribed_assets()
+    if not todo:
+        return {"described": 0, "message": "every asset already has a description"}
+    if not req.confirm:
+        est = svc._IMAGE_TOKENS_EST * len(todo)   # upper-bound estimate, disclosed as such
+        return {"requires_confirmation": True, "count": len(todo),
+                "tokens_est_upper_bound": est}
+    graph_svc = GraphService(load_settings().vault_path)
+    done, failed = [], []
+    for note_id in todo:
+        try:
+            note = graph_svc.read_note(note_id)
+            source = _asset_source(note)
+            per = _describe_service(suffix=Path(note["source_path"]).suffix)
+            done.append(per.describe(note_id, source, confirm=True))
+        except (HTTPException, KeyError, OSError) as e:
+            failed.append({"note_id": note_id, "error": str(getattr(e, "detail", e))})
+    return {"described": len(done), "failed": failed, "results": done}

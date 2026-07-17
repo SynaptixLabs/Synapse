@@ -439,6 +439,7 @@ async function buildSources() {
         <input type="checkbox" ${r.enabled ? 'checked' : ''} data-toggle-root="${esc(r.path)}" title="${r.enabled ? 'enabled — ingested on Apply' : 'disabled — pruned on Apply'}" />
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.path)}</span>
         <span class="rootcount">${counts[name] ?? 0} notes</span>
+        <span class="tg" data-assets-root="${esc(r.path)}" style="cursor:pointer;${r.assets ? 'color:var(--accent)' : 'color:var(--dim);opacity:0.6'}" title="${r.assets ? 'assets ON — images/PDFs sync as sidecar notes' : 'assets OFF — click to also ingest images/PDFs from this root'}">📷</span>
         ${r.exists ? '' : '<span class="tag" title="directory not found">missing</span>'}
         <span class="tg" data-del-root="${esc(r.path)}" style="cursor:pointer;color:var(--bad)" title="remove root + prune its notes">✕</span>
       </div>`;
@@ -550,6 +551,14 @@ $('sources').addEventListener('click', async (ev) => {
       await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: t.dataset.toggleRoot }) });
       setDirty(true);
       setMsg('root toggled — Apply (ingest) to sync');
+    } else if (t.dataset.assetsRoot) {
+      const out = await api('/roots', { method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: t.dataset.assetsRoot, toggle: 'assets' }) });
+      await buildSources();
+      const on = out.find((r) => r.path === t.dataset.assetsRoot)?.assets;
+      setDirty(true);
+      setMsg(on ? 'assets ON for this root — Apply (ingest) to sync its images/PDFs'
+                : 'assets OFF — its sidecar notes prune on the next Apply');
     } else if (t.dataset.delRoot) {
       if (!(await appConfirm(`${t.dataset.delRoot}\n\nIts notes will be pruned from the vault (no ghost nodes).`,
                               { title: 'Remove this source?', ok: 'Remove + prune', danger: true }))) return;
@@ -702,10 +711,14 @@ function acRender() { /* no panel to render */ }
 let currentOpenId = null;
 function aiButtons() {
   const isNote = !!currentOpenId, isSummary = !!currentOpenId?.startsWith('S — ');
+  const isAsset = !!nodes.find((n) => n.id === currentOpenId)?.tags?.some((t) => t.startsWith('asset:'));
   $('ai-distill').disabled = !isNote || isSummary;
   $('ai-distill-tree').disabled = !isNote || isSummary;
   $('ai-render').disabled = !isSummary;
+  $('ai-describe').style.display = isAsset ? '' : 'none';
+  $('ai-describe').disabled = !isAsset;
   $('ai-status').textContent = isSummary ? 'a summary is open — render it as an image'
+    : isAsset ? 'an asset is open — describe it (AI) or distill it'
     : isNote ? 'distill the open note (or its subtree)' : 'open a note to distill it';
 }
 // note-open side effects (AI buttons, graph focus, acceptance) live in the reader's onOpen
@@ -777,6 +790,30 @@ window.aiDistill = async (scope) => {
     await reader.openNote(out.summary_note_id);
     $('ai-status').textContent = `distilled ✓ ${out.citations} citation(s)` + (out.truncated ? ' · truncated (disclosed)' : '');
     setMsg(`S-note created: ${out.summary_note_id} (${out.model})`);
+  } catch (e) { $('ai-status').textContent = e.message; setMsg(e.message, true); }
+};
+
+window.aiDescribe = async () => {
+  if (!currentOpenId) return;
+  const node = currentOpenId;
+  $('ai-status').textContent = 'looking at it…';
+  try {
+    let out = await api('/describe', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note_id: node }) });
+    if (out.requires_confirmation) {
+      if (!(await appConfirm(`Describing this asset is ~${out.tokens_est.toLocaleString()} tokens (gate: ${out.threshold.toLocaleString()}).`,
+                             { title: 'Cost guard', ok: 'Spend it' }))) {
+        $('ai-status').textContent = 'cancelled — nothing spent'; return;
+      }
+      out = await api('/describe', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note_id: node, confirm: true }) });
+    }
+    await api('/rebuild', { method: 'POST' });
+    await refresh();
+    await reader.openNote(node, false);
+    const dropped = out.links_dropped?.length ? ` · ${out.links_dropped.length} hallucinated link(s) dropped` : '';
+    $('ai-status').textContent = `described ✓ ${out.links_added.length} related note(s) linked${dropped}`;
+    setMsg(`description added (${out.model}) — related notes ride as dashed edges`);
   } catch (e) { $('ai-status').textContent = e.message; setMsg(e.message, true); }
 };
 

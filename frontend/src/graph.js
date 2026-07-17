@@ -243,8 +243,8 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const symScale = K < 1 ? Math.sqrt(K) : K;
 
     // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
-    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342' };
-    const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13 };
+    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342', semantic: '#c084fc' };
+    const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13, semantic: 0.45 };
     ctx.lineWidth = 0.75 / Math.sqrt(K);
     const bigMode = big();
     const straight = edges.length > 2000;   // dense brains: straight lines (~2× cheaper strokes)
@@ -321,6 +321,15 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
       }
       ctx.shadowBlur = 0;
+      // asset sidecars (sprint 05): a small 📷/📄 glyph rides the node once zoomed enough
+      // to read — assets are visually distinct from prose notes at a glance
+      if (!dim && K >= 0.55 && n.tags?.length && !big()) {
+        const glyph = n.tags.includes('asset:image') ? '📷' : n.tags.includes('asset:pdf') ? '📄' : '';
+        if (glyph) {
+          ctx.font = `${10 / symScale}px system-ui`; ctx.textAlign = 'center';
+          ctx.fillText(glyph, p.x + r + 7 / symScale, p.y - r - 3 / symScale);
+        }
+      }
       if (inMatch && !dim) {            // search selection: accent ring on EVERY match
         ctx.strokeStyle = 'rgba(124,158,255,0.85)'; ctx.lineWidth = 1.4;
         ctx.beginPath(); ctx.arc(p.x, p.y, r + 3.5, 0, 7); ctx.stroke();

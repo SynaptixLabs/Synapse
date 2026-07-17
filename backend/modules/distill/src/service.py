@@ -175,3 +175,95 @@ class DistillService:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(fm + body, encoding="utf-8")
         return note_id
+
+
+# ── The seeing pass (sprint 05, Epic L) ─────────────────────────────────────────
+
+_AI_SECTION = "## Description (AI)"
+_LINKS_LINE_RE = re.compile(r"^synapse\.inferred_links: .*\n", re.MULTILINE)
+
+
+class DescribeService:
+    """Describe one asset sidecar: vision (images) / text (PDFs) → a `## Description (AI)`
+    section + `synapse.inferred_links` frontmatter. Links are chosen ONLY from a supplied
+    candidate list; anything else the model invents is DROPPED and counted honestly."""
+
+    # a vision call is roughly flat-cost per image; text rides the usual /4 heuristic
+    _IMAGE_TOKENS_EST = 2600
+
+    def __init__(self, vault_path: Path, describer, confirm_threshold: int = 20000):
+        self.vault_path = Path(vault_path)
+        self.graph = GraphService(vault_path)
+        self.describer = describer
+        self.confirm_threshold = confirm_threshold
+
+    def candidates(self, exclude: str) -> list[str]:
+        """Top-degree KNOWLEDGE notes (no other assets, no summaries) — the model picks
+        related ids from this list, never free-types them."""
+        g = self.graph.build()
+        pool = [
+            n for n in g.nodes.values()
+            if n.kind == "note" and n.id != exclude
+            and not n.tags and n.repo != SUMMARY_REPO
+        ]
+        pool.sort(key=lambda n: (-(n.in_degree + n.out_degree), n.id))
+        return [n.id for n in pool[:300]]
+
+    def tokens_est(self, asset_type: str, text: str) -> int:
+        return self._IMAGE_TOKENS_EST if asset_type == "image" else 800 + len(text) // 4
+
+    def describe(self, note_id: str, source_file: Path, confirm: bool = False) -> dict:
+        note = self.graph.read_note(note_id)
+        if note is None or note.get("kind") != "asset":
+            raise KeyError(f"No asset note '{note_id}' in the vault.")
+        asset_type = note.get("asset_type", "image")
+        image_bytes = None
+        text = ""
+        if asset_type == "image":
+            image_bytes = source_file.read_bytes()
+        else:
+            text = note["body"]        # the sidecar already carries the extracted PDF text
+        est = self.tokens_est(asset_type, text)
+        if est > self.confirm_threshold and not confirm:
+            raise ConfirmationRequired(est, self.confirm_threshold)
+        cands = self.candidates(exclude=note_id)
+        result = self.describer.describe(
+            subject=Path(note["source_path"]).name,
+            image_bytes=image_bytes, text=text, candidates=cands)
+        known = set(cands)
+        kept = [l for l in result.links if l in known]
+        dropped = [l for l in result.links if l not in known]
+        self._write_back(note_id, result.markdown, kept, result.model)
+        return {"note_id": note_id, "model": result.model,
+                "links_added": kept, "links_dropped": dropped,
+                "description_chars": len(result.markdown)}
+
+    def _write_back(self, note_id: str, description: str, links: list[str], model: str) -> None:
+        """Idempotent: replaces any existing AI section + inferred_links line."""
+        path = self.graph.notes_dir / note_id
+        content = path.read_text(encoding="utf-8")
+        content = _LINKS_LINE_RE.sub("", content)
+        if links:
+            content = content.replace(
+                "synapse.ingested_at:",
+                f"synapse.inferred_links: {' | '.join(links)}\nsynapse.ingested_at:", 1)
+        idx = content.find(_AI_SECTION)
+        if idx != -1:
+            content = content[:idx].rstrip() + "\n"
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        content = (content.rstrip() + f"\n\n{_AI_SECTION}\n\n{description}\n\n"
+                   f"> _Described by {model}, {now}. Related notes ride as dashed INFERRED "
+                   "edges in the graph._\n")
+        import os
+        tmp = path.parent / f"{path.name}.{os.getpid()}.tmp"
+        tmp.write_text(content, encoding="utf-8")
+        os.replace(tmp, path)
+
+    def undescribed_assets(self) -> list[str]:
+        """Asset sidecars with no AI section yet — the bulk-describe work list."""
+        out = []
+        for p in sorted(self.graph.notes_dir.glob("*.md")):
+            head = p.read_text(encoding="utf-8", errors="replace")
+            if "synapse.kind: asset" in head[:600] and _AI_SECTION not in head:
+                out.append(p.name)
+        return out

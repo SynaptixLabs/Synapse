@@ -326,3 +326,59 @@ class TestModelKeys:
         assert "OPENAI_API_KEY=sk-th-9999bbbb" in env
         leftovers = list((tmp_path / "envdir").glob(".env.*.tmp"))
         assert leftovers == []                      # no key-bearing temp files left behind
+
+
+# ── Sprint 05: assets + the seeing pass ─────────────────────────────────────────
+
+class TestAssets:
+    PHOTOS = Path(__file__).resolve().parent / "fixtures" / "repo_photos"
+    SUNSET = "repo_photos__album__sunset.png.md"
+
+    @pytest.fixture
+    def aclient(self, client, tmp_path, monkeypatch) -> TestClient:
+        monkeypatch.setenv("SYNAPSE_MOCK_MODELS", "1")
+        import json as j
+        (tmp_path / "roots.json").write_text(j.dumps([
+            {"path": str(self.PHOTOS), "enabled": True, "assets": True},
+            {"path": str(FIXTURES / "repo_a"), "enabled": True},
+        ]), encoding="utf-8")
+        client.post("/api/v1/ingest")
+        client.post("/api/v1/rebuild")
+        return client
+
+    def test_assets_toggle_via_patch(self, client, tmp_path):
+        import json as j
+        (tmp_path / "roots.json").write_text(j.dumps(
+            [{"path": str(self.PHOTOS), "enabled": True}]), encoding="utf-8")
+        out = client.patch("/api/v1/roots",
+                           json={"path": str(self.PHOTOS), "toggle": "assets"}).json()
+        assert out[0]["assets"] is True
+        assert client.patch("/api/v1/roots",
+                            json={"path": str(self.PHOTOS), "toggle": "nope"}).status_code == 422
+
+    def test_ingest_reports_assets_and_serves_them(self, aclient):
+        rep = aclient.post("/api/v1/ingest").json()
+        assert rep["totals"]["assets_found"] == 2
+        r = aclient.get(f"/api/v1/asset/{self.SUNSET}")
+        assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+        assert r.content.startswith(b"\x89PNG")
+        assert aclient.get("/api/v1/asset/repo_a__docs__alpha.md").status_code == 404  # not an asset
+        assert aclient.get("/api/v1/asset/ghost.png.md").status_code == 404
+
+    def test_describe_mock_flow_end_to_end(self, aclient):
+        out = aclient.post("/api/v1/describe", json={"note_id": self.SUNSET}).json()
+        assert out["links_added"] and out["model"] == "mock-vision"
+        note = aclient.get(f"/api/v1/note/{self.SUNSET}").json()
+        assert "## Description (AI)" in note["body"]
+        aclient.post("/api/v1/rebuild")
+        graph = aclient.get("/api/v1/graph").json()
+        sem = [e for e in graph["edges"] if e["type"] == "semantic"]
+        assert sem and all(e["confidence"] == "INFERRED" for e in sem)
+
+    def test_describe_all_always_asks_first(self, aclient):
+        out = aclient.post("/api/v1/describe-all", json={}).json()
+        assert out["requires_confirmation"] is True and out["count"] == 2
+        out = aclient.post("/api/v1/describe-all", json={"confirm": True}).json()
+        assert out["described"] == 2 and out["failed"] == []
+        again = aclient.post("/api/v1/describe-all", json={}).json()
+        assert again == {"described": 0, "message": "every asset already has a description"}
