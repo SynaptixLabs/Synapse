@@ -445,6 +445,9 @@ window.runIngest = async () => {
     setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned${assets}`);
     setDirty(false);
     await refresh();
+    // an open Sources panel must recount — founder repro: root said "828 notes" while the
+    // statusbar honestly said 1963 after an assets Apply
+    if ($('sources').classList.contains('open')) await buildSources();
   } catch (e) { setMsg('ingest failed: ' + e.message, true); }
 };
 
