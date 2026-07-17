@@ -28,8 +28,13 @@ PROTOCOL_VERSION = "2024-11-05"
 TOOLS = [
     {
         "name": "query_graph",
-        "description": "Ask the second brain a plain-language question; returns the scoped "
-                       "subgraph (relevant notes + how they connect). Deterministic, no LLM.",
+        "description": "Ask the second brain a question; returns the scoped subgraph "
+                       "(relevant notes + how they connect). Retrieval is DETERMINISTIC "
+                       "term-matching over titles/ids — not semantic. Use distinctive topic "
+                       "words (e.g. 'PRD story families onboarding'), NOT the repo/brain's "
+                       "own name (it prefixes every note id and matches everything). For "
+                       "deep questions: query for seeds, then get_note the best hits and "
+                       "follow get_neighbors.",
         "inputSchema": {"type": "object", "properties": {
             "question": {"type": "string"},
             "budget": {"type": "integer", "description": "max nodes (default 30)"}},
