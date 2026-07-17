@@ -382,3 +382,14 @@ class TestAssets:
         assert out["described"] == 2 and out["failed"] == []
         again = aclient.post("/api/v1/describe-all", json={}).json()
         assert again == {"described": 0, "message": "every asset already has a description"}
+
+
+def test_unresolved_report_classifies_targets(client, tmp_path):
+    """Epic N: ghosts get honest classification — future / dead / out-of-scope."""
+    client.post("/api/v1/ingest")
+    client.post("/api/v1/rebuild")
+    out = client.get("/api/v1/unresolved").json()
+    assert out["total"] >= 1
+    ghost = out["targets"].get("ghost concept")
+    assert ghost and ghost["status"] == "future" and ghost["referrers"] >= 1
+    assert all(t["hint"] for t in out["targets"].values())   # every ghost explains itself

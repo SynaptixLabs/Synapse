@@ -1,0 +1,70 @@
+# Claude coding agent (sprint 05, Epic P) — mention @claude on an issue or PR and Claude
+# works it in this Actions sandbox, opening a PR through the normal review gate (branch
+# protection: PR + 3 green checks + review — agents cannot land unreviewed work).
+#
+# The dogfood twist: the agent gets SYNAPSE'S OWN BRAIN as an MCP tool — the self-ingested
+# vault, served by backend/synapse/serve.py (deterministic, keyless, read-only). It can ask
+# `query_graph`/`get_note` instead of grepping the repo cold.
+#
+# ACTIVATION (founder, one-time): install the Claude GitHub app for this repo
+# (https://github.com/apps/claude) AND add the ANTHROPIC_API_KEY repo secret.
+# Until then this workflow simply never triggers usefully — safe to merge dormant.
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the self-brain (the agent's MCP knowledge source)
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/pip install -q -r backend/requirements.txt
+          cd backend && .venv/bin/python -m synapse ingest
+      - name: Write the MCP config (synapse serve over the self-brain)
+        run: |
+          cat > /tmp/synapse-mcp.json <<EOF
+          {
+            "mcpServers": {
+              "synapse": {
+                "command": "$GITHUB_WORKSPACE/backend/.venv/bin/python",
+                "args": ["$GITHUB_WORKSPACE/backend/synapse/serve.py"]
+              }
+            }
+          }
+          EOF
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --mcp-config /tmp/synapse-mcp.json
+          prompt: |
+            You are working on SYNAPSE. House rules: AGENTS.md is binding (vault is the
+            source of truth; model SDKs only inside their provider modules; tests never
+            spend money; E2E = real Chromium). You have the repo's own second brain as
+            MCP tools — call get_brain_info first, then query_graph/get_note to read the
+            PRD, decisions, and sprint docs before coding. Run `cd backend &&
+            .venv/bin/python -m pytest -q` before declaring anything done.

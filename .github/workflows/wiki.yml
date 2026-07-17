@@ -1,0 +1,33 @@
+# Publish the self-brain as the GitHub Wiki (sprint 05, Epic O — dogfood surface).
+# The wiki is DERIVED: every page banners "edit the source, not here". Zero paid calls —
+# ingest + export are deterministic. Requires the wiki to exist (one-time founder click:
+# repo → Wiki → Create the first page) — until then this job fails soft with the reason.
+name: Publish wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ['**.md', 'backend/**', '.github/workflows/wiki.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # the GITHUB_TOKEN pushes to <repo>.wiki.git
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ingest the self-brain (this repo's own markdown — zero-leak by construction)
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/pip install -q -r backend/requirements.txt
+          cd backend && .venv/bin/python -m synapse ingest
+      - name: Export + publish to the wiki
+        run: |
+          cd backend && .venv/bin/python -m synapse.wiki publish \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.wiki.git" \
+            || echo "::warning::wiki publish skipped — enable the wiki (create its first page) to activate this surface"

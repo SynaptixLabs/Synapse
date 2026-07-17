@@ -64,6 +64,44 @@ def graph_path(a: str, b: str) -> dict:
     return {"a": ra, "b": rb, **shortest_path(graph, ra, rb)}
 
 
+@router.get("/unresolved")
+def unresolved_report() -> dict:
+    """Classify every unresolved link (Epic N, ghost enrichment): is the target a future
+    note (wikilink to nothing), a dead path (file gone from the repo), or a file that
+    EXISTS but outside the brain's scope (add its repo as a Source and it resolves)?"""
+    import posixpath
+    from pathlib import Path
+
+    from app.core.roots import load_roots
+
+    graph = _loaded_graph()
+    root_by_repo = {Path(e["path"]).name: Path(e["path"]) for e in load_roots(load_settings())}
+    targets: dict[str, dict] = {}
+    for n in graph.get("nodes", []):
+        for raw in n.get("unresolved", []):
+            raw_clean = raw.removesuffix(" (AI-inferred)")
+            key = raw_clean.strip("[]").strip().lower()
+            if key in targets:
+                targets[key]["referrers"] += 1
+                continue
+            if raw_clean.startswith("[["):
+                status, hint = "future", "future note — nothing ingested has this name yet"
+            else:
+                root = root_by_repo.get(n.get("repo", ""))
+                base = posixpath.dirname(n.get("source_path", ""))
+                resolved = (root / posixpath.normpath(posixpath.join(base, raw_clean))) if root else None
+                if resolved is not None and resolved.exists():
+                    status, hint = "out-of-scope", (
+                        "the file EXISTS but lives outside the brain — add its repo as a Source")
+                else:
+                    status, hint = "dead", "dead link — the file no longer exists"
+            targets[key] = {"status": status, "hint": hint, "referrers": 1}
+    counts: dict[str, int] = {}
+    for t in targets.values():
+        counts[t["status"]] = counts.get(t["status"], 0) + 1
+    return {"targets": targets, "counts": counts, "total": len(targets)}
+
+
 @router.get("/explain")
 def graph_explain(id: str) -> dict:
     """One node's card: identity + connections grouped by direction and edge type."""

@@ -5,6 +5,15 @@ Thanks for improving SYNAPSE. We follow the
 [SECURITY.md](SECURITY.md), not public issues. Good entry points are labeled
 [`good first issue`](https://github.com/SynaptixLabs/Synapse/labels/good%20first%20issue).
 
+**Coding agents welcome** — human or AI, the bar is identical. Issues labeled
+[`agent-ready`](https://github.com/SynaptixLabs/Synapse/labels/agent-ready) are well-scoped
+and test-covered — good delegation targets for Claude (`@claude` on the issue, once the
+maintainer has activated the app) or Copilot's coding agent. Design-first issues stay
+human-led. Agent PRs ride the exact same gate as everyone's: branch protection requires a
+PR, green CI, and review — and maintainers GBU-review agent work like any contribution.
+Bonus: agents on this repo get SYNAPSE's own brain as MCP tools (see
+`.github/workflows/claude.yml`) — the product reviewing itself.
+
 Two areas, two rulebooks:
 
 ## Contributing to the app (backend / frontend)

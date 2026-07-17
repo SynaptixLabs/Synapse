@@ -55,7 +55,14 @@ window.viewIndex = () => reader.loadIndex();
 const graph = createGraph($('graph'), {
   tooltipEl: $('tooltip'),
   infoEl: null,
-  onNodeClick: (id) => { if (!pathPick(id)) reader.openNote(id); },
+  onNodeClick: (id) => {
+    if (id.startsWith('ghost:')) {   // a ghost has no note to open — explain it instead
+      const g = graph.state();
+      setMsg(`👻 ${id.slice(6)} — a future note (nothing to open yet); its referrers point at it`);
+      return;
+    }
+    if (!pathPick(id)) reader.openNote(id);
+  },
 });
 window.__synapse = { graph: () => graph.state(), counts: () => ({ nodes: nodes.length, edges: edges.length }) };
 // camera framing seam (E2E + debugging): fit the view to ids exactly like a search
@@ -282,6 +289,59 @@ function groupView() {
 let _vRepo = null;   // cached id → display-group map (rebuilt per refresh)
 const vRepoOf = () => (_vRepo ??= new Map(vNodes.filter(n => n.kind === 'note').map(n => [n.id, n.repo])));
 
+// ── Ghost nodes (Epic N): unresolved links become visible "future notes" ─────
+// Display-only synthesis from the unresolved lists the graph already carries (same
+// doctrine as D-9 groups — ids/search/reader never see ghosts). Default OFF; capped.
+const GHOST_CAP = 300;
+let ghostsOn = false;
+let ghostClassify = null;   // target → {status, hint} from GET /unresolved (lazy)
+function ghostView() {
+  if (!ghostsOn) return { gn: [], ge: [] };
+  const byTarget = new Map();   // normalized target → { refs: [noteIds], raw }
+  for (const n of vNodes) {
+    if (n.kind !== 'note') continue;
+    for (const u of n.unresolved) {
+      const raw = u.replace(/ \(AI-inferred\)$/, '');
+      const key = raw.replace(/^\[\[|\]\]$/g, '').trim().toLowerCase();
+      const g = byTarget.get(key) ?? { refs: [], raw };
+      g.refs.push(n.id);
+      byTarget.set(key, g);
+    }
+  }
+  const ranked = [...byTarget.entries()]
+    .sort((a, b) => b[1].refs.length - a[1].refs.length || (a[0] < b[0] ? -1 : 1));
+  const gn = [], ge = [];
+  for (const [key, g] of ranked.slice(0, GHOST_CAP)) {
+    const id = `ghost:${key}`;
+    const cls = ghostClassify?.[key];
+    const label = g.raw.replace(/^\[\[|\]\]$/g, '');
+    gn.push({ id, kind: 'ghost', title: label.split('/').pop(), repo: '', source_path: '',
+              tags: [], in_degree: g.refs.length, out_degree: 0, unresolved: [],
+              hint: cls?.hint ?? (g.raw.startsWith('[[') ? 'future note — nothing ingested has this name yet' : 'dead link — the file no longer exists') });
+    for (const ref of g.refs) if (winIds === null || winIds.has(ref)) {
+      ge.push({ src: ref, dst: id, type: 'ghost' });
+    }
+  }
+  return { gn, ge, capped: Math.max(0, byTarget.size - GHOST_CAP), total: byTarget.size };
+}
+function withGhosts(n, e) {
+  const { gn, ge } = ghostView();
+  return gn.length ? { n: [...n, ...gn], e: [...e, ...ge] } : { n, e };
+}
+window.toggleGhosts = async () => {
+  ghostsOn = !ghostsOn;
+  if (ghostsOn && ghostClassify === null) {
+    try { ghostClassify = (await api('/unresolved')).targets; }
+    catch { ghostClassify = {}; }   // classification is garnish — ghosts render without it
+  }
+  const g = ghostView();
+  await refresh();
+  buildDrawer();
+  setMsg(ghostsOn
+    ? `👻 ${Math.min(g.total ?? 0, GHOST_CAP)} future notes shown${g.capped ? ` (${g.capped} more capped — most-referenced win)` : ''}`
+    : 'ghosts hidden');
+};
+
 function windowed() {
   const notes = vNodes.filter(n => n.kind === 'note');
   if (notes.length <= WINDOW_CAP) { winIds = null; return { n: vNodes, e: vEdges }; }
@@ -309,8 +369,9 @@ function pullIntoWindow(id) {
     if (e.src === id) winIds.add(e.dst);
     if (e.dst === id) winIds.add(e.src);
   }
-  graph.setData(vNodes.filter(x => winIds.has(x.id)), vEdges.filter(x => winIds.has(x.src) && winIds.has(x.dst)),
-                { preserve: true });   // incremental: keep the camera, positions and pins
+  const pw = withGhosts(vNodes.filter(x => winIds.has(x.id)),
+                        vEdges.filter(x => winIds.has(x.src) && winIds.has(x.dst)));
+  graph.setData(pw.n, pw.e, { preserve: true });   // incremental: keep camera, positions, pins
   sendStatics();
   // the statusbar must stay honest — the window just grew
   const shown = vNodes.filter(x => x.kind === 'note' && winIds.has(x.id)).length;
@@ -328,7 +389,8 @@ async function refresh() {
     stats = await api('/stats');
     $('empty').style.display = 'none';
     const view = windowed();
-    graph.setData(view.n, view.e);
+    const vg = withGhosts(view.n, view.e);   // Epic N: ghosts ride on top when toggled
+    graph.setData(vg.n, vg.e);
     sendStatics();
     $('st-notes').textContent = winIds
       ? `${stats.notes} notes · graph: top ${view.n.filter(x => x.kind === 'note').length} by links · zoom reveals the rest`
@@ -590,6 +652,8 @@ function buildDrawer() {
       const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t === 'pathref' ? 'path reference (`code` pointers)' : t;
       return `<div class="row ${off ? 'off' : ''}" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${name} <span class="tg">${off ? 'off' : 'on'}</span></div>`;
     }).join('') +
+    `<h4>👻 Future notes (ghosts)</h4>` +
+    `<div class="row ${ghostsOn ? '' : 'off'}" data-ghosts="1"><span class="edot" style="background:#8b93a6;border-radius:99px;border:1px dashed #9aa3b2;background:transparent"></span> unresolved links as ghost nodes <span class="tg">${ghostsOn ? 'on' : 'off'}</span></div>` +
     `<h4>Unresolved (${unresolved.length}) — click opens the note</h4>` +
     (unresolved.slice(0, 40).map(({ u, n }) =>
       `<div class="row" data-open-note="${esc(n.id)}"><span class="unres">${esc(u)}<small>in ${esc(n.repo)} / ${esc(n.source_path)}</small></span></div>`).join('')
@@ -606,6 +670,8 @@ $('drawer').addEventListener('click', (ev) => {
     const on = graph.toggleEdgeType(row.dataset.edge);
     row.classList.toggle('off', !on);
     row.querySelector('.tg').textContent = on ? 'on' : 'off';
+  } else if (row.dataset.ghosts) {
+    toggleGhosts();
   } else if (row.dataset.openNote) {
     reader.openNote(row.dataset.openNote);
     toggleDrawer(false);

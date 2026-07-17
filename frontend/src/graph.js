@@ -243,8 +243,8 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     const symScale = K < 1 ? Math.sqrt(K) : K;
 
     // curved edges (slight deterministic bow — reads organic, no two overlap exactly)
-    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342', semantic: '#c084fc' };
-    const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13, semantic: 0.45 };
+    const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#3f8f81', sibling: '#2c3342', semantic: '#c084fc', ghost: '#6b7280' };
+    const BASE = { wikilink: 0.5, relative: 0.36, pathref: 0.18, sibling: 0.13, semantic: 0.45, ghost: 0.3 };
     ctx.lineWidth = 0.75 / Math.sqrt(K);
     const bigMode = big();
     const straight = edges.length > 2000;   // dense brains: straight lines (~2× cheaper strokes)
@@ -264,7 +264,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (BASE[e.type] ?? 0.3) * Math.min(1, 240 / d);
       // schema v3 honesty: an AI-derived (INFERRED/AMBIGUOUS) edge never looks identical
       // to an extracted one — uncertainty reads as a dashed line
-      const uncertain = e.confidence && e.confidence !== 'EXTRACTED';
+      const uncertain = (e.confidence && e.confidence !== 'EXTRACTED') || e.type === 'ghost';
       if (uncertain) ctx.setLineDash([5 / K, 4 / K]);
       ctx.beginPath(); ctx.moveTo(a.x, a.y);
       if (straight) ctx.lineTo(b.x, b.y);
@@ -303,6 +303,20 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         ctx.shadowBlur = 0;
         ctx.fillStyle = '#e6e6e6'; ctx.font = `600 ${12 / K}px system-ui`; ctx.textAlign = 'center';
         ctx.fillText(n.title, p.x, p.y - 15 / K);
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      if (n.kind === 'ghost') {   // Epic N: hollow dashed circle — a note that isn't (yet)
+        const gr = 3.5 / symScale;
+        ctx.globalAlpha = hood && !hood.has(n.id) ? 0.08 : 0.55;
+        ctx.strokeStyle = '#9aa3b2'; ctx.lineWidth = 1 / K;
+        ctx.setLineDash([3 / K, 3 / K]);
+        ctx.beginPath(); ctx.arc(p.x, p.y, gr, 0, 7); ctx.stroke();
+        ctx.setLineDash([]);
+        if (K >= 1.2 && labelFits(p.x, p.y)) {
+          ctx.fillStyle = '#7d8590'; ctx.font = `${10 / K}px system-ui`; ctx.textAlign = 'center';
+          ctx.fillText(`👻 ${n.title}`, p.x, p.y - 8 / K);
+        }
         ctx.globalAlpha = 1;
         continue;
       }
@@ -430,7 +444,9 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (n) {
         tooltipEl.style.display = 'block';
         tooltipEl.style.left = ev.clientX + 12 + 'px'; tooltipEl.style.top = ev.clientY + 12 + 'px';
-        tooltipEl.textContent = `${n.title} · ${n.repo} · ${n.in_degree + n.out_degree} links`;
+        tooltipEl.textContent = n.kind === 'ghost'
+          ? `👻 ${n.title} · ${n.in_degree} referrer(s) · ${n.hint ?? 'future note'}`
+          : `${n.title} · ${n.repo} · ${n.in_degree + n.out_degree} links`;
       } else tooltipEl.style.display = 'none';
     }
     draw();
