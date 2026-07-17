@@ -1,4 +1,4 @@
-# Sprint 04 — **The Open Brain** (ACTIVE — opened 2026-07-16)
+# Sprint 04 — **The Open Brain** (✅ CLOSED 2026-07-17 · founder order, acceptance waived · close GBU 4.7)
 
 > **Graph node.** Up: [`../00_index.md`](../00_index.md) · Scope source:
 > [graphify learnings T1–T5](../../reference/2026-07-16_graphify_learnings.md) +

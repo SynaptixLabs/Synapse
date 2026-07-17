@@ -189,10 +189,11 @@ SYNAPSE ships an MCP server, so your AI assistant answers questions from **your*
 brain. It reads the vault straight from disk — **SYNAPSE doesn't need to be running.** The
 only prerequisites are one-time: `./start.sh setup` (creates the venv) and at least one
 ingest (run the app once, or `./synapse ingest`). Git hooks (`./synapse hook install`) keep
-the vault fresh afterwards without the app. The assistant gets four read-only tools:
-`query_graph` (plain-language question → relevant notes + how they connect), `get_note`
-(full markdown), `get_neighbors`, and `shortest_path`. Deterministic, zero model calls and
-zero keys inside the server itself.
+the vault fresh afterwards without the app. The assistant gets five read-only tools:
+`get_brain_info` (the brain's scope — which roots are ingested; agents call it first),
+`query_graph` (plain-language question → relevant notes + snippets + how they connect),
+`get_note` (full markdown, or one section via `section=`/`outline=`), `get_neighbors`, and
+`shortest_path`. Deterministic, zero model calls and zero keys inside the server itself.
 
 > **Shortcut — let the assistant wire itself up:** paste this whole section into Claude Code
 > and say *"register the synapse MCP server for me"* — it will run the command below itself

@@ -141,7 +141,7 @@ class TestDesktopGBUWave:
     def test_brain_info_discloses_scope(self, env):
         info = self._call("get_brain_info")
         assert info["notes"] == 4 and info["edges"] > 0
-        assert info["last_ingest"] and info["honesty"]
+        assert info["graph_built"].endswith("+00:00") and info["honesty"]   # UTC, disclosed
         assert isinstance(info["roots"], list)   # empty roots.json → env-seeded is fine
 
     def test_query_seeds_carry_snippets(self, env):
@@ -168,3 +168,23 @@ class TestDesktopGBUWave:
                     arguments={"id": "repo_a__docs__alpha.md", "section": "zzz-nope"})
         assert resp["result"]["isError"] is True
         assert "Outline:" in resp["result"]["content"][0]["text"]
+
+    def test_sections_ignore_fenced_pseudo_headings(self, env, tmp_path, monkeypatch):
+        """Close-GBU P2: `# comment` inside a code fence is code, not a heading —
+        it must appear in neither the outline nor slice a section mid-fence."""
+        from app.core.config import load_settings
+        notes = load_settings().vault_path / "notes"
+        (notes / "fency.md").write_text(
+            "# Guide\n\n## Setup\n\n```bash\n# install deps\nnpm i\n```\n\n## Usage\n\nrun it\n",
+            encoding="utf-8")
+        out = self._call("get_note", id="fency.md", outline=True)
+        assert out["outline"] == ["# Guide", "## Setup", "## Usage"]
+        sec = self._call("get_note", id="fency.md", section="Setup")
+        assert "npm i" in sec["body"] and "## Usage" not in sec["body"]
+
+    def test_snippet_prefers_prose_over_heading(self, env):
+        """Close-GBU P3: a no-term-match preview must be a content line, not the H1
+        (which just duplicates the title)."""
+        from synapse.serve import _snippet
+        assert _snippet("# Title\n\nreal first line\n", ["zzz"]) == "real first line"
+        assert _snippet("# Only Heading\n", ["zzz"]) == "# Only Heading"   # last resort

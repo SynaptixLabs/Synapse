@@ -63,7 +63,7 @@ for (const w of [1024, 1280, 1920]) {
   await page.screenshot({ path: `tests/screenshots/explorer-${w}.png` });
 }
 
-// acceptance tracker (visual acceptance): drag a divider, open 3 notes, expect a1..a6 auto-PASS
+// usage-flag tracker: drag a divider, open 3 notes — flows recorded silently (panel removed)
 const rs = await page.locator('#rs-reader').boundingBox();
 await page.mouse.move(rs.x + 3, rs.y + rs.height / 2);
 await page.mouse.down();

@@ -7,7 +7,7 @@ on stdin/stdout. Read-only over the vault graph; zero model calls, zero network,
 Register with Claude Code (one line — script path, so it works from ANY project cwd):
     claude mcp add synapse -- <repo>/backend/.venv/bin/python <repo>/backend/synapse/serve.py
 
-Tools: query_graph · get_note · get_neighbors · shortest_path
+Tools: query_graph · get_note · get_neighbors · shortest_path · get_brain_info
 """
 
 from __future__ import annotations
@@ -96,12 +96,28 @@ def _graph():
     return _CACHE["graph"]
 
 
+def _headings(body: str) -> list[tuple[int, str, int]]:
+    """(level, text, offset) for every REAL markdown heading — `# comment` lines inside
+    ```/~~~ code fences are code, not structure (close-GBU P2: repo markdown is fence-heavy,
+    and a fenced shell comment used to truncate sections mid-fence)."""
+    import re as _re
+    out, fenced, pos = [], False, 0
+    for line in body.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            fenced = not fenced
+        elif not fenced:
+            m = _re.match(r"^(#{1,6})\s+(.+?)\s*$", line.rstrip("\n"))
+            if m:
+                out.append((len(m.group(1)), m.group(2).strip(), pos))
+        pos += len(line)
+    return out
+
+
 def _sectioned(body: str, section: str | None, outline: bool) -> dict:
     """Optional context-savers (Desktop GBU P1): heading outline, or one section sliced
     from its heading to the next same-or-higher-level heading."""
-    import re as _re
-    headings = [(len(m.group(1)), m.group(2).strip(), m.start())
-                for m in _re.finditer(r"^(#{1,6})\s+(.+?)\s*$", body, _re.MULTILINE)]
+    headings = _headings(body)
     if outline:
         return {"outline": [f"{'#' * lvl} {txt}" for lvl, txt, _ in headings]}
     if section:
@@ -117,23 +133,23 @@ def _sectioned(body: str, section: str | None, outline: bool) -> dict:
 
 
 def _snippet(body: str, terms: list[str]) -> str:
-    """First line containing a query term (else the first content line), ~200 chars —
-    so query results carry a PREVIEW, not just a pointer (Desktop GBU P1)."""
+    """First line containing a query term, else the first NON-heading content line (a
+    heading-only preview duplicates the title — zero information), ~200 chars."""
     import unicodedata
     folded_terms = [unicodedata.normalize("NFC", t).casefold() for t in terms]
-    first_content = ""
+    first_prose, first_heading = "", ""
     for line in body.splitlines():
         s = line.strip()
-        if not s or s.startswith(("---", "#")) and not first_content:
-            if s.startswith("#") and not first_content:
-                first_content = s
+        if not s or s.startswith("---"):
             continue
-        if not first_content:
-            first_content = s
         low = unicodedata.normalize("NFC", s).casefold()
         if any(t in low for t in folded_terms):
             return s[:200]
-    return first_content[:200]
+        if s.startswith("#"):
+            first_heading = first_heading or s
+        else:
+            first_prose = first_prose or s
+    return (first_prose or first_heading)[:200]
 
 
 def call_tool(name: str, args: dict) -> dict:
@@ -167,14 +183,14 @@ def call_tool(name: str, args: dict) -> dict:
         settings = load_settings()
         g = _graph()
         import datetime
-        mtime = datetime.datetime.fromtimestamp(
-            _CACHE["mtime"][1] / 1e9).isoformat(timespec="seconds")
+        built = datetime.datetime.fromtimestamp(
+            _CACHE["mtime"][1] / 1e9, tz=datetime.timezone.utc).isoformat(timespec="seconds")
         return {
             "roots": [{"path": r["path"], "enabled": r.get("enabled", True)}
                       for r in load_roots(settings)],
             "notes": sum(1 for n in g["nodes"] if n.get("kind") == "note"),
             "edges": len(g.get("edges", [])),
-            "last_ingest": mtime,
+            "graph_built": built,   # graph.json's build time, UTC (proxy for last sync)
             "vault": str(settings.vault_path),
             "honesty": "answers cover ONLY these roots — nothing else exists in this brain",
         }
