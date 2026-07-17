@@ -39,22 +39,40 @@ def _terms(text: str) -> list[str]:
 
 
 def _score(node: dict, terms: list[str]) -> int:
-    """Same ranking ladder as the explorer's search: exact > prefix > word > substring,
-    summed over terms so multi-term questions reward multi-term matches."""
-    hay_id = _fold(node["id"])
+    """Ranking ladder: exact > prefix > word > substring, summed over terms.
+    Two field-driven rules (Desktop GBU 2026-07-17):
+    * the repo name is STRIPPED from the id before scoring — it prefixes every note in a
+      brain, so it used to flatten every score to +60 and make repo-name questions
+      degenerate; a repo mention now adds only a small bonus;
+    * filename/path TOKENS count as words ('bible' must rank `30_HS_BIBLE.md` highly —
+      the P0 false-negative: canonical docs were invisible to their obvious keyword)."""
+    return sum(_contributions(node, terms))
+
+
+def _contributions(node: dict, terms: list[str]) -> list[int]:
+    """Per-term match strength for one node (aligned with `terms`)."""
+    nid = node["id"]
+    repo = node.get("repo") or ""
+    local = nid[len(repo) + 2:] if repo and nid.startswith(f"{repo}__") else nid
+    hay_id = _fold(local)
     hay_title = _fold(node.get("title") or "")
-    title_words = set(_WORD_RE.findall(hay_title))
-    score = 0
+    words = set(_WORD_RE.findall(hay_title)) | set(_WORD_RE.findall(hay_id))
+    repo_fold = _fold(repo)
+    out = []
     for t in terms:
         if t == hay_title or t == hay_id:
-            score += 100
+            out.append(100)
         elif hay_title.startswith(t) or hay_id.startswith(t):
-            score += 60
-        elif t in title_words:
-            score += 40
+            out.append(60)
+        elif t in words:
+            out.append(40)
         elif t in hay_title or t in hay_id:
-            score += 15
-    return score
+            out.append(15)
+        elif repo_fold and t in repo_fold:
+            out.append(8)
+        else:
+            out.append(0)
+    return out
 
 
 def _adjacency(graph: dict) -> dict[str, list[tuple[str, str, str]]]:
@@ -157,8 +175,19 @@ def query(graph: dict, question: str, budget: int = 30) -> dict:
     nodes = graph.get("nodes", [])
     if not terms:
         return {"terms": [], "seeds": [], "nodes": [], "edges": [], "truncated": False}
+    # rarity weighting (deterministic IDF — Desktop GBU P0 follow-through): in
+    # "Bible source of truth", the rare term 'bible' must not be drowned by generic
+    # words that literally title dozens of notes. Still zero model calls.
+    import math
+    contribs = [_contributions(n, terms) for n in nodes]
+    n_total = max(1, len(nodes))
+    weights = [
+        2.5 if df == 0 else max(0.5, min(2.5, math.log(n_total / df)))
+        for df in (sum(1 for c in contribs if c[i] > 0) for i in range(len(terms)))
+    ]
     scored = sorted(
-        ((n, _score(n, terms)) for n in nodes), key=lambda p: (-p[1], p[0]["id"])
+        ((n, sum(c * w for c, w in zip(cv, weights))) for n, cv in zip(nodes, contribs)),
+        key=lambda p: (-p[1], p[0]["id"]),
     )
     seeds = [n["id"] for n, s in scored[: min(5, budget)] if s > 0]
     adj = _adjacency(graph)
@@ -177,9 +206,18 @@ def query(graph: dict, question: str, budget: int = 30) -> dict:
                 break
             keep.append(nb); kept.add(nb)
     by_id = {n["id"]: n for n in nodes}
+    # collapse parallel edges (a pair often links as wikilink AND relative AND pathref):
+    # one entry per (src, dst) with the type list — the duplication is token noise for
+    # MCP consumers and adds no signal (Desktop GBU P2)
+    pair_types: dict[tuple[str, str], list[str]] = {}
+    for e in graph.get("edges", []):
+        if e["src"] in kept and e["dst"] in kept and e["type"] not in _PATH_EXCLUDED_TYPES:
+            types = pair_types.setdefault((e["src"], e["dst"]), [])
+            if e["type"] not in types:
+                types.append(e["type"])
     sub_edges = [
-        e for e in graph.get("edges", [])
-        if e["src"] in kept and e["dst"] in kept and e["type"] not in _PATH_EXCLUDED_TYPES
+        {"src": src, "dst": dst, "types": sorted(types)}
+        for (src, dst), types in sorted(pair_types.items())
     ]
     return {
         "terms": terms,

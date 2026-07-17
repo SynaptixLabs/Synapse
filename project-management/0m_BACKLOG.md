@@ -76,6 +76,11 @@
 18. **Leiden communities + brain report** — structure-based clustering (LLM-free labels) beyond
     folder-based D-9 groups; auto whole-brain report (god nodes · surprising connections ·
     suggested questions). Later v0.2 wave (T8).
+19. **Semantic re-rank lane (opt-in)** — founder's Desktop field GBU (2026-07-17): lexical
+    retrieval's honest ceiling is phrase INTENT ("Bible source of truth" vs notes literally
+    titled so). Deterministic default stays; opt-in re-rank via local embeddings or the
+    summarizer seam. Shipped already: filename-token recall, IDF rarity weighting, seed
+    snippets, sectioned get_note, get_brain_info coverage disclosure. → issue #16.
 
 Items 1 (entity extraction) and 8 gain the **edge-confidence vocabulary** prerequisite
 (`EXTRACTED`/`INFERRED`+score/`AMBIGUOUS`) — adopted as schema groundwork in Sprint 04 Epic J.

@@ -42,9 +42,21 @@ TOOLS = [
     },
     {
         "name": "get_note",
-        "description": "Read one note's full markdown body from the vault by id.",
-        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}},
-                        "required": ["id"]},
+        "description": "Read one note's markdown from the vault by id. Long note? Pass "
+                       "section='<heading text>' to get just that section, or "
+                       "outline=true to get the heading tree first — saves your context.",
+        "inputSchema": {"type": "object", "properties": {
+            "id": {"type": "string"},
+            "section": {"type": "string", "description": "heading substring — returns only that section"},
+            "outline": {"type": "boolean", "description": "return the heading outline instead of the body"}},
+            "required": ["id"]},
+    },
+    {
+        "name": "get_brain_info",
+        "description": "The brain's SCOPE: which source roots are ingested, note/edge "
+                       "counts, last ingest time. Call this first — answers only cover "
+                       "what was ingested (a one-repo brain can't answer about other repos).",
+        "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "get_neighbors",
@@ -72,29 +84,100 @@ def _graph():
     from modules.graph.src.services import GraphService
     svc = GraphService(load_settings().vault_path)
     try:
-        mtime = svc.graph_file.stat().st_mtime
+        # key on (path, mtime) — mtime alone can collide across different vaults
+        key = (str(svc.graph_file), svc.graph_file.stat().st_mtime_ns)
     except OSError:
         raise RuntimeError("No graph yet — run `synapse ingest` in the SYNAPSE repo first.")
-    if _CACHE["mtime"] != mtime:
+    if _CACHE["mtime"] != key:
         _CACHE["graph"] = svc.load()
-        _CACHE["mtime"] = mtime
+        _CACHE["mtime"] = key
     if _CACHE["graph"] is None:
         raise RuntimeError("No graph yet — run `synapse ingest` in the SYNAPSE repo first.")
     return _CACHE["graph"]
+
+
+def _sectioned(body: str, section: str | None, outline: bool) -> dict:
+    """Optional context-savers (Desktop GBU P1): heading outline, or one section sliced
+    from its heading to the next same-or-higher-level heading."""
+    import re as _re
+    headings = [(len(m.group(1)), m.group(2).strip(), m.start())
+                for m in _re.finditer(r"^(#{1,6})\s+(.+?)\s*$", body, _re.MULTILINE)]
+    if outline:
+        return {"outline": [f"{'#' * lvl} {txt}" for lvl, txt, _ in headings]}
+    if section:
+        want = section.casefold()
+        for i, (lvl, txt, start) in enumerate(headings):
+            if want in txt.casefold():
+                end = next((s for l2, _, s in headings[i + 1:] if l2 <= lvl), len(body))
+                return {"section": txt, "body": body[start:end].rstrip()}
+        raise RuntimeError(
+            f"No heading matches '{section}'. Outline: "
+            + " | ".join(t for _, t, _ in headings[:20]))
+    return {"body": body}
+
+
+def _snippet(body: str, terms: list[str]) -> str:
+    """First line containing a query term (else the first content line), ~200 chars —
+    so query results carry a PREVIEW, not just a pointer (Desktop GBU P1)."""
+    import unicodedata
+    folded_terms = [unicodedata.normalize("NFC", t).casefold() for t in terms]
+    first_content = ""
+    for line in body.splitlines():
+        s = line.strip()
+        if not s or s.startswith(("---", "#")) and not first_content:
+            if s.startswith("#") and not first_content:
+                first_content = s
+            continue
+        if not first_content:
+            first_content = s
+        low = unicodedata.normalize("NFC", s).casefold()
+        if any(t in low for t in folded_terms):
+            return s[:200]
+    return first_content[:200]
 
 
 def call_tool(name: str, args: dict) -> dict:
     """Dispatch one tool call → a JSON-serializable result dict (raises on bad input)."""
     from modules.graph.src import query as q
     if name == "query_graph":
-        return q.query(_graph(), args["question"], budget=int(args.get("budget", 30)))
+        out = q.query(_graph(), args["question"], budget=int(args.get("budget", 30)))
+        # enrich the ≤5 seeds with a matched-line preview (a few file reads, big saving
+        # in get_note round-trips for the caller)
+        from app.core.config import load_settings
+        from modules.graph.src.services import GraphService
+        svc = GraphService(load_settings().vault_path)
+        snippets = {}
+        for sid in out["seeds"]:
+            note = svc.read_note(sid)
+            if note:
+                snippets[sid] = _snippet(note["body"], out["terms"])
+        out["seed_snippets"] = snippets
+        return out
     if name == "get_note":
         from app.core.config import load_settings
         from modules.graph.src.services import GraphService
         note = GraphService(load_settings().vault_path).read_note(args["id"])
         if note is None:
             raise RuntimeError(f"No note '{args['id']}' in the vault.")
-        return note
+        extra = _sectioned(note["body"], args.get("section"), bool(args.get("outline")))
+        return {**{k: v for k, v in note.items() if k != "body"}, **extra}
+    if name == "get_brain_info":
+        from app.core.config import load_settings
+        from app.core.roots import load_roots
+        settings = load_settings()
+        g = _graph()
+        import datetime
+        mtime = datetime.datetime.fromtimestamp(
+            _CACHE["mtime"][1] / 1e9).isoformat(timespec="seconds")
+        return {
+            "roots": [{"path": r["path"], "enabled": r.get("enabled", True)}
+                      for r in load_roots(settings)],
+            "notes": sum(1 for n in g["nodes"] if n.get("kind") == "note"),
+            "edges": len(g.get("edges", [])),
+            "last_ingest": mtime,
+            "vault": str(settings.vault_path),
+            "honesty": "answers cover ONLY these roots — nothing else exists in this brain",
+        }
     if name == "get_neighbors":
         g = _graph()
         rid = q.resolve(g, args["id"])

@@ -13,7 +13,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("SYNAPSE_ENV_FILE", str(tmp_path / ".env"))
     from modules.graph.src.services import GraphService
     from modules.ingest.src.services import IngestService
-    IngestService(tmp_path / "vault", frozenset({".git"})).ingest(
+    IngestService(tmp_path / "vault", frozenset({".git", "node_modules"})).ingest(
         [FIXTURES / "repo_a", FIXTURES / "repo_b"])
     GraphService(tmp_path / "vault").rebuild()
 
@@ -41,7 +41,7 @@ class TestProtocol:
     def test_tools_list_shape(self, env):
         tools = _rpc("tools/list")["result"]["tools"]
         assert {t["name"] for t in tools} == {
-            "query_graph", "get_note", "get_neighbors", "shortest_path"}
+            "query_graph", "get_note", "get_neighbors", "shortest_path", "get_brain_info"}
         assert all("inputSchema" in t and "description" in t for t in tools)
 
     def test_unknown_method_is_jsonrpc_error_not_crash(self, env):
@@ -126,3 +126,45 @@ class TestLifecycle:
         from synapse.serve import handle
         resp = handle({"id": 9, "method": "ping"})
         assert resp["error"]["code"] == -32600
+
+
+class TestDesktopGBUWave:
+    """Field-feedback fixes (Claude Desktop GBU 2026-07-17): coverage, previews, sections."""
+
+    def _call(self, name, **arguments):
+        import json as j
+        _rpc("initialize")   # idempotent — tests must not depend on class ordering
+        resp = _rpc("tools/call", name=name, arguments=arguments)
+        assert resp["result"]["isError"] is False, resp["result"]["content"][0]["text"]
+        return j.loads(resp["result"]["content"][0]["text"])
+
+    def test_brain_info_discloses_scope(self, env):
+        info = self._call("get_brain_info")
+        assert info["notes"] == 4 and info["edges"] > 0
+        assert info["last_ingest"] and info["honesty"]
+        assert isinstance(info["roots"], list)   # empty roots.json → env-seeded is fine
+
+    def test_query_seeds_carry_snippets(self, env):
+        out = self._call("query_graph", question="alpha")
+        assert out["seeds"] and out["seed_snippets"]
+        assert any(out["seed_snippets"].values())   # at least one non-empty preview line
+
+    def test_query_edges_are_deduped_pairs(self, env):
+        out = self._call("query_graph", question="alpha readme")
+        for e in out["edges"]:
+            assert "types" in e and isinstance(e["types"], list) and e["types"]
+        pairs = [(e["src"], e["dst"]) for e in out["edges"]]
+        assert len(pairs) == len(set(pairs))     # one entry per pair, types merged
+
+    def test_get_note_outline_and_section(self, env):
+        out = self._call("get_note", id="repo_a__docs__alpha.md", outline=True)
+        assert out["outline"] and out["outline"][0].startswith("#")
+        head = out["outline"][0].lstrip("# ")
+        sec = self._call("get_note", id="repo_a__docs__alpha.md", section=head[:5])
+        assert sec["section"] and sec["body"].startswith("#")
+        # unknown section → actionable error listing the outline
+        import json as j
+        resp = _rpc("tools/call", name="get_note",
+                    arguments={"id": "repo_a__docs__alpha.md", "section": "zzz-nope"})
+        assert resp["result"]["isError"] is True
+        assert "Outline:" in resp["result"]["content"][0]["text"]

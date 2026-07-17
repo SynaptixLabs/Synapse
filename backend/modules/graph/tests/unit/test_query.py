@@ -138,3 +138,38 @@ class TestCodexWave:
         with pytest.raises(ValueError):
             Edge(src="a", dst="b", type="wikilink", confidence="EXTRACTED", confidence_score=0.9)
         Edge(src="a", dst="b", type="wikilink", confidence="INFERRED", confidence_score=0.85)
+
+
+class TestDesktopGBUWave:
+    """Recall fixes from the Claude Desktop field GBU (2026-07-17)."""
+
+    def test_filename_tokens_rank_canonical_docs(self, tmp_path):
+        """P0 false-negative: 'bible' must surface `30_HS_BIBLE.md` even when its TITLE
+        doesn't contain the word — filename tokens are words now."""
+        repo = tmp_path / "hs"; (repo / "pm").mkdir(parents=True)
+        (repo / "pm" / "30_HS_BIBLE.md").write_text("# The Source Book\n\nbinding rules\n", encoding="utf-8")
+        (repo / "pm" / "notes.md").write_text("# Notes\n\nthe bible is elsewhere\n", encoding="utf-8")
+        v = tmp_path / "v"
+        IngestService(v, IGNORE).ingest([repo])
+        g = GraphService(v).rebuild().to_dict()
+        out = query(g, "bible source of truth")
+        assert out["seeds"][0] == "hs__pm__30_HS_BIBLE.md"
+
+    def test_repo_name_no_longer_flattens_scores(self, graph):
+        """Querying the brain's own repo name must not give every note the same big
+        prefix bonus — distinctive terms must dominate."""
+        out = query(graph, "repo_a alpha")
+        assert out["seeds"][0] == "repo_a__docs__alpha.md"   # 'alpha' outranks the repo prefix
+
+    def test_rare_term_beats_generic_title_words(self, tmp_path):
+        """IDF follow-through: 'bible source of truth' must surface the Bible even when
+        six other notes are literally TITLED 'Source of Truth'."""
+        repo = tmp_path / "hs2"; repo.mkdir()
+        for i in range(6):
+            (repo / f"spec{i}.md").write_text(f"# Source of Truth {i}\n\nspec\n", encoding="utf-8")
+        (repo / "30_HS_BIBLE.md").write_text("# The Book\n\nbinding\n", encoding="utf-8")
+        v = tmp_path / "v2"
+        IngestService(v, IGNORE).ingest([repo])
+        g = GraphService(v).rebuild().to_dict()
+        out = query(g, "bible source of truth")
+        assert "hs2__30_HS_BIBLE.md" in out["seeds"]
