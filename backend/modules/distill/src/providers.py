@@ -96,14 +96,14 @@ class VisionDescriber:
     from a candidate list. AI-derived relations ship as INFERRED edges — never free-typed."""
 
     def describe(self, subject: str, image_bytes: bytes | None, text: str,
-                 candidates: list[str]) -> AssetDescription:  # pragma: no cover
+                 candidates: list[str], suffix: str = ".png") -> AssetDescription:  # pragma: no cover
         raise NotImplementedError
 
 
 class MockVisionDescriber(VisionDescriber):
     """Deterministic description — tests and SYNAPSE_MOCK_MODELS=1."""
 
-    def describe(self, subject, image_bytes, text, candidates):
+    def describe(self, subject, image_bytes, text, candidates, suffix=".png"):
         kind = "image" if image_bytes else "document"
         return AssetDescription(
             markdown=(f"This is a **mock description** of the {kind} *{subject}* — "
@@ -116,13 +116,12 @@ class AnthropicVisionDescriber(VisionDescriber):
     _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
               ".webp": "image/webp", ".gif": "image/gif"}
 
-    def __init__(self, api_key: str, model: str, max_tokens: int, suffix: str = ".png"):
+    def __init__(self, api_key: str, model: str, max_tokens: int):
         self._api_key = api_key
         self.model = model
         self.max_tokens = max_tokens
-        self.suffix = suffix
 
-    def describe(self, subject, image_bytes, text, candidates):
+    def describe(self, subject, image_bytes, text, candidates, suffix=".png"):
         import base64
 
         import anthropic  # the ONLY allowed import site of the vendor SDK
@@ -141,7 +140,7 @@ class AnthropicVisionDescriber(VisionDescriber):
         if image_bytes is not None:
             content.append({"type": "image", "source": {
                 "type": "base64",
-                "media_type": self._MEDIA.get(self.suffix.lower(), "image/png"),
+                "media_type": self._MEDIA.get(suffix.lower(), "image/png"),
                 "data": base64.standard_b64encode(image_bytes).decode(),
             }})
         else:

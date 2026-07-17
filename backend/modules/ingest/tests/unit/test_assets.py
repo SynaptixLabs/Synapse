@@ -10,8 +10,8 @@ from modules.ingest.src.services import IngestService
 FIXTURES = Path(__file__).resolve().parents[4] / "tests" / "fixtures"
 PHOTOS = FIXTURES / "repo_photos"
 IGNORE = frozenset({"node_modules", ".git", ".venv", "__pycache__"})
-SUNSET = "repo_photos__album__sunset.png.md"
-HANDBOOK = "repo_photos__handbook.pdf.md"
+SUNSET = "repo_photos__album__sunset.png.asset.md"
+HANDBOOK = "repo_photos__handbook.pdf.asset.md"
 
 
 @pytest.fixture
@@ -86,11 +86,11 @@ class TestSidecars:
         img = photos / "pic.png"
         img.write_bytes((PHOTOS / "album" / "sunset.png").read_bytes())
         svc.ingest([photos], managed_names={"p2"}, asset_roots={str(photos.resolve())})
-        side = tmp_path / "vault" / "notes" / "p2__pic.png.md"
+        side = tmp_path / "vault" / "notes" / "p2__pic.png.asset.md"
         content = side.read_text(encoding="utf-8")
         content = content.replace("---\nsynapse.source_repo",
                                   "---\nsynapse.source_repo", 1)  # noop anchor
-        content = content.replace("synapse.ingested_at", "synapse.inferred_links: p2__pic.png.md\nsynapse.ingested_at", 1)
+        content = content.replace("synapse.ingested_at", "synapse.inferred_links: p2__pic.png.asset.md\nsynapse.ingested_at", 1)
         content += "\n## Description (AI)\n\nA glorious sunset.\n"
         side.write_text(content, encoding="utf-8")
         import os, time
@@ -98,7 +98,7 @@ class TestSidecars:
         svc.ingest([photos], managed_names={"p2"}, asset_roots={str(photos.resolve())})
         after = side.read_text(encoding="utf-8")
         assert "A glorious sunset." in after
-        assert "synapse.inferred_links: p2__pic.png.md" in after
+        assert "synapse.inferred_links: p2__pic.png.asset.md" in after
 
     def test_synapseignore_applies_to_assets(self, svc, tmp_path):
         photos = tmp_path / "p3"; (photos / "Archive").mkdir(parents=True)
@@ -132,3 +132,41 @@ class TestAssetGraph:
                           "confidence": "INFERRED", "confidence_score": 0.75}
         node = next(n for n in g["nodes"] if n["id"] == SUNSET)
         assert "[[ghost-target.md]] (AI-inferred)" in node["unresolved"]   # honest, not dropped
+
+
+class TestGBUWave:
+    """Sprint-05 fresh-eyes GBU regression pins (2026-07-17)."""
+
+    def test_photo_plus_annotation_md_coexist(self, svc, tmp_path):
+        """P1: `photo.png` + a REAL `photo.png.md` annotation next to it (the Obsidian
+        convention) must produce TWO vault notes — the ids used to collide and thrash."""
+        repo = tmp_path / "annot"; repo.mkdir()
+        (repo / "photo.png").write_bytes((PHOTOS / "album" / "sunset.png").read_bytes())
+        (repo / "photo.png.md").write_text("# My annotation\n\nhand-written notes\n", encoding="utf-8")
+        rep = svc.ingest([repo], managed_names={"annot"}, asset_roots={str(repo.resolve())})
+        assert rep.assets_written == 1 and rep.notes_written == 1
+        notes = tmp_path / "vault" / "notes"
+        assert (notes / "annot__photo.png.asset.md").is_file()     # the sidecar
+        assert (notes / "annot__photo.png.md").is_file()           # the annotation
+        assert "hand-written notes" in (notes / "annot__photo.png.md").read_text(encoding="utf-8")
+        # and the sync CONVERGES: second pass is all-unchanged
+        rep2 = svc.ingest([repo], managed_names={"annot"}, asset_roots={str(repo.resolve())})
+        assert rep2.assets_written == 0 and rep2.notes_written == 0
+
+    def test_long_frontmatter_links_line_survives_rewrite(self, svc, tmp_path):
+        """P2: the AI-links carry-over used to read only existing[:800] — a long links
+        line was silently truncated, corrupting a PAID artifact."""
+        photos = tmp_path / "p4"; photos.mkdir()
+        img = photos / "deep.png"
+        img.write_bytes((PHOTOS / "album" / "sunset.png").read_bytes())
+        svc.ingest([photos], managed_names={"p4"}, asset_roots={str(photos.resolve())})
+        side = tmp_path / "vault" / "notes" / "p4__deep.png.asset.md"
+        long_ids = " | ".join(f"repo__{'x' * 60}_{i}.md" for i in range(20))   # ≫ 800 chars
+        content = side.read_text(encoding="utf-8").replace(
+            "synapse.ingested_at", f"synapse.inferred_links: {long_ids}\nsynapse.ingested_at", 1)
+        side.write_text(content, encoding="utf-8")
+        import os, time
+        os.utime(img, (time.time() + 5, time.time() + 5))
+        svc.ingest([photos], managed_names={"p4"}, asset_roots={str(photos.resolve())})
+        after = side.read_text(encoding="utf-8")
+        assert f"synapse.inferred_links: {long_ids}" in after      # byte-identical carry-over

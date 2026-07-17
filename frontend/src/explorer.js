@@ -374,7 +374,8 @@ window.runIngest = async () => {
     await api('/rebuild', { method: 'POST' });
     const t = rep.totals;
     if (t.pruned > 0) { ac.prunedSeen = true; }   // acceptance s43: the sync pruned, honestly counted
-    setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned`);
+    const assets = t.assets_found > 0 ? ` · ${t.assets_found} assets → ${t.assets_written} sidecars` : '';
+    setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned${assets}`);
     setDirty(false);
     await refresh();
   } catch (e) { setMsg('ingest failed: ' + e.message, true); }

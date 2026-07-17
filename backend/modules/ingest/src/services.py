@@ -137,10 +137,16 @@ class IngestService:
             return "skipped"
         stat_token = f"{st.st_mtime_ns}:{st.st_size}"
         existing = ""
+        head = ""
         if note_path.is_file():
             existing = note_path.read_text(encoding="utf-8", errors="replace")
-            m = self._STAT_RE.search(existing[:800])
+            # the WHOLE frontmatter head — a fixed slice truncated long links lines and
+            # silently corrupted paid AI artifacts (GBU sprint-05 P2)
+            head = existing.split("\n---\n", 1)[0]
+            m = self._STAT_RE.search(head)
             if m and m.group(1) == stat_token:
+                # NOTE: an edit that restores mtime AND size (exiftool -P, rsync -t) is
+                # invisible to this fast path by design — disclosed in the README
                 return "unchanged"
         try:
             raw = asset.path.read_bytes()
@@ -154,7 +160,7 @@ class IngestService:
         idx = existing.find(self._AI_SECTION)
         if idx != -1:
             ai_section = "\n" + existing[idx:].rstrip() + "\n"
-        links_m = self._AI_LINKS_RE.search(existing[:800])
+        links_m = self._AI_LINKS_RE.search(head)
         links_line = f"synapse.inferred_links: {links_m.group(1)}\n" if links_m else ""
         body = self._asset_body(asset, raw, errors)
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")

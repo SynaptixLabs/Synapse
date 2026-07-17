@@ -191,10 +191,10 @@ class TestDescribe:
     def test_describe_writes_section_links_and_graph_edges(self, asset_vault):
         vault, photos = asset_vault
         svc = self._svc(vault)
-        out = svc.describe("repo_photos__album__sunset.png.md",
+        out = svc.describe("repo_photos__album__sunset.png.asset.md",
                            photos / "album" / "sunset.png")
         assert out["links_added"] and not out["links_dropped"]
-        side = (vault / "notes" / "repo_photos__album__sunset.png.md").read_text(encoding="utf-8")
+        side = (vault / "notes" / "repo_photos__album__sunset.png.asset.md").read_text(encoding="utf-8")
         assert "## Description (AI)" in side and "mock description" in side
         assert "synapse.inferred_links: " in side
         from modules.graph.src.services import GraphService
@@ -206,8 +206,8 @@ class TestDescribe:
         vault, photos = asset_vault
         svc = self._svc(vault)
         for _ in range(2):
-            svc.describe("repo_photos__album__sunset.png.md", photos / "album" / "sunset.png")
-        side = (vault / "notes" / "repo_photos__album__sunset.png.md").read_text(encoding="utf-8")
+            svc.describe("repo_photos__album__sunset.png.asset.md", photos / "album" / "sunset.png")
+        side = (vault / "notes" / "repo_photos__album__sunset.png.asset.md").read_text(encoding="utf-8")
         assert side.count("## Description (AI)") == 1
         assert side.count("synapse.inferred_links:") == 1
 
@@ -217,37 +217,37 @@ class TestDescribe:
         from modules.distill.src.service import DescribeService
 
         class Hallucinator(VisionDescriber):
-            def describe(self, subject, image_bytes, text, candidates):
+            def describe(self, subject, image_bytes, text, candidates, suffix=".png"):
                 return AssetDescription(markdown="A thing.",
                                         links=[candidates[0], "made-up-note.md"], model="bad")
         svc = DescribeService(vault, Hallucinator())
-        out = svc.describe("repo_photos__album__sunset.png.md",
+        out = svc.describe("repo_photos__album__sunset.png.asset.md",
                            photos / "album" / "sunset.png")
         assert out["links_dropped"] == ["made-up-note.md"]
-        side = (vault / "notes" / "repo_photos__album__sunset.png.md").read_text(encoding="utf-8")
+        side = (vault / "notes" / "repo_photos__album__sunset.png.asset.md").read_text(encoding="utf-8")
         assert "made-up-note.md" not in side.split("---")[1]   # never written to frontmatter
 
     def test_cost_guard_fires_for_images(self, asset_vault):
         vault, photos = asset_vault
         svc = self._svc(vault, threshold=100)   # image est 2600 > 100
         with pytest.raises(ConfirmationRequired):
-            svc.describe("repo_photos__album__sunset.png.md", photos / "album" / "sunset.png")
-        out = svc.describe("repo_photos__album__sunset.png.md",
+            svc.describe("repo_photos__album__sunset.png.asset.md", photos / "album" / "sunset.png")
+        out = svc.describe("repo_photos__album__sunset.png.asset.md",
                            photos / "album" / "sunset.png", confirm=True)
         assert out["links_added"]
 
     def test_candidates_exclude_assets_and_summaries(self, asset_vault):
         vault, _ = asset_vault
         svc = self._svc(vault)
-        cands = svc.candidates(exclude="repo_photos__album__sunset.png.md")
-        assert all(not c.endswith((".png.md", ".pdf.md")) for c in cands)
+        cands = svc.candidates(exclude="repo_photos__album__sunset.png.asset.md")
+        assert all(not c.endswith((".png.asset.md", ".pdf.asset.md")) for c in cands)
         assert "repo_a__docs__alpha.md" in cands
 
     def test_undescribed_worklist_shrinks(self, asset_vault):
         vault, photos = asset_vault
         svc = self._svc(vault)
         before = svc.undescribed_assets()
-        assert "repo_photos__album__sunset.png.md" in before
-        svc.describe("repo_photos__album__sunset.png.md", photos / "album" / "sunset.png")
+        assert "repo_photos__album__sunset.png.asset.md" in before
+        svc.describe("repo_photos__album__sunset.png.asset.md", photos / "album" / "sunset.png")
         after = svc.undescribed_assets()
-        assert "repo_photos__album__sunset.png.md" not in after
+        assert "repo_photos__album__sunset.png.asset.md" not in after

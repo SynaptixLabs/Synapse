@@ -332,7 +332,7 @@ class TestModelKeys:
 
 class TestAssets:
     PHOTOS = Path(__file__).resolve().parent / "fixtures" / "repo_photos"
-    SUNSET = "repo_photos__album__sunset.png.md"
+    SUNSET = "repo_photos__album__sunset.png.asset.md"
 
     @pytest.fixture
     def aclient(self, client, tmp_path, monkeypatch) -> TestClient:

@@ -71,9 +71,11 @@ class SourceAsset:
 
     @property
     def note_id(self) -> str:
-        """Sidecar id keeps the asset's own extension + `.md` (`…__img.jpg.md`) so the
-        source filename stays readable in the graph."""
-        return cap_note_id(f"{self.repo_name}__{self.rel_path.replace('/', '__')}.md")
+        """Sidecar id = asset filename + `.asset.md` (`…__img.jpg.asset.md`). The extra
+        `.asset` disambiguates from a REAL markdown file named `img.jpg.md` sitting next to
+        the photo — the Obsidian annotation convention — which would otherwise share the
+        id and silently merge/thrash (GBU sprint-05 P1)."""
+        return cap_note_id(f"{self.repo_name}__{self.rel_path.replace('/', '__')}.asset.md")
 
 
 @dataclass

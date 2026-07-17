@@ -196,18 +196,23 @@ class DescribeService:
         self.graph = GraphService(vault_path)
         self.describer = describer
         self.confirm_threshold = confirm_threshold
+        self._pool: list[str] | None = None   # candidate pool, built ONCE per service life
 
     def candidates(self, exclude: str) -> list[str]:
         """Top-degree KNOWLEDGE notes (no other assets, no summaries) — the model picks
-        related ids from this list, never free-types them."""
-        g = self.graph.build()
-        pool = [
-            n for n in g.nodes.values()
-            if n.kind == "note" and n.id != exclude
-            and not n.tags and n.repo != SUMMARY_REPO
-        ]
-        pool.sort(key=lambda n: (-(n.in_degree + n.out_degree), n.id))
-        return [n.id for n in pool[:300]]
+        related ids from this list, never free-types them. Cached per service instance:
+        a describe-all over 500 photos must not rebuild the graph 500 times (GBU P2).
+        Ids containing ' | ' are excluded — that's the links-line separator."""
+        if self._pool is None:
+            g = self.graph.build()
+            pool = [
+                n for n in g.nodes.values()
+                if n.kind == "note" and not n.tags and n.repo != SUMMARY_REPO
+                and " | " not in n.id
+            ]
+            pool.sort(key=lambda n: (-(n.in_degree + n.out_degree), n.id))
+            self._pool = [n.id for n in pool[:301]]
+        return [c for c in self._pool if c != exclude][:300]
 
     def tokens_est(self, asset_type: str, text: str) -> int:
         return self._IMAGE_TOKENS_EST if asset_type == "image" else 800 + len(text) // 4
@@ -222,14 +227,17 @@ class DescribeService:
         if asset_type == "image":
             image_bytes = source_file.read_bytes()
         else:
-            text = note["body"]        # the sidecar already carries the extracted PDF text
+            # the sidecar carries the extracted PDF text — WITHOUT any previous AI section
+            # (a re-describe must never feed the model its own prior output as "document text")
+            text = note["body"].split(_AI_SECTION, 1)[0]
         est = self.tokens_est(asset_type, text)
         if est > self.confirm_threshold and not confirm:
             raise ConfirmationRequired(est, self.confirm_threshold)
         cands = self.candidates(exclude=note_id)
         result = self.describer.describe(
             subject=Path(note["source_path"]).name,
-            image_bytes=image_bytes, text=text, candidates=cands)
+            image_bytes=image_bytes, text=text, candidates=cands,
+            suffix=Path(note["source_path"]).suffix)
         known = set(cands)
         kept = [l for l in result.links if l in known]
         dropped = [l for l in result.links if l not in known]
@@ -244,9 +252,14 @@ class DescribeService:
         content = path.read_text(encoding="utf-8")
         content = _LINKS_LINE_RE.sub("", content)
         if links:
-            content = content.replace(
-                "synapse.ingested_at:",
-                f"synapse.inferred_links: {' | '.join(links)}\nsynapse.ingested_at:", 1)
+            line = f"synapse.inferred_links: {' | '.join(links)}\n"
+            if "synapse.ingested_at:" in content:
+                content = content.replace("synapse.ingested_at:",
+                                          line + "synapse.ingested_at:", 1)
+            elif content.startswith("---\n"):   # hand-authored sidecar (Obsidian edits)
+                content = "---\n" + line + content[4:]
+            else:
+                content = f"---\n{line}---\n" + content
         idx = content.find(_AI_SECTION)
         if idx != -1:
             content = content[:idx].rstrip() + "\n"

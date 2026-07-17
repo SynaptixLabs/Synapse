@@ -72,7 +72,7 @@ def _asset_source(note: dict):
     return target
 
 
-def _describe_service(suffix: str = ".png"):
+def _describe_service():
     from modules.distill.src.providers import AnthropicVisionDescriber, MockVisionDescriber
     from modules.distill.src.service import DescribeService
     s = load_settings()
@@ -80,7 +80,7 @@ def _describe_service(suffix: str = ".png"):
         describer = MockVisionDescriber()
     elif s.anthropic_key:
         describer = AnthropicVisionDescriber(
-            s.anthropic_key, s.summarizer_model, s.summarizer_max_tokens, suffix=suffix)
+            s.anthropic_key, s.summarizer_model, s.summarizer_max_tokens)
     else:
         raise HTTPException(status_code=400, detail=(
             "No ANTHROPIC_API_KEY configured (backend/.env) — set your key, or set "
@@ -94,13 +94,15 @@ def describe(req: DescribeRequest) -> dict:
     from pathlib import Path
 
     from modules.graph.src.services import GraphService
+    from app.core.vault_lock import vault_write_lock
     note = GraphService(load_settings().vault_path).read_note(req.note_id)
     if note is None or note.get("kind") != "asset":
         raise HTTPException(status_code=404, detail=f"No asset note '{req.note_id}' in the vault.")
     source = _asset_source(note)
-    svc = _describe_service(suffix=Path(note["source_path"]).suffix)
+    svc = _describe_service()
     try:
-        return svc.describe(req.note_id, source, confirm=req.confirm)
+        with vault_write_lock(load_settings().vault_path):
+            return svc.describe(req.note_id, source, confirm=req.confirm)
     except ConfirmationRequired as c:
         return {"requires_confirmation": True, "tokens_est": c.tokens_est, "threshold": c.threshold}
     except KeyError as e:
@@ -113,23 +115,30 @@ def describe_all(req: DescribeAllRequest) -> dict:
     never auto-spend): call without confirm to get the count + estimate."""
     from pathlib import Path
 
+    from app.core.vault_lock import vault_write_lock
+    from modules.distill.src.service import _AI_SECTION
     from modules.graph.src.services import GraphService
     svc = _describe_service()
     todo = svc.undescribed_assets()
     if not todo:
         return {"described": 0, "message": "every asset already has a description"}
-    if not req.confirm:
-        est = svc._IMAGE_TOKENS_EST * len(todo)   # upper-bound estimate, disclosed as such
-        return {"requires_confirmation": True, "count": len(todo),
-                "tokens_est_upper_bound": est}
     graph_svc = GraphService(load_settings().vault_path)
+    if not req.confirm:
+        # a REAL per-item estimate (GBU P2: 2600×N under-quoted PDFs 4-10×) + the
+        # candidate block each call carries (~300 ids ≈ 4K tokens)
+        est = 0
+        for note_id in todo:
+            note = graph_svc.read_note(note_id) or {}
+            text = (note.get("body") or "").split(_AI_SECTION, 1)[0]
+            est += svc.tokens_est(note.get("asset_type", "image"), text) + 4000
+        return {"requires_confirmation": True, "count": len(todo), "tokens_est": est}
     done, failed = [], []
     for note_id in todo:
         try:
             note = graph_svc.read_note(note_id)
             source = _asset_source(note)
-            per = _describe_service(suffix=Path(note["source_path"]).suffix)
-            done.append(per.describe(note_id, source, confirm=True))
+            with vault_write_lock(load_settings().vault_path):
+                done.append(svc.describe(note_id, source, confirm=True))
         except (HTTPException, KeyError, OSError) as e:
             failed.append({"note_id": note_id, "error": str(getattr(e, "detail", e))})
     return {"described": len(done), "failed": failed, "results": done}
