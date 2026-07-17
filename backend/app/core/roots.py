@@ -39,6 +39,7 @@ def load_roots(settings: Settings) -> list[dict]:
         entries = [{"path": str(REPO_ROOT), "enabled": True}]
         src = "default"
     return [{"path": e["path"], "enabled": bool(e.get("enabled", True)),
+             "assets": bool(e.get("assets", False)),   # sprint 05: sync images/PDFs too
              "exists": Path(e["path"]).is_dir(), "source": src} for e in entries]
 
 
@@ -47,10 +48,17 @@ def save_roots(settings: Settings, entries: list[dict]) -> None:
     f.parent.mkdir(parents=True, exist_ok=True)
     tmp = f.parent / (f.name + ".tmp")   # atomic — a crash mid-write must not corrupt the store
     tmp.write_text(json.dumps(
-        [{"path": e["path"], "enabled": bool(e.get("enabled", True))} for e in entries],
+        [{"path": e["path"], "enabled": bool(e.get("enabled", True)),
+          "assets": bool(e.get("assets", False))} for e in entries],
         indent=1, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, f)
 
 
 def enabled_paths(settings: Settings) -> tuple[Path, ...]:
     return tuple(Path(e["path"]) for e in load_roots(settings) if e["enabled"])
+
+
+def asset_root_paths(settings: Settings) -> set[str]:
+    """Resolved path strings of enabled roots whose assets flag is ON."""
+    return {str(Path(e["path"]).resolve())
+            for e in load_roots(settings) if e["enabled"] and e.get("assets")}

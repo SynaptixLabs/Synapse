@@ -44,6 +44,38 @@ class SourceFile:
         return cap_note_id(f"{self.repo_name}__{self.rel_path.replace('/', '__')}")
 
 
+# Asset extensions the sidecar pass understands (sprint 05, Epic K — issue #13 stage 1)
+ASSET_TYPES = {
+    ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
+    ".pdf": "pdf",
+}
+
+
+@dataclass(frozen=True)
+class SourceAsset:
+    """One binary asset (image/PDF) discovered in an assets-enabled source root.
+    The vault gets a SIDECAR markdown note (metadata + extracted text); the bytes stay
+    in the source root — a 50GB photo library must never duplicate into the vault."""
+
+    repo_name: str
+    repo_root: Path
+    path: Path            # absolute
+
+    @property
+    def rel_path(self) -> str:
+        return self.path.relative_to(self.repo_root).as_posix()
+
+    @property
+    def asset_type(self) -> str:
+        return ASSET_TYPES[self.path.suffix.lower()]
+
+    @property
+    def note_id(self) -> str:
+        """Sidecar id keeps the asset's own extension + `.md` (`…__img.jpg.md`) so the
+        source filename stays readable in the graph."""
+        return cap_note_id(f"{self.repo_name}__{self.rel_path.replace('/', '__')}.md")
+
+
 @dataclass
 class RepoReport:
     repo: str
@@ -51,6 +83,10 @@ class RepoReport:
     notes_written: int = 0
     unchanged: int = 0
     skipped: int = 0
+    assets_found: int = 0
+    assets_written: int = 0
+    assets_unchanged: int = 0
+    assets_skipped: int = 0
 
 
 @dataclass
@@ -77,6 +113,14 @@ class IngestReport:
     def skipped(self) -> int:
         return sum(r.skipped for r in self.repos)
 
+    @property
+    def assets_found(self) -> int:
+        return sum(r.assets_found for r in self.repos)
+
+    @property
+    def assets_written(self) -> int:
+        return sum(r.assets_written for r in self.repos)
+
     def to_dict(self) -> dict:
         return {
             "repos": [vars(r) for r in self.repos],
@@ -86,6 +130,8 @@ class IngestReport:
                 "unchanged": self.unchanged,
                 "skipped": self.skipped,
                 "pruned": self.pruned,
+                "assets_found": self.assets_found,
+                "assets_written": self.assets_written,
             },
             "errors": self.errors[:50],
         }
@@ -93,9 +139,11 @@ class IngestReport:
     def render(self) -> str:
         lines = ["Ingest report", "-------------"]
         for r in self.repos:
+            assets = (f", {r.assets_found} assets → {r.assets_written} sidecars"
+                      if r.assets_found else "")
             lines.append(
                 f"  {r.repo}: {r.files_found} md found → {r.notes_written} written, "
-                f"{r.unchanged} unchanged, {r.skipped} skipped"
+                f"{r.unchanged} unchanged, {r.skipped} skipped{assets}"
             )
         t = self.to_dict()["totals"]
         lines.append(

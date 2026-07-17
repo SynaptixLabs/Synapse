@@ -19,7 +19,9 @@ from pathlib import Path
 from .models import Edge, Graph, Node
 
 _FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
-_FM_FIELD_RE = re.compile(r"^synapse\.(source_repo|source_path):\s*(.+?)\s*$", re.MULTILINE)
+_FM_FIELD_RE = re.compile(
+    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links):\s*(.+?)\s*$",
+    re.MULTILINE)
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 _MDLINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+?\.md)(?:#[^)]*)?\)")
@@ -55,6 +57,8 @@ class GraphService:
                 "source_path": fields.get("source_path", ""),
                 "title": (title_m.group(1) if title_m else Path(fields.get("source_path", path.stem)).stem),
                 "body": body,
+                "asset_type": fields.get("asset_type", "") if fields.get("kind") == "asset" else "",
+                "inferred_links": fields.get("inferred_links", ""),
             })
         return notes
 
@@ -99,6 +103,9 @@ class GraphService:
             g.nodes[n["id"]] = Node(
                 id=n["id"], kind="note", title=n["title"],
                 repo=n["repo"], source_path=n["source_path"],
+                # assets stay kind:note in the graph (windowing/search unchanged) and carry
+                # their nature as a tag — the explorer draws the 📷/📄 glyph from it
+                tags=[f"asset:{n['asset_type']}"] if n["asset_type"] else [],
             )
         for repo in sorted({n["repo"] for n in notes if n["repo"]}):
             g.nodes[f"repo:{repo}"] = Node(id=f"repo:{repo}", kind="repo", title=repo, repo=repo)
@@ -122,6 +129,17 @@ class GraphService:
             # pathref (D-5): backticked `*.md` pointers — resolved note-relative, then
             # repo-root-relative (both conventions exist in adapter files). Unresolvable code
             # mentions are NOT recorded as unresolved: code often quotes hypothetical paths.
+            # sprint 05 (Epic L): AI-derived relations from `synapse.inferred_links` —
+            # the FIRST real INFERRED edges. Ids are exact (validated at describe time);
+            # a target pruned since then is recorded, never silently dropped.
+            for raw_link in (t.strip() for t in n["inferred_links"].split(" | ") if t.strip()):
+                if raw_link in g.nodes or raw_link.lower() in exact:
+                    dst = raw_link if raw_link in g.nodes else exact[raw_link.lower()]
+                    if dst != n["id"]:
+                        g.edges.add(Edge(src=n["id"], dst=dst, type="semantic",
+                                         confidence="INFERRED", confidence_score=0.75))
+                else:
+                    node.unresolved.append(f"[[{raw_link}]] (AI-inferred)")
             for m in _CODEPATH_RE.finditer(n["body"]):
                 token = m.group(1)
                 # strip only leading `./` sequences — a bare lstrip('./') would eat the dot
@@ -176,6 +194,8 @@ class GraphService:
             "id": note_id,
             "repo": fields.get("source_repo", ""),
             "source_path": fields.get("source_path", ""),
+            "kind": fields.get("kind", "note"),
+            "asset_type": fields.get("asset_type", ""),
             "body": text[fm.end():] if fm else text,
         }
 

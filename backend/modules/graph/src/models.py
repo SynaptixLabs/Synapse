@@ -39,7 +39,7 @@ CONFIDENCE_TAGS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 class Edge:
     src: str
     dst: str
-    type: str                   # wikilink | relative | pathref | sibling
+    type: str                   # wikilink | relative | pathref | sibling | semantic (AI-derived)
     confidence: str = "EXTRACTED"          # EXTRACTED | INFERRED | AMBIGUOUS (schema v3)
     confidence_score: float | None = None  # INFERRED only — discrete rubric 0.55–0.95
 

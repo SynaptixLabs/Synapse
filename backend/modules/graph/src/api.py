@@ -97,6 +97,38 @@ def get_note(note_id: str) -> dict:
     return note
 
 
+@router.get("/asset/{note_id}")
+def get_asset(note_id: str):
+    """Stream an asset sidecar's ORIGINAL bytes from its source root (sprint 05, Epic K).
+    The vault holds metadata; the file stays where it lives. Traversal-guarded."""
+    import mimetypes
+    from pathlib import Path
+
+    from fastapi.responses import FileResponse
+
+    from app.core.roots import load_roots
+
+    note = _service().read_note(note_id)
+    if note is None or note.get("kind") != "asset":
+        raise HTTPException(status_code=404, detail=f"No asset note '{note_id}' in the vault.")
+    root = next((e["path"] for e in load_roots(load_settings())
+                 if Path(e["path"]).name == note["repo"]), None)
+    if root is None:
+        raise HTTPException(status_code=404, detail=(
+            f"Source root '{note['repo']}' is no longer configured — the sidecar exists "
+            "but its file's root left the Sources list."))
+    root_p = Path(root).resolve()
+    target = (root_p / note["source_path"]).resolve()
+    if root_p != target and root_p not in target.parents:
+        raise HTTPException(status_code=404, detail="Asset path escapes its root.")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail=(
+            f"The file behind this sidecar is gone ({note['source_path']}) — "
+            "re-run ingest to prune it."))
+    media_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    return FileResponse(target, media_type=media_type)
+
+
 @router.delete("/note/{note_id}")
 def delete_note(note_id: str) -> dict:
     """Delete a SUMMARY note (and its rendered media). Source-mirror notes are managed by the

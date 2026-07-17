@@ -19,18 +19,21 @@ router = APIRouter(prefix="/api/v1", tags=["ingest"])
 def ingest() -> dict:
     """SYNC the vault to the enabled roots (add/update/prune). Returns the honest report.
     Serialized against concurrent writers (git-hook syncs) by the vault lock."""
+    from app.core.roots import asset_root_paths
     from app.core.vault_lock import vault_write_lock
     settings = load_settings()
     service = IngestService(settings.vault_path, settings.ignore_dirs)
     managed = {Path(e["path"]).name for e in load_roots(settings)}
     with vault_write_lock(settings.vault_path):
-        report = service.ingest(settings.source_repos, managed_names=managed)
+        report = service.ingest(settings.source_repos, managed_names=managed,
+                                asset_roots=asset_root_paths(settings))
     return report.to_dict()
 
 
 # ── roots CRUD (D-6): the UI-managed list of source repos ─────────────────────
 class RootRequest(BaseModel):
     path: str
+    toggle: str = "enabled"    # PATCH: which flag to flip — "enabled" | "assets"
 
 
 class BulkRequest(BaseModel):
@@ -129,12 +132,16 @@ def add_root(req: RootRequest) -> list[dict]:
 
 @router.patch("/roots")
 def toggle_root(req: RootRequest) -> list[dict]:
+    """Flip a root's `enabled` flag — or its `assets` flag (`toggle: "assets"`, sprint 05:
+    sync this root's images/PDFs as sidecar notes on the next ingest)."""
+    if req.toggle not in ("enabled", "assets"):
+        raise HTTPException(status_code=422, detail="toggle must be 'enabled' or 'assets'.")
     settings = load_settings()
     entries = load_roots(settings)
     hit = next((e for e in entries if e["path"] == req.path), None)
     if hit is None:
         raise HTTPException(status_code=404, detail="No such root.")
-    hit["enabled"] = not hit["enabled"]
+    hit[req.toggle] = not hit.get(req.toggle, False)
     save_roots(settings, entries)
     return load_roots(settings)
 

@@ -82,6 +82,145 @@ class IngestService:
         found.sort(key=lambda f: f.path)
         return found
 
+    def scan_assets(self, repo_root: Path, errors: list[str] | None = None) -> list:
+        """Images/PDFs under an assets-ENABLED root (sprint 05, Epic K). Same walk
+        discipline as scan_repo: ignore-dirs pruned, ignore files respected, vault
+        excluded, never fatal."""
+        from .ignore import IgnoreMatcher
+        from .models import ASSET_TYPES, SourceAsset
+        repo_root = Path(repo_root).resolve()
+        vault = self.vault_path.resolve()
+        found: list[SourceAsset] = []
+
+        def onerr(e: OSError) -> None:
+            if errors is not None:
+                errors.append(f"{getattr(e, 'filename', repo_root)}: {getattr(e, 'strerror', e)}")
+
+        matcher = IgnoreMatcher()
+        for dirpath, dirnames, filenames in os.walk(repo_root, onerror=onerr, followlinks=False):
+            dp = Path(dirpath)
+            if dp == vault or vault in dp.parents:
+                dirnames[:] = []
+                continue
+            rel_dir = "" if dp == repo_root else dp.relative_to(repo_root).as_posix()
+            matcher.load_dir(dp, rel_dir)
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in self.ignore_dirs
+                and not matcher.ignored(f"{rel_dir}/{d}" if rel_dir else d, is_dir=True)
+            ]
+            for fn in filenames:
+                if Path(fn).suffix.lower() not in ASSET_TYPES:
+                    continue
+                rel_f = f"{rel_dir}/{fn}" if rel_dir else fn
+                if matcher.ignored(rel_f, is_dir=False):
+                    continue
+                found.append(SourceAsset(repo_name=repo_root.name, repo_root=repo_root, path=dp / fn))
+        found.sort(key=lambda a: a.path)
+        return found
+
+    _AI_SECTION = "## Description (AI)"
+    _STAT_RE = re.compile(r"^synapse\.asset_stat: (\S+)$", re.MULTILINE)
+    _AI_LINKS_RE = re.compile(r"^synapse\.inferred_links: (.*)$", re.MULTILINE)
+
+    def write_asset(self, asset, errors: list[str] | None = None) -> str:
+        """Write/refresh one asset SIDECAR note. Returns 'written'|'unchanged'|'skipped'.
+        Fast path: (mtime_ns, size) recorded in frontmatter — an unchanged 4GB library is
+        never re-read. A rewrite PRESERVES the AI description section + inferred links
+        (they are user artifacts, like distills)."""
+        note_path = self.notes_dir / asset.note_id
+        try:
+            st = asset.path.stat()
+        except OSError as e:
+            if errors is not None:
+                errors.append(f"{asset.path}: {getattr(e, 'strerror', e)}")
+            return "skipped"
+        stat_token = f"{st.st_mtime_ns}:{st.st_size}"
+        existing = ""
+        if note_path.is_file():
+            existing = note_path.read_text(encoding="utf-8", errors="replace")
+            m = self._STAT_RE.search(existing[:800])
+            if m and m.group(1) == stat_token:
+                return "unchanged"
+        try:
+            raw = asset.path.read_bytes()
+        except OSError as e:
+            if errors is not None:
+                errors.append(f"{asset.path}: {getattr(e, 'strerror', e)}")
+            return "skipped"
+        digest = self.content_hash(raw)
+        # carry over the AI artifacts from the previous sidecar, if any
+        ai_section = ""
+        idx = existing.find(self._AI_SECTION)
+        if idx != -1:
+            ai_section = "\n" + existing[idx:].rstrip() + "\n"
+        links_m = self._AI_LINKS_RE.search(existing[:800])
+        links_line = f"synapse.inferred_links: {links_m.group(1)}\n" if links_m else ""
+        body = self._asset_body(asset, raw, errors)
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        content = (
+            "---\n"
+            f"synapse.source_repo: {asset.repo_name}\n"
+            f"synapse.source_path: {asset.rel_path}\n"
+            f"synapse.kind: asset\n"
+            f"synapse.asset_type: {asset.asset_type}\n"
+            f"synapse.asset_stat: {stat_token}\n"
+            f"synapse.content_hash: {digest}\n"
+            f"synapse.ingested_at: {now}\n"
+            f"{links_line}"
+            "---\n"
+            f"{body}{ai_section}"
+        )
+        try:
+            self.notes_dir.mkdir(parents=True, exist_ok=True)
+            tmp = note_path.parent / f"{note_path.name}.{os.getpid()}.tmp"
+            tmp.write_text(content, encoding="utf-8")
+            os.replace(tmp, note_path)
+        except OSError as e:
+            if errors is not None:
+                errors.append(f"{note_path}: {getattr(e, 'strerror', e)}")
+            return "skipped"
+        return "written"
+
+    _PDF_TEXT_CAP = 100_000
+
+    def _asset_body(self, asset, raw: bytes, errors: list[str] | None) -> str:
+        title = Path(asset.rel_path).name
+        size_kb = len(raw) // 1024
+        icon = "📷" if asset.asset_type == "image" else "📄"
+        body = f"# {title}\n\n> {icon} {asset.asset_type} · `{asset.rel_path}` · {size_kb} KB\n"
+        if asset.asset_type == "pdf":
+            text, note = self._pdf_text(asset, errors)
+            if text:
+                body += f"\n## Extracted text\n\n{text}\n"
+            elif note:
+                body += f"\n> {note}\n"
+        return body
+
+    def _pdf_text(self, asset, errors: list[str] | None) -> tuple[str, str]:
+        """(text, honesty-note). No pypdf → metadata-only sidecar with a note that says so;
+        a corrupt PDF is recorded, never fatal."""
+        try:
+            import pypdf
+        except ImportError:
+            return "", "text not extracted — `pip install pypdf` and re-ingest to make this PDF searchable"
+        try:
+            reader = pypdf.PdfReader(str(asset.path))
+            parts = []
+            total = 0
+            for page in reader.pages:
+                t = page.extract_text() or ""
+                parts.append(t)
+                total += len(t)
+                if total >= self._PDF_TEXT_CAP:
+                    parts.append("\n\n> _Truncated — extracted text capped at 100K characters._")
+                    break
+            return "\n".join(parts).strip(), ""
+        except Exception as e:   # pypdf raises a zoo of exceptions on malformed PDFs
+            if errors is not None:
+                errors.append(f"{asset.path}: PDF text extraction failed ({e})")
+            return "", "text extraction failed — the PDF may be scanned or malformed"
+
     # ── note writing ──────────────────────────────────────────────────────
     @staticmethod
     def content_hash(data: bytes) -> str:
@@ -138,11 +277,13 @@ class IngestService:
         return "written"
 
     # ── the pipeline ──────────────────────────────────────────────────────
-    def ingest(self, repos: Iterable[Path], managed_names: set[str] | None = None) -> IngestReport:
+    def ingest(self, repos: Iterable[Path], managed_names: set[str] | None = None,
+               asset_roots: set[str] | None = None) -> IngestReport:
         """Sync the vault to the enabled roots. With `managed_names` (ALL configured roots,
         enabled AND disabled), ingest also PRUNES: notes from disabled roots, and notes whose
         source file no longer exists in an enabled root. Notes from repos outside the roots
-        list (e.g. `✦ summaries`) are never touched."""
+        list (e.g. `✦ summaries`) are never touched. Roots named in `asset_roots` (resolved
+        path strings) additionally sync images/PDFs as sidecar notes (sprint 05, Epic K)."""
         report = IngestReport()
         expected: set[str] = set()
         enabled_names = set()
@@ -154,6 +295,20 @@ class IngestService:
             if not repo_root.is_dir():
                 report.errors.append(f"{repo_root}: not a directory on this machine")
                 continue   # honest: 0 files found for a missing path
+            if asset_roots and str(repo_root.resolve()) in asset_roots:
+                for asset in self.scan_assets(repo_root, errors=report.errors):
+                    rr.assets_found += 1
+                    outcome = self.write_asset(asset, errors=report.errors)
+                    if outcome == "written":
+                        rr.assets_written += 1
+                    elif outcome == "unchanged":
+                        rr.assets_unchanged += 1
+                    else:
+                        rr.assets_skipped += 1
+                    if outcome in ("written", "unchanged") or (
+                        outcome == "skipped" and (self.notes_dir / asset.note_id).is_file()
+                    ):
+                        expected.add(asset.note_id)
             for src in self.scan_repo(repo_root, errors=report.errors):
                 rr.files_found += 1
                 outcome = self.write_note(src, errors=report.errors)

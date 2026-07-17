@@ -1,4 +1,4 @@
-# Sprint 05 — **Everything In** (PLANNED — founder gate to open; after sprint 04)
+# Sprint 05 — **Everything In** (ACTIVE — opened 2026-07-17 on founder go)
 
 > **Graph node.** Up: [`../00_index.md`](../00_index.md) · Scope source:
 > [graphify learnings T6–T7](../../reference/2026-07-16_graphify_learnings.md) +
