@@ -28,6 +28,16 @@ jobs:
           cd backend && .venv/bin/python -m synapse ingest
       - name: Export + publish to the wiki
         run: |
-          cd backend && .venv/bin/python -m synapse.wiki publish \
-            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.wiki.git" \
-            || echo "::warning::wiki publish skipped — enable the wiki (create its first page) to activate this surface"
+          set +e
+          out=$(cd backend && .venv/bin/python -m synapse.wiki publish \
+            "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.wiki.git" 2>&1)
+          rc=$?
+          echo "$out"
+          if [ $rc -ne 0 ]; then
+            # fail soft ONLY for the known bootstrap gap; every other failure is a real red
+            if echo "$out" | grep -q "first page"; then
+              echo "::warning::wiki not initialized yet — repo → Wiki → create the first page, then re-run"
+              exit 0
+            fi
+            exit $rc
+          fi

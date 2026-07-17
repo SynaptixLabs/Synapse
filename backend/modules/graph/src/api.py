@@ -86,13 +86,23 @@ def unresolved_report() -> dict:
                 continue
             if raw_clean.startswith("[["):
                 status, hint = "future", "future note — nothing ingested has this name yet"
+            elif raw_clean.startswith(("/", "http://", "https://")):
+                # absolute paths/URLs: the resolver never touches these — and neither do we
+                # (GBU P2: no filesystem probing outside the repo root)
+                status, hint = "external", "absolute path/URL — the graph never resolves these"
             else:
                 root = root_by_repo.get(n.get("repo", ""))
                 base = posixpath.dirname(n.get("source_path", ""))
-                resolved = (root / posixpath.normpath(posixpath.join(base, raw_clean))) if root else None
-                if resolved is not None and resolved.exists():
-                    status, hint = "out-of-scope", (
-                        "the file EXISTS but lives outside the brain — add its repo as a Source")
+                joined = posixpath.normpath(posixpath.join(base, raw_clean))
+                if joined.startswith(".."):
+                    # mirrors the resolver EXACTLY: ../-escapes never resolve, even if the
+                    # target repo were added as a Source (GBU P2: the old hint lied)
+                    status, hint = "outside-repo", (
+                        "points outside its repo via ../ — cross-repo relative links never "
+                        "resolve; use a wikilink to the target note instead")
+                elif root is not None and (root / joined).exists():
+                    status, hint = "future-file", (
+                        "the file exists in the repo but wasn't ingested (ignored or non-md)")
                 else:
                     status, hint = "dead", "dead link — the file no longer exists"
             targets[key] = {"status": status, "hint": hint, "referrers": 1}

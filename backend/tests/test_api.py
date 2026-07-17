@@ -385,7 +385,8 @@ class TestAssets:
 
 
 def test_unresolved_report_classifies_targets(client, tmp_path):
-    """Epic N: ghosts get honest classification — future / dead / out-of-scope."""
+    """Epic N: ghosts get honest classification, mirroring the RESOLVER's rules exactly —
+    ../-escapes and absolute paths are never probed and never promise resolution."""
     client.post("/api/v1/ingest")
     client.post("/api/v1/rebuild")
     out = client.get("/api/v1/unresolved").json()
@@ -393,3 +394,10 @@ def test_unresolved_report_classifies_targets(client, tmp_path):
     ghost = out["targets"].get("ghost concept")
     assert ghost and ghost["status"] == "future" and ghost["referrers"] >= 1
     assert all(t["hint"] for t in out["targets"].values())   # every ghost explains itself
+    # GBU P2 guards: escape/absolute targets classify WITHOUT filesystem probing
+    for key, t in out["targets"].items():
+        if key.startswith(("/", "http")):
+            assert t["status"] == "external"
+        assert t["status"] in ("future", "dead", "external", "outside-repo", "future-file")
+        if t["status"] == "outside-repo":
+            assert "never" in t["hint"]     # the hint must not promise add-a-Source fixes it

@@ -57,7 +57,6 @@ const graph = createGraph($('graph'), {
   infoEl: null,
   onNodeClick: (id) => {
     if (id.startsWith('ghost:')) {   // a ghost has no note to open — explain it instead
-      const g = graph.state();
       setMsg(`👻 ${id.slice(6)} — a future note (nothing to open yet); its referrers point at it`);
       return;
     }
@@ -300,6 +299,9 @@ function ghostView() {
   const byTarget = new Map();   // normalized target → { refs: [noteIds], raw }
   for (const n of vNodes) {
     if (n.kind !== 'note') continue;
+    // on a WINDOWED brain, only in-window referrers count — a ghost whose referrers are
+    // all off-window would float edge-less at canvas center (GBU P1: orphan-ghost blob)
+    if (winIds !== null && !winIds.has(n.id)) continue;
     for (const u of n.unresolved) {
       const raw = u.replace(/ \(AI-inferred\)$/, '');
       const key = raw.replace(/^\[\[|\]\]$/g, '').trim().toLowerCase();
@@ -317,10 +319,9 @@ function ghostView() {
     const label = g.raw.replace(/^\[\[|\]\]$/g, '');
     gn.push({ id, kind: 'ghost', title: label.split('/').pop(), repo: '', source_path: '',
               tags: [], in_degree: g.refs.length, out_degree: 0, unresolved: [],
+              seedNear: g.refs[0],   // graph seeds the ghost beside a real referrer
               hint: cls?.hint ?? (g.raw.startsWith('[[') ? 'future note — nothing ingested has this name yet' : 'dead link — the file no longer exists') });
-    for (const ref of g.refs) if (winIds === null || winIds.has(ref)) {
-      ge.push({ src: ref, dst: id, type: 'ghost' });
-    }
+    for (const ref of g.refs) ge.push({ src: ref, dst: id, type: 'ghost' });
   }
   return { gn, ge, capped: Math.max(0, byTarget.size - GHOST_CAP), total: byTarget.size };
 }
@@ -334,9 +335,13 @@ window.toggleGhosts = async () => {
     try { ghostClassify = (await api('/unresolved')).targets; }
     catch { ghostClassify = {}; }   // classification is garnish — ghosts render without it
   }
-  const g = ghostView();
-  await refresh();
+  // pure display toggle: rebuild from the CURRENT view, keep camera/positions/pins
+  // (GBU P2: a refetch + fresh layout on every 👻 click violated the preserve doctrine)
+  const view = windowed();
+  const vg = withGhosts(view.n, view.e);
+  graph.setData(vg.n, vg.e, { preserve: true });
   buildDrawer();
+  const g = ghostsOn ? ghostView() : {};
   setMsg(ghostsOn
     ? `👻 ${Math.min(g.total ?? 0, GHOST_CAP)} future notes shown${g.capped ? ` (${g.capped} more capped — most-referenced win)` : ''}`
     : 'ghosts hidden');
