@@ -23,7 +23,29 @@ from .models import IngestReport, RepoReport, SourceFile
 
 _HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
 _REPO_RE = re.compile(r"^synapse\.source_repo:\s*(.+?)\s*$", re.MULTILINE)
+_FM_KEY_RE = re.compile(r"^synapse\.[a-z_]+:", re.MULTILINE)
 FRONTMATTER_END = "---"
+
+
+def is_vault_dir(path: Path) -> bool:
+    """Vault-shaped directory: a `graph.json` next to a `notes/` dir whose notes carry
+    synapse.* frontmatter — i.e. a synapse vault, not source content. BOTH markers are
+    required: a stray graph.json (or an innocent `notes/` dir) must never hide real
+    markdown from the scan. Catches FOREIGN vaults left inside a source repo (an old
+    `data/vault`); ingesting one would index notes-of-notes as first-class content."""
+    if not (path / "graph.json").is_file():
+        return False
+    notes = path / "notes"
+    if not notes.is_dir():
+        return False
+    for note in sorted(notes.glob("*.md"))[:5]:   # a few heads is proof enough
+        try:
+            head = note.read_text(encoding="utf-8", errors="replace")[:600]
+        except OSError:
+            continue   # unreadable note — the walk records dir/file errors elsewhere
+        if head.startswith(FRONTMATTER_END) and _FM_KEY_RE.search(head):
+            return True
+    return False
 
 
 def note_repo(note_path: Path) -> str | None:
@@ -48,7 +70,9 @@ class IngestService:
     def scan_repo(self, repo_root: Path, errors: list[str] | None = None) -> list[SourceFile]:
         """All .md files under `repo_root`. os.walk (not rglob): prunes ignore-dirs WITHOUT
         descending (fast on huge trees), never follows symlinks (no loops), and unreadable
-        directories are RECORDED as errors instead of crashing the whole ingest."""
+        directories are RECORDED as errors instead of crashing the whole ingest. Vault-shaped
+        directories (see is_vault_dir) are pruned the same way and recorded in `errors`:
+        skipped loudly, never silently."""
         repo_root = Path(repo_root).resolve()
         vault = self.vault_path.resolve()
         found: list[SourceFile] = []
@@ -65,6 +89,12 @@ class IngestService:
             if dp == vault or vault in dp.parents:
                 dirnames[:] = []
                 continue   # never ingest the vault itself (a repo may contain it)
+            if is_vault_dir(dp):
+                dirnames[:] = []
+                if errors is not None:
+                    errors.append(f"{dp}: skipped foreign synapse vault "
+                                  f"(graph.json + notes/ with synapse.* frontmatter)")
+                continue   # a DIFFERENT vault left in the repo — never notes-of-notes (issue #2)
             rel_dir = "" if dp == repo_root else dp.relative_to(repo_root).as_posix()
             matcher.load_dir(dp, rel_dir)   # .gitignore/.synapseignore scoped to this subtree
             dirnames[:] = [

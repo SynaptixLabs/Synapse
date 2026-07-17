@@ -75,6 +75,63 @@ class TestIngest:
         second = service.ingest([repo])          # vault now has notes inside the repo
         assert second.files_found == 1 and second.unchanged == 1
 
+    @staticmethod
+    def _foreign_vault(repo: Path) -> Path:
+        """A DIFFERENT synapse vault left inside a source repo (an old data/vault)."""
+        foreign = repo / "data" / "vault"
+        (foreign / "notes").mkdir(parents=True)
+        (foreign / "graph.json").write_text('{"nodes": [], "edges": []}', encoding="utf-8")
+        (foreign / "notes" / "old__note.md").write_text(
+            "---\nsynapse.source_repo: old\nsynapse.content_hash: " + "0" * 64 + "\n---\n# Old\n",
+            encoding="utf-8")
+        return foreign
+
+    def test_skips_foreign_vault_and_reports_it(self, service, tmp_path):
+        """Issue #2: a repo holding a DIFFERENT synapse vault (graph.json + notes/ with
+        synapse.* frontmatter) must SKIP it — recorded in the ledger, never silent."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "real.md").write_text("# Real\n", encoding="utf-8")
+        self._foreign_vault(repo)
+        report = service.ingest([repo])
+        assert report.files_found == 1 and report.notes_written == 1   # real.md only
+        assert not list(service.notes_dir.glob("*old__note*"))         # no notes-of-notes
+        assert any("skipped foreign synapse vault" in e for e in report.errors)
+        second = service.ingest([repo])                                # stays skipped, idempotent
+        assert second.files_found == 1 and second.unchanged == 1
+
+    def test_configured_vault_excluded_even_when_vault_shaped(self, tmp_path):
+        """The ACTIVE vault is excluded by IDENTITY, not by shape: even with both foreign
+        markers present it is skipped silently (not misreported as a foreign vault)."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "real.md").write_text("# Real\n", encoding="utf-8")
+        service = IngestService(vault_path=repo / "data" / "vault", ignore_dirs=IGNORE)
+        service.ingest([repo])                        # vault now holds synapse-frontmatter notes
+        (repo / "data" / "vault" / "graph.json").write_text("{}", encoding="utf-8")
+        report = service.ingest([repo])
+        assert report.files_found == 1 and report.unchanged == 1
+        assert not report.errors
+
+    def test_graph_json_alone_is_not_a_vault(self, service, tmp_path):
+        """ONE marker only — graph.json next to notes/ WITHOUT synapse frontmatter: real
+        content, ingested normally."""
+        repo = tmp_path / "repo"
+        (repo / "data" / "notes").mkdir(parents=True)
+        (repo / "data" / "graph.json").write_text("{}", encoding="utf-8")
+        (repo / "data" / "notes" / "plain.md").write_text("# Plain\n", encoding="utf-8")
+        report = service.ingest([repo])
+        assert report.files_found == 1 and report.notes_written == 1 and not report.errors
+
+    def test_synapse_frontmatter_alone_is_not_a_vault(self, service, tmp_path):
+        """ONE marker only — notes/ WITH synapse.* frontmatter but no graph.json: ingested."""
+        repo = tmp_path / "repo"
+        (repo / "notes").mkdir(parents=True)
+        (repo / "notes" / "quoted.md").write_text(
+            "---\nsynapse.source_repo: elsewhere\n---\n# Quoted\n", encoding="utf-8")
+        report = service.ingest([repo])
+        assert report.files_found == 1 and report.notes_written == 1 and not report.errors
+
     def test_transient_read_failure_never_prunes_the_good_note(self, service, tmp_path):
         """GBU P2: a source file that fails to READ this pass ('skipped') still exists —
         the sync prune must keep the good note we already hold."""
