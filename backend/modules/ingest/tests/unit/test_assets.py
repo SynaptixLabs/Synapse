@@ -170,3 +170,22 @@ class TestGBUWave:
         svc.ingest([photos], managed_names={"p4"}, asset_roots={str(photos.resolve())})
         after = side.read_text(encoding="utf-8")
         assert f"synapse.inferred_links: {long_ids}" in after      # byte-identical carry-over
+
+
+class TestForeignVaultAssets:
+    def test_foreign_vault_media_never_becomes_sidecars(self, svc, tmp_path):
+        """Follow-up to #17 (@Nitjsefnie): the foreign-vault guard covers the ASSETS scan
+        too — an old vault's media/*.png must not sneak in as sidecars on a 📷 root."""
+        repo = tmp_path / "repo"; repo.mkdir()
+        (repo / "keep.png").write_bytes((PHOTOS / "album" / "sunset.png").read_bytes())
+        foreign = repo / "data" / "vault"
+        (foreign / "notes").mkdir(parents=True)
+        (foreign / "media").mkdir()
+        (foreign / "graph.json").write_text('{"nodes": []}', encoding="utf-8")
+        (foreign / "notes" / "x.md").write_text(
+            "---\nsynapse.source_repo: old\n---\n# X\n", encoding="utf-8")
+        (foreign / "media" / "old.png").write_bytes((PHOTOS / "album" / "sunset.png").read_bytes())
+        rep = svc.ingest([repo], managed_names={"repo"}, asset_roots={str(repo.resolve())})
+        assert rep.assets_found == 1                                   # keep.png only
+        assert any("foreign synapse vault (assets scan)" in e for e in rep.errors)
+        assert not (tmp_path / "vault" / "notes" / "repo__data__vault__media__old.png.asset.md").exists()

@@ -132,6 +132,13 @@ class IngestService:
             if dp == vault or vault in dp.parents:
                 dirnames[:] = []
                 continue
+            if is_vault_dir(dp):
+                # same guard as scan_repo (#17 by @Nitjsefnie) — a foreign vault's media/
+                # must not become asset sidecars either; skipped loudly, never silently
+                dirnames[:] = []
+                if errors is not None:
+                    errors.append(f"{dp}: skipped foreign synapse vault (assets scan)")
+                continue
             rel_dir = "" if dp == repo_root else dp.relative_to(repo_root).as_posix()
             matcher.load_dir(dp, rel_dir)
             dirnames[:] = [

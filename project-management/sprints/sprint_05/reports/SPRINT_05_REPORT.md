@@ -6,15 +6,22 @@
 > Acceptance: [recorded PASS](../acceptance/00_founder_acceptance_script.md)
 > **Window:** 2026-07-17 (one day) · **Budget:** ~200V planned → **~330V actual** (founder
 > opened three gated epics mid-sprint + two field-feedback features) · **Commits:**
-> `05fc9b0` → `e329391` on `main`.
+> `05fc9b0` → the close commit (10) on `main` · Close review:
+> [`../reviews/2026-07-17_gbu_sprint05_close.md`](../reviews/2026-07-17_gbu_sprint05_close.md) (4.6).
 
 ## Verdict up front
 
 **All six epics delivered, reviewed, and founder-accepted the same day.** SYNAPSE graduated
 from repo-brain to **multimedia second brain**: images and PDFs are first-class citizens,
 the AI can *see*, unresolved links are visible ghosts, the brain publishes itself as the
-repo's wiki, and coding agents can consult it via MCP. Suite at close: **158/158 backend ·
+repo's wiki, and coding agents can consult it via MCP. Suite at close: **163/163 backend ·
 9 real-Chromium E2E specs** (3 new this sprint, all in CI).
+
+**And a first:** the sprint closed with the repo's **first external contribution** —
+@Nitjsefnie reported #18 (pypdf packaging, found on a clean checkout) and landed **PR #17**
+(foreign-vault exclusion, issue #2, with 4 tests) — reviewed with a full-suite run on the
+rebased branch, merged, and extended by a credited follow-up (`scan_assets` gets the same
+guard). The contribution machine built two days ago worked end-to-end on first contact.
 
 ## Delivered vs plan
 
