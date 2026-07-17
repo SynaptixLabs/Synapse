@@ -12,14 +12,22 @@ Input everywhere is the loaded graph.json dict (schema v2/v3: {"nodes": [...], "
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import deque
 
-_WORD_RE = re.compile(r"[a-z0-9]{2,}")
+# Unicode word characters (letters + digits in ANY script — this vault is full of Hebrew;
+# Codex P1: an ASCII-only tokenizer made Hebrew retrieval silently non-functional)
+_WORD_RE = re.compile(r"[^\W_]{2,}", re.UNICODE)
 # connective noise that would otherwise dominate plain-language questions
 _STOPWORDS = frozenset(
     "the a an and or of to in on for with what which how why is are does do "
     "between connects connect connected relate related relation show me my".split()
 )
+
+
+def _fold(text: str) -> str:
+    """Casefold + NFC — one normal form for both the question and the notes."""
+    return unicodedata.normalize("NFC", text).casefold()
 
 # sibling edges (note → its repo hub) are structural glue, not knowledge — pathing
 # through them would make every same-repo pair trivially 2 hops apart
@@ -27,14 +35,14 @@ _PATH_EXCLUDED_TYPES = frozenset({"sibling"})
 
 
 def _terms(text: str) -> list[str]:
-    return [w for w in _WORD_RE.findall(text.lower()) if w not in _STOPWORDS]
+    return [w for w in _WORD_RE.findall(_fold(text)) if w not in _STOPWORDS]
 
 
 def _score(node: dict, terms: list[str]) -> int:
     """Same ranking ladder as the explorer's search: exact > prefix > word > substring,
     summed over terms so multi-term questions reward multi-term matches."""
-    hay_id = node["id"].lower()
-    hay_title = (node.get("title") or "").lower()
+    hay_id = _fold(node["id"])
+    hay_title = _fold(node.get("title") or "")
     title_words = set(_WORD_RE.findall(hay_title))
     score = 0
     for t in terms:
@@ -94,8 +102,9 @@ def explain(graph: dict, note_id: str) -> dict | None:
 
 
 def shortest_path(graph: dict, a: str, b: str) -> dict:
-    """BFS shortest path between two nodes (undirected; sibling edges excluded so paths
-    carry knowledge, not repo plumbing). Returns hops with the edge that led to each."""
+    """BFS shortest path between two nodes (undirected). Sibling edges (note↔repo hub) are
+    plumbing, not knowledge — excluded as THROUGH-routes, but allowed on the first/last hop
+    so a repo hub is a legal *endpoint* (Codex P2: hubs were advertised yet unreachable)."""
     by_id0 = {n["id"]: n for n in graph.get("nodes", [])}
     if a == b:
         return {"found": True, "length": 0,
@@ -108,8 +117,16 @@ def shortest_path(graph: dict, a: str, b: str) -> dict:
     while q:
         cur = q.popleft()
         for nb, etype, direction in adj.get(cur, []):
-            if etype in _PATH_EXCLUDED_TYPES or nb in seen:
+            if nb in seen:
                 continue
+            if etype in _PATH_EXCLUDED_TYPES:
+                # a sibling edge is usable ONLY to leave/reach a repo hub that IS the
+                # queried endpoint — otherwise every same-repo pair would be a trivial
+                # 2-hop route through its hub (the exact plumbing this exclusion blocks)
+                hub_is_endpoint = (cur.startswith("repo:") and cur in (a, b)) or \
+                                  (nb.startswith("repo:") and nb in (a, b))
+                if not hub_is_endpoint:
+                    continue
             seen.add(nb)
             prev[nb] = (cur, etype, direction)
             if nb == b:
@@ -132,7 +149,10 @@ def shortest_path(graph: dict, a: str, b: str) -> dict:
 
 def query(graph: dict, question: str, budget: int = 30) -> dict:
     """Plain-language question → scoped subgraph: top lexical seeds + their 1-hop
-    neighborhood, hard-capped at `budget` nodes (disclosed via `truncated`)."""
+    neighborhood, hard-capped at `budget` nodes (disclosed via `truncated`).
+    The cap is enforced HERE, whatever the caller sends (Codex P1: budget=1 returned 5
+    seeds and MCP accepted budget=10^9) — clamped to [1, 200], seeds included."""
+    budget = max(1, min(int(budget), 200))
     terms = _terms(question)
     nodes = graph.get("nodes", [])
     if not terms:
@@ -140,7 +160,7 @@ def query(graph: dict, question: str, budget: int = 30) -> dict:
     scored = sorted(
         ((n, _score(n, terms)) for n in nodes), key=lambda p: (-p[1], p[0]["id"])
     )
-    seeds = [n["id"] for n, s in scored[:5] if s > 0]
+    seeds = [n["id"] for n, s in scored[: min(5, budget)] if s > 0]
     adj = _adjacency(graph)
     keep: list[str] = []
     kept = set()

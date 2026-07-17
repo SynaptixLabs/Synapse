@@ -127,8 +127,8 @@ rules — e.g. one line, `Archive/`, keeps an archive folder out of the graph. S
 `#` comments, `*`/`?` globs (never crossing `/` — `**` crosses, and `**/x` matches at depth 0
 too), trailing `/` for directories, leading `/` anchoring, `!` negation with last-match-wins,
 per-subdirectory files scoped to their subtree. (Not the full gitignore spec — escaping like
-`\#` is not supported.) Notes under a newly-ignored path are pruned on the next sync, with
-honest counts.
+`\#` and character classes `[…]` are not supported; brackets are treated literally in anchored
+patterns.) Notes under a newly-ignored path are pruned on the next sync, with honest counts.
 
 ## Using the explorer
 
@@ -217,7 +217,7 @@ listed there is actually read by the app; shell/CI variables override the file):
 ## Tests
 
 ```bash
-./start.sh test                     # backend suite: 65 unit/API tests — ZERO paid model calls
+./start.sh test                     # the full backend unit/API suite — ZERO paid model calls
 ```
 
 E2E is a **real Chromium browser** (Playwright — `page.goto()`, visibility assertions,

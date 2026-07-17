@@ -104,3 +104,25 @@ class TestLoopSurvival:
             "the ping AFTER the garbage must be answered — the loop survived"
         parse_errors = [m for m in responses if m.get("error", {}).get("code") == -32700]
         assert parse_errors and all(m["id"] is None for m in parse_errors)
+
+
+class TestLifecycle:
+    """Codex P2 (MCP spec): init-first ordering, id types, envelope validation."""
+
+    def test_requests_before_initialize_are_rejected(self, env):
+        from synapse import serve
+        serve._STATE["initialized"] = False
+        resp = _rpc("tools/list", msg_id=3)
+        assert resp["error"]["code"] == -32002
+        assert _rpc("initialize")["result"]["protocolVersion"]   # then init succeeds
+        assert "result" in _rpc("tools/list", msg_id=4)          # and the door is open
+
+    def test_array_id_is_invalid_request(self, env):
+        from synapse.serve import handle
+        resp = handle({"jsonrpc": "2.0", "id": [1], "method": "ping"})
+        assert resp["error"]["code"] == -32600 and resp["id"] is None
+
+    def test_missing_jsonrpc_field_is_invalid_request(self, env):
+        from synapse.serve import handle
+        resp = handle({"id": 9, "method": "ping"})
+        assert resp["error"]["code"] == -32600

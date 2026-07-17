@@ -83,20 +83,32 @@ function pathPick(id) {
     // the importance window — pull every hop in first, or the glow renders with holes
     out.hops.forEach((h) => pullIntoWindow(h.id));
     graph.setPath(out.hops.map((h) => h.id));
+    ac.pathFound = true; acSave();   // acceptance s41: the app just proved path mode
     setMsg(`path: ${out.length} hop${out.length === 1 ? '' : 's'} — ${a} ⇢ ${b} (click empty canvas to clear)`);
   }).catch((e) => setMsg(e.message, true));
   return true;
 }
 
 // ── Explain block (Epic G): the open note's connections as a wiki footer ─────
+let explainSeq = 0;   // Codex P2: rapid A→B→A opens raced — only the LAST request may render
 async function renderExplain(id) {
+  const seq = ++explainSeq;
   document.getElementById('explain')?.remove();
   if (!id) return;
   try {
     const out = await api(`/explain?id=${encodeURIComponent(id)}`);
+    if (seq !== explainSeq || currentOpenId !== id) return;   // a newer open superseded us
+    document.getElementById('explain')?.remove();             // never two footers
     // sibling edges are repo plumbing, not knowledge — the footer shows real links only
     const groups = (out.connections ?? []).filter((g) => g.type !== 'sibling');
-    if (currentOpenId !== id || !groups.length) return;
+    if (!groups.length) {   // honest empty state — an isolated note SAYS so
+      const empty = document.createElement('div');
+      empty.id = 'explain';
+      empty.innerHTML = '<h4>⛓ Connections · 0</h4><div class="exrow">no knowledge links yet — only repo grouping</div>';
+      $('reader-body').appendChild(empty);
+      ac.explainSeen = true; acSave();
+      return;
+    }
     const shown = groups.reduce((s, g) => s + g.nodes.length, 0);
     const rows = groups.map((g) => {
       const arrow = g.direction === 'out' ? '→' : '←';
@@ -109,6 +121,7 @@ async function renderExplain(id) {
     el.id = 'explain';
     el.innerHTML = `<h4>⛓ Connections · ${shown}</h4>${rows}`;
     $('reader-body').appendChild(el);
+    ac.explainSeen = true; acSave();   // acceptance s42: the footer rendered with real links
   } catch { /* no graph yet — the empty state already guides the user */ }
 }
 
@@ -360,6 +373,7 @@ window.runIngest = async () => {
     const rep = await api('/ingest', { method: 'POST' });
     await api('/rebuild', { method: 'POST' });
     const t = rep.totals;
+    if (t.pruned > 0) { ac.prunedSeen = true; }   // acceptance s43: the sync pruned, honestly counted
     setMsg(`ingest sync: ${t.files_found} found · ${t.notes_written} written · ${t.unchanged} unchanged · ${t.skipped} skipped · ${t.pruned} pruned`);
     setDirty(false);
     await refresh();
@@ -671,7 +685,7 @@ document.addEventListener('keydown', (ev) => {
 });
 
 // ── sprint-2 acceptance tracker: auto-PASS steps as the app proves them ────
-const AC_KEY = 'synapse.acceptance.s2';
+const AC_KEY = 'synapse.acceptance.s4';
 const ac = JSON.parse(localStorage.getItem(AC_KEY) ?? '{}');
 ac.notesOpened = new Set(ac.notesOpened ?? []);
 
@@ -680,24 +694,28 @@ function acSave() {
   acRender();
 }
 function acRender() {
+  // sprint-04 checklist (The Open Brain): s41–s43 auto-PASS from app usage; s44–s46 are
+  // manual ticks (CLI/MCP live outside the page). Older sprint flags keep recording —
+  // they double as generic usage instrumentation (and sprint-02's E2E asserts them).
   const states = {
-    a1: ac.graphLoaded,
-    a2: ac.filterUsed && ac.enterOpened,
-    a3: ac.notesOpened.size >= 3,
-    a4: ac.wikilinkNav,
-    a5: ac.glossaryToggled && ac.unresolvedOpened,
-    a6: ac.readerCycled && ac.lhsCycled && ac.resized,
-    a7: ac.manual7,
-    a8: ac.mobileSeen,
+    s41: ac.pathFound,
+    s42: ac.explainSeen,
+    s43: ac.prunedSeen,
+    s44: ac.manual_s44,
+    s45: ac.manual_s45,
+    s46: ac.manual_s46,
   };
   for (const [id, pass] of Object.entries(states)) {
     const el = $(id); if (!el) continue;
-    if (id === 'a7') { el.className = 'badge ' + (pass ? 'pass' : ''); continue; }
-    el.textContent = pass ? 'PASS' : (id === 'a3' ? `${ac.notesOpened.size}/3` : 'todo');
+    if (id.startsWith('s44') || id.startsWith('s45') || id.startsWith('s46')) {
+      el.className = 'badge ' + (pass ? 'pass' : '');
+      continue;
+    }
+    el.textContent = pass ? 'PASS' : 'todo';
     el.className = 'badge ' + (pass ? 'pass' : '');
   }
 }
-window.manualAccept = (cb, id) => { ac.manual7 = cb.checked; acSave(); };
+window.manualAccept = (cb, id) => { ac['manual_' + id] = cb.checked; acSave(); };
 window.resetAccept = () => { localStorage.removeItem(AC_KEY); location.reload(); };
 window.toggleAccept = () => $('accept').classList.toggle('open');
 document.addEventListener('click', (ev) => {

@@ -9,10 +9,29 @@
 **Fired** (new externally-reachable surface: the MCP server; filesystem-behavior changes).
 - **Fresh-eyes internal agent**: full-diff adversarial pass, 6 targeted repro runs; initial
   verdict **REVISE** (2 P1 · 8 P2 · 8 P3) — every P1/P2 fixed and re-verified this session.
-- **Codex cross-vendor: QUOTA-DEFERRED** — probe returned "workspace is out of credits"
-  (pool exhausted 2026-07-16 evening, per the standing quota note). Founder gate: refill →
-  re-run one cross-vendor pass over `sprint-04` (tracked as a close condition, like the POC's
-  backlog #6 — now also unblocked-on-auth, blocked-on-credits).
+- **Codex cross-vendor: RAN 2026-07-17** (credits returned; `gpt-5.6-sol`, high reasoning,
+  ~184K tokens, read-only) — verdict **REVISE**: 4 P1 · 7 P2 · 3 P3, all genuinely missed by
+  the internal pass. **Every P1/P2 fixed and re-verified same session** (ledger below);
+  P3-12 documented as a known divergence. The close condition is SATISFIED.
+
+### Codex findings → fix ledger (all verified by new regression tests)
+
+| # | Sev | Finding | Fix |
+|---|---|---|---|
+| C1 | P1 | **Hebrew retrieval non-functional** — ASCII-only tokenizer; a Hebrew question or title match returned nothing (fatal for this founder's vault) | Unicode tokenizer (`[^\W_]{2,}`) + NFC + casefold across query/score/resolve; Hebrew fixture test |
+| C2 | P1 | **watch missed deletions & ignore-file edits** — max-mtime never decreases on delete | full path→(mtime_ns,size) snapshots incl. `.gitignore`/`.synapseignore`, compared with `!=` |
+| C3 | P1 | **Concurrent hook ingests collide** — shared tmp names, interleaved prune/write | cross-process `vault_write_lock` (flock) on every CLI/API ingest+rebuild entry point + pid-unique tmp names |
+| C4 | P1 | **Budget not a hard cap** — `budget=1` returned 5 seeds; MCP accepted 10^9 | clamp [1,200] enforced INSIDE `query()`; seeds respect it; regression tests |
+| C5 | P2 | Repo hubs advertised as path endpoints but unreachable | sibling edges usable only when the HUB is the queried endpoint (same-repo shortcut still blocked — dedicated test) |
+| C6 | P2 | MCP lifecycle laxness (pre-init requests, array ids, missing jsonrpc) | init-state tracking (-32002), id-type + envelope validation (-32600); protocol tests |
+| C7 | P2 | Stale path overlay survives graph refresh | `setData` drops the path on fresh layouts / vanished hops |
+| C8 | P2 | Explain footer double-append race (A→B→A fast) | request-token guard; only the newest render lands |
+| C9 | P2 | Confidence invariants unenforced; nondeterministic edge sort | `Edge.__post_init__` validation (bad tag/score = loud error); sort key includes confidence+score |
+| C10 | P2 | Promised confidence UI didn't exist | non-EXTRACTED edges draw **dashed** (uncertainty is visible the day the first INFERRED edge ships) |
+| C11 | P2 | Hook install/uninstall could clobber a user-CUSTOMIZED hook containing our marker | strict byte-shape ownership (`_is_ours`); customized hooks refused with an honest message |
+| C12 | P3 | Bracket classes behave differently anchored vs not | documented divergence (ignore.py + README) |
+| C13 | P3 | "Connections footer on every open note" overclaimed | honest `⛓ Connections · 0` empty state on isolated notes |
+| C14 | P3 | README hardcoded a stale test count | de-brittled |
 
 ## Evidence (runs, not assertions)
 
@@ -70,13 +89,19 @@ sprint04's canvas clicks wait for **node stillness** + frame endpoints via the a
 | Honesty (disclosed subsets, BROKEN status, truncation flags, logs) | 4.8 |
 | Determinism & performance (measured 21k DoD, no-sort matcher) | 4.6 |
 | UX (path glow, connections footer, honest statusbars) | 4.5 |
-| Review coverage (internal only — Codex quota-deferred) | 3.8 |
-| **Overall** | **4.5** |
+| Review coverage (internal fresh-eyes + Codex cross-vendor, both fix waves verified) | 4.7 |
+| **Overall** | **4.6** |
 
 ## Verdict
 
-**APPROVE (dev acceptance).** Sprint stays OPEN pending the two founder gates:
-1. Founder acceptance script: [`../acceptance/00_founder_acceptance_script.md`](../acceptance/00_founder_acceptance_script.md).
-2. Codex credits refill → one cross-vendor pass over the sprint-04 diff (close condition).
+**APPROVE (dev acceptance, cross-vendor condition satisfied).** Evidence after both fix
+waves: **122/122 backend** (incl. 8 Codex regression pins) · **6/6 real-Chromium E2E**.
+Also delivered post-review on founder feedback: the in-app acceptance panel now shows
+**sprint 04** (auto-PASS badges for path/footer/prune + manual ticks for CLI/hooks/MCP —
+UI-first acceptance doctrine) and the obsolete Sprint-1 board menu entry is gone.
 
-— `cpto` (JANUS), 2026-07-16
+Sprint stays OPEN pending ONE gate: the founder acceptance run
+([`../acceptance/00_founder_acceptance_script.md`](../acceptance/00_founder_acceptance_script.md)
+— or simply the in-app ✓ Acceptance — sprint 4 panel).
+
+— `cpto` (JANUS), 2026-07-16 · Codex wave + acceptance panel appended 2026-07-17

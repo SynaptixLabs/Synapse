@@ -25,6 +25,12 @@ from modules.ingest.src.services import IngestService
 
 
 def cmd_ingest(settings) -> int:
+    from app.core.vault_lock import vault_write_lock
+    with vault_write_lock(settings.vault_path):
+        return _cmd_ingest_locked(settings)
+
+
+def _cmd_ingest_locked(settings) -> int:
     if not settings.source_repos:
         print(
             "No source repos configured.\n"
@@ -45,7 +51,9 @@ def cmd_ingest(settings) -> int:
 
 
 def cmd_rebuild(settings) -> int:
-    stats = GraphService(settings.vault_path).rebuild().stats()
+    from app.core.vault_lock import vault_write_lock
+    with vault_write_lock(settings.vault_path):
+        stats = GraphService(settings.vault_path).rebuild().stats()
     print(json.dumps(stats, indent=2, ensure_ascii=False))
     return 0
 

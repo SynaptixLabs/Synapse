@@ -142,3 +142,33 @@ class TestGitignoreSemantics:
             ".gitignore": "**/build/\n",   # the most common ** form in the wild
         })
         assert _scan_ids(repo, tmp_path) == {"keep.md"}
+
+
+class TestCodexWave:
+    """Codex cross-vendor GBU (2026-07-17) regression pins — hooks + watch."""
+
+    def test_uninstall_never_deletes_a_customized_hook(self, tmp_path):
+        """Codex P2: marker-containing hooks that a user EXTENDED must survive uninstall."""
+        from modules.ingest.src.hooks import _hook_body
+        repo = tmp_path / "gitrepo"; hooks = repo / ".git" / "hooks"; hooks.mkdir(parents=True)
+        customized = _hook_body() + "echo my-extra-line\n"
+        (hooks / "post-commit").write_text(customized, encoding="utf-8")
+        out = uninstall_hooks([repo])
+        assert (hooks / "post-commit").read_text(encoding="utf-8") == customized
+        assert any("CUSTOMIZED" in line for line in out)
+        out = install_hooks([repo])   # install must refuse to overwrite it too
+        assert any(line.startswith("✗") for line in out)
+        assert (hooks / "post-commit").read_text(encoding="utf-8") == customized
+
+    def test_watch_snapshot_sees_deletions_and_ignorefile_edits(self, tmp_path):
+        """Codex P1: max-mtime never decreases on delete → the note lingered forever."""
+        from modules.ingest.src.hooks import _snapshot
+        root = tmp_path / "root"; root.mkdir()
+        (root / "a.md").write_text("# a", encoding="utf-8")
+        s1 = _snapshot(root, set())
+        (root / "a.md").unlink()
+        s2 = _snapshot(root, set())
+        assert s1 != s2                                   # deletion IS a change
+        (root / ".synapseignore").write_text("x/\n", encoding="utf-8")
+        s3 = _snapshot(root, set())
+        assert s2 != s3                                   # ignore-rule edits are changes too

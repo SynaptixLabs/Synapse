@@ -93,3 +93,48 @@ class TestQuery:
 
     def test_deterministic(self, graph):
         assert query(graph, "alpha readme") == query(graph, "alpha readme")
+
+
+class TestCodexWave:
+    """Codex cross-vendor GBU (2026-07-17) regression pins."""
+
+    def test_hebrew_retrieval_works(self, graph):
+        """Codex P1: the ASCII tokenizer made Hebrew queries silently return nothing —
+        fatal for a Hebrew-heavy vault. The committed fixture note must be findable."""
+        out = query(graph, "מסמך בעברית")
+        assert any(n["id"] == "repo_a__hebrew.md" for n in out["nodes"])
+        assert resolve(graph, "מסמך") == "repo_a__hebrew.md"
+
+    def test_budget_is_a_hard_cap_even_below_seed_count(self, graph):
+        """Codex P1: budget=1 used to return 5 seeds; and absurd budgets must clamp."""
+        assert len(query(graph, "alpha beta readme", budget=1)["nodes"]) == 1
+        assert len(query(graph, "alpha beta readme", budget=-7)["nodes"]) == 1
+        big = query(graph, "alpha beta readme", budget=10**9)
+        assert len(big["nodes"]) <= 200
+
+    def test_repo_hub_is_a_legal_path_endpoint(self, graph):
+        """Codex P2: hubs resolved as endpoints but were unreachable (all-sibling edges)."""
+        out = shortest_path(graph, "repo:repo_a", "repo_a__docs__alpha.md")
+        assert out["found"] and out["length"] == 1
+
+    def test_same_repo_pair_cannot_shortcut_through_its_hub(self, tmp_path):
+        """The hub-endpoint allowance must NOT reopen the trivial a→hub→b 2-hop route."""
+        repo = tmp_path / "loner"; repo.mkdir()
+        (repo / "one.md").write_text("# One\n\nno links\n", encoding="utf-8")
+        (repo / "two.md").write_text("# Two\n\nno links\n", encoding="utf-8")
+        v = tmp_path / "lonervault"
+        IngestService(v, IGNORE).ingest([repo])
+        g = GraphService(v).rebuild().to_dict()
+        out = shortest_path(g, "loner__one.md", "loner__two.md")
+        assert out["found"] is False   # only plumbing connects them — no knowledge path
+
+    def test_edge_confidence_invariants_fail_loudly(self):
+        """Codex P2: invalid tag/score combinations must be constructor errors."""
+        from modules.graph.src.models import Edge
+        with pytest.raises(ValueError):
+            Edge(src="a", dst="b", type="wikilink", confidence="GUESSED")
+        with pytest.raises(ValueError):
+            Edge(src="a", dst="b", type="wikilink", confidence="INFERRED")   # no score
+        with pytest.raises(ValueError):
+            Edge(src="a", dst="b", type="wikilink", confidence="EXTRACTED", confidence_score=0.9)
+        Edge(src="a", dst="b", type="wikilink", confidence="INFERRED", confidence_score=0.85)

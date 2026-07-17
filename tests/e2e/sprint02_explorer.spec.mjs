@@ -72,10 +72,33 @@ await page.mouse.up();
 await page.fill('#filter', 'readme'); await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
 await page.fill('#filter', 'beta');   await page.press('#filter', 'Enter'); await page.waitForTimeout(400);
 // pin + focus (REV 2.3): drag a node → it pins; click empty canvas → defocus; reset clears
+// the Enter-open above flies the camera — wait for stillness or the probe scans moving targets
+for (let i = 0; i < 20; i++) {
+  const v1 = await page.evaluate(() => JSON.stringify(window.__synapse.graph().view));
+  await page.waitForTimeout(200);
+  const v2 = await page.evaluate(() => JSON.stringify(window.__synapse.graph().view));
+  if (v1 === v2) break;
+}
 const cbox = await page.locator('#graph').boundingBox();
-// find a node to drag: probe a grid of points until the cursor turns 'pointer'
 let hit = null;
-for (let gx = 0.3; gx <= 0.7 && !hit; gx += 0.05) for (let gy = 0.3; gy <= 0.7 && !hit; gy += 0.05) {
+// deterministic first: hover the FOCUSED node at its known position (blind grid probing
+// is coordinate luck on a sparse zoomed-in canvas)
+const focusPt = await page.evaluate(() => {
+  const g = window.__synapse.graph();
+  const id = g.focus ?? 'repo_b__beta.md';
+  const pos = g.posOf(id);
+  if (pos.x === undefined) return null;
+  const rect = document.getElementById('graph').getBoundingClientRect();
+  const x = rect.x + pos.x * g.view.k + g.view.x, y = rect.y + pos.y * g.view.k + g.view.y;
+  return (x > rect.x && x < rect.x + rect.width && y > rect.y && y < rect.y + rect.height)
+    ? { x, y } : null;
+});
+if (focusPt) {
+  await page.mouse.move(focusPt.x, focusPt.y);
+  if (await page.evaluate(() => document.getElementById('graph').style.cursor) === 'pointer') hit = focusPt;
+}
+// fallback: probe a grid of points until the cursor turns 'pointer'
+for (let gx = 0.2; gx <= 0.8 && !hit; gx += 0.05) for (let gy = 0.2; gy <= 0.8 && !hit; gy += 0.05) {
   await page.mouse.move(cbox.x + cbox.width * gx, cbox.y + cbox.height * gy);
   if (await page.evaluate(() => document.getElementById('graph').style.cursor) === 'pointer')
     hit = { x: cbox.x + cbox.width * gx, y: cbox.y + cbox.height * gy };
@@ -92,11 +115,15 @@ await page.click('text=⟲ reset layout');
 await page.waitForFunction(() => window.__synapse.graph().pinned.length === 0);
 await page.waitForTimeout(1200);
 
-await page.click('text=✓ Acceptance — sprint 2');
+// sprint-2's flows are still asserted (the app keeps recording them as usage flags);
+// the VISIBLE acceptance panel now belongs to the active sprint (founder UI-first doctrine)
+await page.waitForFunction(() => {
+  const s = JSON.parse(localStorage.getItem('synapse.acceptance.s4') ?? '{}');
+  return s.graphLoaded && s.filterUsed && s.enterOpened && (s.notesOpened ?? []).length >= 3 &&
+         s.wikilinkNav && s.glossaryToggled && s.unresolvedOpened;
+}, null, { timeout: 8000 });
+await page.click('text=✓ Acceptance — sprint 4');
 await page.waitForSelector('#accept.open');
-await page.waitForFunction(() =>
-  ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'].every(id => document.getElementById(id).classList.contains('pass')),
-  null, { timeout: 8000 });
 await page.screenshot({ path: 'tests/screenshots/explorer-acceptance-panel.png' });
 
 // mobile: panels become overlays, closed by default

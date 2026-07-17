@@ -151,7 +151,7 @@ class GraphService:
             (self.graph_file, json.dumps(g.to_dict(), ensure_ascii=False, indent=1)),
             (self.index_file, self._render_index(g)),
         ):
-            tmp = target.with_name(target.name + ".tmp")
+            tmp = target.with_name(f"{target.name}.{_os.getpid()}.tmp")   # unique per writer
             tmp.write_text(content, encoding="utf-8")
             _os.replace(tmp, target)
         return g

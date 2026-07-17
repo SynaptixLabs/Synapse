@@ -79,11 +79,14 @@ def graph_explain(id: str) -> dict:
 @router.post("/rebuild")
 def rebuild(fresh: bool = False) -> dict:
     """Rebuild graph + Index from the vault. `?fresh=true` deletes graph.json FIRST — the UI's
-    rebuild-invariance proof (stats must come back identical, from the vault alone)."""
+    rebuild-invariance proof (stats must come back identical, from the vault alone).
+    Serialized against concurrent writers (git-hook syncs) by the vault lock."""
+    from app.core.vault_lock import vault_write_lock
     service = _service()
-    if fresh and service.graph_file.is_file():
-        service.graph_file.unlink()
-    return service.rebuild().stats()
+    with vault_write_lock(load_settings().vault_path):
+        if fresh and service.graph_file.is_file():
+            service.graph_file.unlink()
+        return service.rebuild().stats()
 
 
 @router.get("/note/{note_id}")

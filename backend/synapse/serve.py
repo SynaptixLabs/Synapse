@@ -107,11 +107,25 @@ def call_tool(name: str, args: dict) -> dict:
     raise RuntimeError(f"Unknown tool: {name}")
 
 
+_STATE = {"initialized": False}
+
+
 def handle(msg: dict) -> dict | None:
     """One JSON-RPC message → response dict (None for notifications). Never raises —
-    protocol errors become JSON-RPC errors, so one bad call can't kill the server."""
+    protocol errors become JSON-RPC errors, so one bad call can't kill the server.
+    Lifecycle (Codex P2, MCP spec): requests before `initialize` are rejected; ids must
+    be strings/ints; the envelope must claim jsonrpc 2.0."""
     method, msg_id = msg.get("method"), msg.get("id")
+    if msg_id is not None and not isinstance(msg_id, (str, int)):
+        return {"jsonrpc": "2.0", "id": None,
+                "error": {"code": -32600, "message": "Invalid Request: id must be a string or integer"}}
+    if msg.get("jsonrpc") != "2.0":
+        return {"jsonrpc": "2.0", "id": msg_id,
+                "error": {"code": -32600, "message": "Invalid Request: jsonrpc must be '2.0'"}}
     if method == "initialize":
+        if msg_id is None:
+            return None   # initialize must be a REQUEST; as a notification it gets no reply
+        _STATE["initialized"] = True
         return {"jsonrpc": "2.0", "id": msg_id, "result": {
             "protocolVersion": PROTOCOL_VERSION,
             "capabilities": {"tools": {}},
@@ -121,6 +135,9 @@ def handle(msg: dict) -> dict | None:
         return None
     if method == "ping":
         return {"jsonrpc": "2.0", "id": msg_id, "result": {}}
+    if not _STATE["initialized"] and msg_id is not None:
+        return {"jsonrpc": "2.0", "id": msg_id,
+                "error": {"code": -32002, "message": "Server not initialized"}}
     if method == "tools/list":
         return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": TOOLS}}
     if method == "tools/call":

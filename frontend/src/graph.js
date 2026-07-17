@@ -54,6 +54,11 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     // a focused note that no longer exists (deleted distill) must not keep spotlight-dimming
     // the whole brain (second-opinion finding #4)
     if (sim.focus && !nodes.some(x => x.id === sim.focus)) sim.focus = null;
+    // a traced path must not outlive its data (Codex P2): fresh layouts drop it, and a
+    // preserved refresh drops it if any hop vanished from the new node set
+    if (pathIds && (!preserve || !pathIds.every(id => nodes.some(x => x.id === id)))) {
+      pathIds = null; matchSet = null;
+    }
     kick(preserve ? 0.3 : 1);
   }
 
@@ -257,6 +262,10 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       ctx.strokeStyle = lit ? '#e6e6e6' : EDGE[e.type] ?? '#333';
       ctx.globalAlpha = hood ? (lit ? 0.95 : 0.04) : (BASE[e.type] ?? 0.3) * Math.min(1, 240 / d);
+      // schema v3 honesty: an AI-derived (INFERRED/AMBIGUOUS) edge never looks identical
+      // to an extracted one — uncertainty reads as a dashed line
+      const uncertain = e.confidence && e.confidence !== 'EXTRACTED';
+      if (uncertain) ctx.setLineDash([5 / K, 4 / K]);
       ctx.beginPath(); ctx.moveTo(a.x, a.y);
       if (straight) ctx.lineTo(b.x, b.y);
       else {
@@ -265,6 +274,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
         ctx.quadraticCurveTo(mx - dy / d * bow, my + dx / d * bow, b.x, b.y);
       }
       ctx.stroke();
+      if (uncertain) ctx.setLineDash([]);
     }
     ctx.globalAlpha = 1;
 

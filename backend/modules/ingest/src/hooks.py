@@ -50,6 +50,16 @@ def _git_dir(root: Path) -> Path | None:
     return d if d.is_dir() else None
 
 
+def _is_ours(body: str) -> bool:
+    """STRICT ownership (Codex P2): the marker alone is not enough — a user who extended
+    our hook with their own lines must never lose them to an overwrite or an uninstall.
+    Ours = exactly the shape _hook_body() writes (any interpreter/paths, nothing extra)."""
+    return bool(re.fullmatch(
+        r"#!/bin/sh\n# synapse-auto-sync [^\n]*\n# interpreter: [^\n]*\n"
+        r"cd '[^\n]*' && '[^\n]*' -m synapse ingest >> '[^\n]*' 2>&1 &\n?",
+        body))
+
+
 def install_hooks(roots) -> list[str]:
     out = []
     for root in roots:
@@ -62,8 +72,8 @@ def install_hooks(roots) -> list[str]:
         hooks.mkdir(exist_ok=True)
         for name in _HOOK_NAMES:
             path = hooks / name
-            if path.exists() and _MARKER not in path.read_text(encoding="utf-8", errors="replace"):
-                out.append(f"✗ {root.name}/{name}: a foreign hook exists — not touching it")
+            if path.exists() and not _is_ours(path.read_text(encoding="utf-8", errors="replace")):
+                out.append(f"✗ {root.name}/{name}: a foreign/customized hook exists — not touching it")
                 continue
             path.write_text(_hook_body(), encoding="utf-8")
             path.chmod(0o755)
@@ -79,9 +89,15 @@ def uninstall_hooks(roots) -> list[str]:
             continue
         for name in _HOOK_NAMES:
             path = git / "hooks" / name
-            if path.is_file() and _MARKER in path.read_text(encoding="utf-8", errors="replace"):
+            if not path.is_file():
+                continue
+            body = path.read_text(encoding="utf-8", errors="replace")
+            if _is_ours(body):
                 path.unlink()
                 out.append(f"✓ {Path(root).name}/{name}: removed")
+            elif _MARKER in body:
+                out.append(f"✗ {Path(root).name}/{name}: contains our marker but was CUSTOMIZED — "
+                           "remove the synapse lines yourself")
     return out or ["nothing installed"]
 
 
@@ -110,18 +126,21 @@ def hook_status(roots) -> list[str]:
     return out
 
 
-def _latest_mtime(root: Path, ignore_dirs: set[str]) -> float:
-    """Newest .md mtime under root (ignore-dirs pruned; symlinks not followed)."""
-    latest = 0.0
+def _snapshot(root: Path, ignore_dirs: set[str]) -> dict[str, tuple[int, int]]:
+    """path → (mtime_ns, size) for every .md AND ignore file under root. A full snapshot
+    (not a max-mtime) so DELETIONS and `.gitignore`/`.synapseignore` edits are visible —
+    Codex P1: a deleted file never raises the max mtime, so its note lingered forever."""
+    snap: dict[str, tuple[int, int]] = {}
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
         dirnames[:] = [d for d in dirnames if d not in ignore_dirs]
         for fn in filenames:
-            if fn.lower().endswith(".md"):
+            if fn.lower().endswith(".md") or fn in (".gitignore", ".synapseignore"):
                 try:
-                    latest = max(latest, (Path(dirpath) / fn).stat().st_mtime)
+                    st = (Path(dirpath) / fn).stat()
+                    snap[f"{dirpath}/{fn}"] = (st.st_mtime_ns, st.st_size)
                 except OSError:
                     continue
-    return latest
+    return snap
 
 
 def watch(settings, interval: int, run_ingest) -> int:
@@ -130,12 +149,12 @@ def watch(settings, interval: int, run_ingest) -> int:
     roots = [Path(r) for r in settings.source_repos]
     ignore = set(settings.ignore_dirs)
     print(f"Watching {len(roots)} root(s) every {interval}s — Ctrl+C to stop.")
-    last = {r: _latest_mtime(r, ignore) for r in roots}
+    last = {r: _snapshot(r, ignore) for r in roots}
     try:
         while True:
             time.sleep(max(2, interval))
-            now = {r: _latest_mtime(r, ignore) for r in roots}
-            changed = [r for r in roots if now[r] > last[r]]
+            now = {r: _snapshot(r, ignore) for r in roots}
+            changed = [r for r in roots if now[r] != last[r]]   # != sees deletes too
             if changed:
                 time.sleep(2)   # debounce: let a save burst settle
                 print(f"[watch] change in {', '.join(c.name for c in changed)} → syncing…")

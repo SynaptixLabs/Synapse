@@ -32,6 +32,9 @@ class Node:
         }
 
 
+CONFIDENCE_TAGS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
+
+
 @dataclass(frozen=True)
 class Edge:
     src: str
@@ -39,6 +42,16 @@ class Edge:
     type: str                   # wikilink | relative | pathref | sibling
     confidence: str = "EXTRACTED"          # EXTRACTED | INFERRED | AMBIGUOUS (schema v3)
     confidence_score: float | None = None  # INFERRED only — discrete rubric 0.55–0.95
+
+    def __post_init__(self):
+        # invariants enforced at construction (Codex P2): an invalid tag/score combination
+        # must fail loudly at EMIT time, not surface as silent schema drift in graph.json
+        if self.confidence not in CONFIDENCE_TAGS:
+            raise ValueError(f"unknown edge confidence tag: {self.confidence!r}")
+        if self.confidence == "INFERRED" and self.confidence_score is None:
+            raise ValueError("INFERRED edges require a confidence_score (rubric 0.55-0.95)")
+        if self.confidence != "INFERRED" and self.confidence_score is not None:
+            raise ValueError(f"{self.confidence} edges carry no confidence_score")
 
     def to_dict(self) -> dict:
         d = {"src": self.src, "dst": self.dst, "type": self.type, "confidence": self.confidence}
@@ -56,7 +69,10 @@ class Graph:
         return {
             "schema_version": SCHEMA_VERSION,
             "nodes": [self.nodes[k].to_dict() for k in sorted(self.nodes)],
-            "edges": [e.to_dict() for e in sorted(self.edges, key=lambda e: (e.src, e.dst, e.type))],
+            "edges": [e.to_dict() for e in sorted(
+                self.edges,
+                key=lambda e: (e.src, e.dst, e.type, e.confidence, e.confidence_score or -1.0),
+            )],
         }
 
     def stats(self) -> dict:

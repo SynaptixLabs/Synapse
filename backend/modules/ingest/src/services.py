@@ -126,7 +126,9 @@ class IngestService:
         try:
             self.notes_dir.mkdir(parents=True, exist_ok=True)
             # atomic: a concurrent rebuild must never index a half-written note
-            tmp = note_path.parent / (note_path.name + ".tmp")
+            # unique temp name: concurrent writers must never share an intermediate
+            # (the vault lock serializes entry points; this is belt-and-braces)
+            tmp = note_path.parent / f"{note_path.name}.{os.getpid()}.tmp"
             tmp.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
             os.replace(tmp, note_path)
         except OSError as e:

@@ -17,11 +17,14 @@ router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
 @router.post("/ingest")
 def ingest() -> dict:
-    """SYNC the vault to the enabled roots (add/update/prune). Returns the honest report."""
+    """SYNC the vault to the enabled roots (add/update/prune). Returns the honest report.
+    Serialized against concurrent writers (git-hook syncs) by the vault lock."""
+    from app.core.vault_lock import vault_write_lock
     settings = load_settings()
     service = IngestService(settings.vault_path, settings.ignore_dirs)
     managed = {Path(e["path"]).name for e in load_roots(settings)}
-    report = service.ingest(settings.source_repos, managed_names=managed)
+    with vault_write_lock(settings.vault_path):
+        report = service.ingest(settings.source_repos, managed_names=managed)
     return report.to_dict()
 
 

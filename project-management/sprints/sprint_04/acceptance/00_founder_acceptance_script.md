@@ -2,6 +2,10 @@
 
 > Up: [`../index.md`](../index.md) · Run on YOUR live stack (`./start.sh`, real 21k vault).
 > ~10 minutes. The sprint closes only on a recorded PASS below.
+>
+> **UI-first:** the app carries this checklist live — Menu → **✓ Acceptance — sprint 4**.
+> Steps 2–4 auto-PASS as the app proves them; tick 1/5/6 there manually. This document is
+> the narrative version of the same six gates.
 
 ## 1 · The query trio (CLI)
 

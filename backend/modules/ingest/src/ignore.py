@@ -11,7 +11,8 @@ Supported subset (documented in the README — this is NOT the full gitignore sp
   `**/x` also matches depth 0) · trailing `/` = directories only · leading `/` (or any
   embedded `/`) = anchored to the ignore file's directory · un-anchored single-segment
   patterns match any path segment at any depth · `!pattern` negation, last-match-wins.
-Not supported: escaping (`\\#`, `\\!`), character-class subtleties beyond fnmatch.
+Not supported: escaping (`\\#`, `\\!`); character classes `[…]` are fnmatch-interpreted in
+un-anchored patterns but LITERAL in anchored ones (documented divergence — unify if hit).
 """
 
 from __future__ import annotations
