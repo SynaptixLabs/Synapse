@@ -4,8 +4,10 @@
 > ~10 minutes. The sprint closes only on a recorded PASS below.
 >
 > **UI-first:** the app carries this checklist live — Menu → **✓ Acceptance — sprint 4**.
-> Steps 2–4 auto-PASS as the app proves them; tick 1/5/6 there manually. This document is
-> the narrative version of the same six gates.
+> Steps 2–4 auto-PASS as the app proves them; tick 1/5 there manually. This document is
+> the narrative version of the same five gates. (MCP registration was dropped from
+> acceptance per founder call 2026-07-17 — it stays a shipped, dev-tested feature with
+> full instructions in the README.)
 
 ## 1 · The query trio (CLI)
 
@@ -53,19 +55,6 @@ echo "test" >> some-note.md && git add -A && git commit -m "hook test"
 - [ ] Within a few seconds the brain reflects the change (statusbar note count / the note's
       content) — no manual ingest.
 - [ ] `./synapse hook uninstall` removes cleanly (`hook status` confirms).
-
-## 6 · Your brain in Claude Code (MCP)
-
-```bash
-# from the SYNAPSE repo root (script path — works from any project cwd afterwards):
-claude mcp add synapse -- "$(pwd)/backend/.venv/bin/python" "$(pwd)/backend/synapse/serve.py"
-```
-
-In a NEW Claude Code session, ask: *"Using the synapse tools, what does my vault say about
-<topic you know>? Cite note ids."*
-
-- [ ] Claude answers from YOUR vault, citing real note ids (`query_graph` / `get_note` calls
-      visible in the transcript).
 
 ## Verdict
 

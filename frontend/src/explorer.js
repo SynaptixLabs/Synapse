@@ -694,7 +694,7 @@ function acSave() {
   acRender();
 }
 function acRender() {
-  // sprint-04 checklist (The Open Brain): s41–s43 auto-PASS from app usage; s44–s46 are
+  // sprint-04 checklist (The Open Brain): s41–s43 auto-PASS from app usage; s44–s45 are
   // manual ticks (CLI/MCP live outside the page). Older sprint flags keep recording —
   // they double as generic usage instrumentation (and sprint-02's E2E asserts them).
   const states = {
@@ -703,11 +703,10 @@ function acRender() {
     s43: ac.prunedSeen,
     s44: ac.manual_s44,
     s45: ac.manual_s45,
-    s46: ac.manual_s46,
   };
   for (const [id, pass] of Object.entries(states)) {
     const el = $(id); if (!el) continue;
-    if (id.startsWith('s44') || id.startsWith('s45') || id.startsWith('s46')) {
+    if (id === 's44' || id === 's45') {
       el.className = 'badge ' + (pass ? 'pass' : '');
       continue;
     }
@@ -850,3 +849,5 @@ health($('health'));
 refresh();
 refreshModelStatus();
 acRender();
+// app version in the statusbar — single source of truth: package.json (via vite define)
+try { $('appver').textContent = `v${__APP_VERSION__} · `; } catch { /* dev without define */ }

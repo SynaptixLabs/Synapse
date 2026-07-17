@@ -183,19 +183,67 @@ The FastAPI backend serves interactive docs at **http://localhost:8000/docs**. K
 `/media/*` for generated images. CORS is restricted to explorer pages (`*:5173`) — a random
 website you visit cannot drive an API that reads your filesystem and spends your tokens.
 
-## Use your brain from Claude Code (MCP)
+## Use your brain from Claude Code & Claude Desktop (MCP)
 
-SYNAPSE ships an MCP server, so your coding agent answers questions from **your** second brain:
+SYNAPSE ships an MCP server, so your AI assistant answers questions from **your** second
+brain. It reads the vault straight from disk — **SYNAPSE doesn't even need to be running.**
+The assistant gets four read-only tools: `query_graph` (plain-language question → relevant
+notes + how they connect), `get_note` (full markdown), `get_neighbors`, and `shortest_path`.
+Deterministic, zero model calls and zero keys inside the server itself.
+
+### Claude Code (one line)
 
 ```bash
 # run from the SYNAPSE repo root — script path, so it works from ANY project afterwards
 claude mcp add synapse -- "$(pwd)/backend/.venv/bin/python" "$(pwd)/backend/synapse/serve.py"
 ```
 
-Then just ask Claude Code things only your vault knows — it gets four tools: `query_graph`
-(plain-language question → relevant notes + how they connect), `get_note` (full markdown),
-`get_neighbors`, and `shortest_path`. Read-only, deterministic, zero model calls and zero keys
-inside the server itself.
+### Claude Desktop
+
+1. Open **Settings → Developer → Edit Config** — this opens `claude_desktop_config.json`
+   (Windows: `%APPDATA%\Claude\` · macOS: `~/Library/Application Support/Claude/`).
+2. Add the `synapse` server. Point it at the clone **whose vault holds your notes** (the one
+   where you ran ingest):
+
+   **Clone on Windows / macOS / Linux** (adjust the path):
+
+   ```json
+   {
+     "mcpServers": {
+       "synapse": {
+         "command": "C:\\path\\to\\Synapse\\backend\\.venv\\Scripts\\python.exe",
+         "args": ["C:\\path\\to\\Synapse\\backend\\synapse\\serve.py"]
+       }
+     }
+   }
+   ```
+
+   (macOS/Linux: `command` is `/path/to/Synapse/backend/.venv/bin/python`, `args` the same
+   `serve.py` path — forward slashes.)
+
+   **Clone inside WSL** (Claude Desktop on Windows bridges in via `wsl.exe`):
+
+   ```json
+   {
+     "mcpServers": {
+       "synapse": {
+         "command": "wsl.exe",
+         "args": ["-d", "Ubuntu", "--",
+                  "/home/you/Synapse/backend/.venv/bin/python",
+                  "/home/you/Synapse/backend/synapse/serve.py"]
+       }
+     }
+   }
+   ```
+
+3. **Fully quit** Claude Desktop (tray icon → Quit — closing the window is not enough) and
+   reopen. The tools icon now lists `synapse`.
+4. Ask: *“Using the synapse tools, what does my vault know about ‹a topic›? Cite note ids.”*
+
+**Troubleshooting:** `ModuleNotFoundError` → the paths in the config don’t point at the same
+clone/venv (`./start.sh setup` creates the venv). Empty answers → that clone’s vault has no
+graph yet — run `./synapse ingest` there once. The server never writes; deleting the config
+entry removes it completely.
 
 ## Configuration
 

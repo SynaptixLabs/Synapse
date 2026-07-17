@@ -209,6 +209,7 @@
         <span class="item" onclick="toggleSources()">▤ Sources (roots)</span>
         <span class="item" onclick="runIngest()">⟳ Run ingest</span>
         <span class="item" onclick="runRebuild()">⟲ Rebuild graph</span>
+        <a class="item" href="https://github.com/SynaptixLabs/Synapse#readme" target="_blank" rel="noopener">📖 Help / README</a>
         <a class="item" href="https://github.com/SynaptixLabs/Synapse" target="_blank" rel="noopener">⧉ GitHub</a>
         <div class="ai">
           <h4 style="margin:0 0 0.3rem">AI</h4>
@@ -257,9 +258,8 @@
             <li><span class="badge" id="s43">todo</span> <span><b>Ignore prunes honestly.</b> Add <code>Archive/</code> to a <code>.synapseignore</code> in a source root → ⟳ Run ingest → those notes leave, counted as pruned. (<code>.gitignore</code>s now respected too.)</span></li>
             <li><span class="badge" id="s44"><input type="checkbox" onchange="manualAccept(this,'s44')"></span> <span><b>Query trio (CLI).</b> <code>./synapse query "…"</code> · <code>path A B</code> · <code>explain ID</code> — instant, no model calls.</span></li>
             <li><span class="badge" id="s45"><input type="checkbox" onchange="manualAccept(this,'s45')"></span> <span><b>Auto-sync.</b> <code>./synapse hook install</code> → commit in that repo → the brain updates by itself. <code>hook status</code> tells the truth.</span></li>
-            <li><span class="badge" id="s46"><input type="checkbox" onchange="manualAccept(this,'s46')"></span> <span><b>Your brain in Claude Code.</b> Register the MCP server (README: "Use your brain from Claude Code") → ask something only your vault knows → answer cites note ids.</span></li>
           </ul>
-          <p style="color:var(--dim);font-size:0.75rem;margin-top:0.5rem">Top three auto-PASS as the app proves them (progress survives reload); tick the CLI ones yourself. All 6 green → tell JANUS "PASS" and sprint 4 closes. Full script: <code>project-management/sprints/sprint_04/acceptance/</code></p>
+          <p style="color:var(--dim);font-size:0.75rem;margin-top:0.5rem">Top three auto-PASS as the app proves them (progress survives reload); tick the CLI ones yourself. All 5 green → tell JANUS "PASS" and sprint 4 closes. Full script: <code>project-management/sprints/sprint_04/acceptance/</code></p>
         </div>
       </section>
 
@@ -297,7 +297,7 @@
       <span id="busyspin" title="working…">⏳</span>
       <span id="st-notes">–</span><span id="st-edges">–</span><span id="st-unres">–</span>
       <span class="msg" id="st-msg"></span>
-      <span class="vault">vault: <code>data/vault/</code> · MIT</span>
+      <span class="vault"><span id="appver"></span>vault: <code>data/vault/</code> · MIT</span>
     </div>
 
     <script type="module" src="/src/explorer.js"></script>
