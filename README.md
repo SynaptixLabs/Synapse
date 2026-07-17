@@ -125,7 +125,7 @@ artifacts — the sync never touches them.
 `"assets": true` in `data/roots.json`) and the next ingest syncs that root's images and PDFs
 as **sidecar notes** — metadata + extracted PDF text in the vault, the bytes stay where they
 live (a 50GB photo library never duplicates). PDF text becomes searchable brain matter
-(`pip install pypdf` — without it, sidecars are honest metadata-only and say what to install).
+(`pypdf` ships in requirements; without it sidecars degrade to honest metadata-only).
 Asset notes render their original in the reader (📷 inline, 📄 as a link), carry a glyph on
 the graph, and **👁 Describe (AI)** writes a grounded description + links related notes —
 those relations draw as **dashed purple edges** (AI-inferred, honestly distinct from parsed

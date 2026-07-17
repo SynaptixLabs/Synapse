@@ -62,3 +62,16 @@ Then: Actions → "Publish wiki" → Run workflow (or just push anything to main
 
 ## Verdict
 - [ ] PASS — date/notes: ____________
+
+---
+
+## RESULT (recorded 2026-07-17)
+
+**PASS — founder live-tested on the desktop stack** ("All seem to work"): 📷 asset ingest at
+real scale (HS root → 1963 notes = 828 md + ~1,134 sidecars; D-9 split + window engaged),
+inline photo render, 👁 Describe, PDF search, Obsidian open, 👻 ghosts, type lens + 📦
+regroup (built mid-acceptance on founder feedback), wiki first-page + publish.
+**Step 7 (agents activation) DECLINED by founder** — Epic P ships dormant: workflow +
+labels + policy merged; activation (Claude app + API-key secret) available any time.
+Field findings fixed same-session: stale Sources count after Apply (84cffb9); type
+lens + regroup ask (e329391).

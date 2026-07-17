@@ -1,4 +1,4 @@
-# Sprint 05 — **Everything In** (ACTIVE — opened 2026-07-17 on founder go)
+# Sprint 05 — **Everything In** (✅ CLOSED 2026-07-17 · founder acceptance PASS)
 
 > **Graph node.** Up: [`../00_index.md`](../00_index.md) · Scope source:
 > [graphify learnings T6–T7](../../reference/2026-07-16_graphify_learnings.md) +

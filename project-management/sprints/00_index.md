@@ -19,13 +19,12 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 
 ## Active sprint
 
-- **Sprint 05 — Everything In** ([`sprint_05/index.md`](sprint_05/index.md)) — opened
-  2026-07-17 on founder go ("kick off the next sprint"). Multimedia stage 1: images + PDFs
-  join the brain as sidecar notes.
-- Previous: sprint 04 CLOSED 2026-07-17 (founder order, acceptance waived; close GBU 4.7 —
-  [report](sprint_04/reports/SPRINT_04_REPORT.md) ·
-  [close review](sprint_04/reviews/2026-07-17_gbu_sprint04_close.md)).
-- Backlog: [`../0m_BACKLOG.md`](../0m_BACKLOG.md).
+- **None — sprint 05 CLOSED 2026-07-17 on founder acceptance PASS**
+  ([report](sprint_05/reports/SPRINT_05_REPORT.md) ·
+  [acceptance](sprint_05/acceptance/00_founder_acceptance_script.md)). Same-day open→close:
+  all six epics (K–P) delivered; Epic P shipped dormant (activation declined).
+- Next gate: v0.2 backlog ([`../0m_BACKLOG.md`](../0m_BACKLOG.md)) — WebGL engine (#5),
+  semantic re-rank (#16), entity extraction (#8), chat (#10); Codex re-pass post-Jul-23.
 
 ## All sprints
 
@@ -35,7 +34,7 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 | 02 | ✅ Closed 2026-07-15 · PASS · 4.6 | **The Explorer** | Explorer page (kit REV 2→2.3): accordion, glossary, immersive placeable graph, persistent focus, in-UI acceptance | C — Explorer UI | none | [`sprint_02/index.md`](sprint_02/index.md) |
 | 03 | ✅ Closed 2026-07-15 · PASS · **POC closed (v0.1.0)** | **The Twist** | Two models end-to-end: summarize node/subtree (Anthropic) + render summary as image (gpt-image-1); POC close | D — Distill · E — Render · F — POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | [`sprint_03/index.md`](sprint_03/index.md) |
 | 04 | ✅ Closed 2026-07-17 · founder order · 4.7 | **The Open Brain** | The brain becomes infrastructure: deterministic query/path/explain, `.synapseignore` + git-hook freshness, MCP server (your brain as an assistant tool), edge-confidence schema | G — Query trio · H — Freshness · I — MCP · J — Confidence schema | none | [`sprint_04/index.md`](sprint_04/index.md) |
-| 05 | 🟢 ACTIVE (~200V) | **Everything In** | Multimedia stage 1: images + PDFs as sidecar-note first-class citizens; vision pass behind the seams (cost-guarded); extras packaging + Obsidian interop | K Assets · L Seeing pass · M Extras/Obsidian · N Ghosts · O Wiki · P Agents×MCP | optional (vision) | [`sprint_05/index.md`](sprint_05/index.md) |
+| 05 | ✅ Closed 2026-07-17 · founder PASS | **Everything In** | Multimedia stage 1: images + PDFs as sidecar-note first-class citizens; vision pass behind the seams (cost-guarded); extras packaging + Obsidian interop | K Assets · L Seeing pass · M Extras/Obsidian · N Ghosts · O Wiki · P Agents×MCP | optional (vision) | [`sprint_05/index.md`](sprint_05/index.md) |
 
 ## Sprint anatomy (each `sprint_<N>/` node)
 
