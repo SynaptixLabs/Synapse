@@ -140,7 +140,10 @@ patterns.) Notes under a newly-ignored path are pruned on the next sync, with ho
   tail** (static dots around each hub — click one to pull it into the living graph). The status
   bar always tells you what's shown.
 - **Read** — every note renders as a wiki article (clickable `[[wikilinks]]`, infobox, RTL
-  support); the docked reader drives the AI panel.
+  support) and ends with a **⛓ Connections** footer (every link, grouped by type, clickable);
+  the docked reader drives the AI panel.
+- **⇢ Path** — click the button, then two notes: the shortest chain of links between them
+  glows gold, hop by hop (empty click clears).
 - **✦ Distill** — summarize the open note + its neighbors (or a wider subtree). The summary is
   saved to the vault as an `S — <name>` note, wikilinked to its sources, joining the graph on
   rebuild. Grounding is enforced: uncited or hallucinated-citation results are rejected.
@@ -316,8 +319,11 @@ No gate closes on assertion):
 | [01](project-management/sprints/sprint_01/index.md) | **The Brain** | `synapse ingest` → readable vault + derived graph + `Index.md`; acceptance dashboard, wiki popup, repo-colored graph | ✅ founder PASS |
 | [02](project-management/sprints/sprint_02/index.md) | **The Explorer** | explorer page: search, glossary, immersive placeable graph, docked wiki reader | ✅ founder PASS |
 | [03](project-management/sprints/sprint_03/index.md) | **The Twist** | distill any node/subtree + render it as an image; 21k-note scale arc; POC close | ✅ founder PASS · **v0.1.0** |
+| [04](project-management/sprints/sprint_04/index.md) | **The Open Brain** | deterministic query/path/explain (CLI · API · UI path-mode + connections footer) · `.gitignore`/`.synapseignore` + git-hook/watch auto-sync · **MCP server** (Claude Code & Desktop) · edge-confidence schema v3 | ✅ closed 2026-07-17 · close GBU 4.7 |
 
-What v0.2 wants (WebGL graph engine, entity extraction, ripple maintenance, chat query):
+Next planned: [sprint 05 — **Everything In**](project-management/sprints/sprint_05/index.md)
+(images + PDFs as first-class notes). The wider v0.2 backlog (WebGL engine, entity extraction,
+ripple maintenance, chat, semantic re-rank):
 [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
 
 Product truth: [`0k_PRD.md`](project-management/0k_PRD.md) ·
