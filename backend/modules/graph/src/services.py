@@ -35,7 +35,7 @@ _CODEPATH_RE = re.compile(r"`([^`\s]+?\.md)`")
 # match the same markdown/backtick forms against the extensions ingest actually sidecars,
 # and resolve to the sidecar the same way (the exact map is keyed by the ORIGINAL
 # source_path, `…/hero.png`, so no id munging is needed here).
-_ASSET_EXT = r"(?:png|jpe?g|gif|webp|svg|pdf|mp4|webm|mov|m4v|mp3|m4a|wav)"
+_ASSET_EXT = r"(?:png|jpe?g|gif|webp|svg|pdf|mp4|webm|mov|m4v|mp3|m4a|wav|html?)"
 _MDASSET_RE = re.compile(rf"\[[^\]]*\]\(([^)\s]+?\.{_ASSET_EXT})(?:#[^)]*)?\)", re.IGNORECASE)
 _CODEASSET_RE = re.compile(rf"`([^`\s]+?\.{_ASSET_EXT})`", re.IGNORECASE)
 
