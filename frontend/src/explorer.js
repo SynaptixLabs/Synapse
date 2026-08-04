@@ -289,6 +289,12 @@ function nodeTypeOf(n) {
   if (n.repo === '✦ summaries' || n.repo?.startsWith('✦ summaries')) return 'distill';
   if (n.tags?.includes('asset:image')) return 'image';
   if (n.tags?.includes('asset:pdf')) return 'pdf';
+  // video/audio (2026-08-04): without these a video fell through to 'note', so the type
+  // lens had no pill for it and the count landed in 📝 — "I still see no videos" even
+  // though six were ingested and linked. Every asset kind ingest can produce needs a
+  // lens entry, or it is invisible as a CATEGORY however well it renders as a node.
+  if (n.tags?.includes('asset:video')) return 'video';
+  if (n.tags?.includes('asset:audio')) return 'audio';
   return 'note';
 }
 
@@ -339,15 +345,15 @@ function rebuildView() {
 
 function buildTypebar() {
   const el = $('typebar'); if (!el) return;
-  const counts = { note: 0, image: 0, pdf: 0, distill: 0 };
+  const counts = { note: 0, image: 0, pdf: 0, video: 0, audio: 0, distill: 0 };
   for (const n of nodes) if (n.kind === 'note') counts[nodeTypeOf(n)]++;
-  const PILLS = [['note', '📝'], ['image', '📷'], ['pdf', '📄'], ['distill', '✦']];
+  const PILLS = [['note', '📝'], ['image', '📷'], ['pdf', '📄'], ['video', '🎬'], ['audio', '🎧'], ['distill', '✦']];
   let html = PILLS.filter(([t]) => counts[t] > 0)
     .map(([t, icon]) => {
       const off = hiddenTypes.has(t);
       return `<button class="pill ${off ? 'off' : ''}" data-type="${t}" title="${off ? 'show' : 'hide'} ${t}s">${icon} ${counts[t]}</button>`;
     }).join('');
-  if (counts.image + counts.pdf > 0) {
+  if (counts.image + counts.pdf + counts.video + counts.audio > 0) {
     html += `<button class="pill ${assetsGrouped ? '' : 'off'}" data-regroup="1" title="assets as their own group (hull) vs mixed into folders">📦 ${assetsGrouped ? 'assets grouped' : 'assets mixed'}</button>`;
   }
   el.innerHTML = html;
@@ -750,7 +756,9 @@ function buildDrawer() {
     `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
     Object.entries(EDGE).map(([t, c]) => {
       const off = graph.state().hiddenEdges.includes(t);
-      const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t === 'pathref' ? 'path reference (`code` pointers)' : t;
+      const name = t === 'sibling' ? 'repo grouping (shown as hulls)'
+                 : t === 'pathref' ? 'path reference (`code` pointers)'
+                 : t === 'asset' ? 'media link (image · PDF · video · audio)' : t;
       return `<div class="row ${off ? 'off' : ''}" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${name} <span class="tg">${off ? 'off' : 'on'}</span></div>`;
     }).join('') +
     `<h4>👻 Future notes (ghosts)</h4>` +
