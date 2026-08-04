@@ -1,6 +1,6 @@
 /** SYNAPSE explorer — sprint-02 Epic C, implements ui_kit/explorer KIT.md REV 2 1:1. */
 import { api, health } from './api.js';
-import { buildNamespace, createReader, esc } from './wiki.js';
+import { buildNamespace, createReader, esc, loadConventions } from './wiki.js';
 import { createGraph } from './graph.js';
 
 const $ = (id) => document.getElementById(id);
@@ -747,12 +747,15 @@ function buildDrawer() {
     (legend.length
       ? `<h4>Node types — colour + shape</h4>` +
         legend.map(c =>
-          `<div class="row"><span style="color:${c.color};font-size:15px;width:16px;display:inline-block">` +
+          // c.color is CONFIG, and config is not trust — an unescaped `"` here breaks out of the
+          // style attribute (stored XSS from node-classes.json). Escaped here AND validated
+          // at write time in node_classes.py; either alone is one typo away from a hole.
+          `<div class="row"><span style="color:${esc(c.color)};font-size:15px;width:16px;display:inline-block">` +
           `${SHAPE_GLYPH[c.shape] ?? '●'}</span> ${esc(c.label)} <span class="tg">${c.count}</span></div>`).join('')
       : '') +
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
-      `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${colors.get(r)}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
+      `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${esc(colors.get(r) ?? "#6f8fbf")}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
     `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
     Object.entries(EDGE).map(([t, c]) => {
       const off = graph.state().hiddenEdges.includes(t);
@@ -1035,7 +1038,9 @@ refresh = async function () {
 };
 
 health($('health'));
-refresh();
+// resolve the companion-media convention BEFORE the first render, so an <Visual/>
+// never resolves against a stale default on a vault that configures its own layout
+loadConventions().then(refresh);
 refreshModelStatus();
 acRender();
 // app version in the statusbar — single source of truth: package.json (via vite define)

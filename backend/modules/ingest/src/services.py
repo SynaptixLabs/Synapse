@@ -62,10 +62,15 @@ def note_repo(note_path: Path) -> str | None:
 
 
 class IngestService:
-    def __init__(self, vault_path: Path, ignore_dirs: frozenset[str] | set[str]):
+    def __init__(self, vault_path: Path, ignore_dirs: frozenset[str] | set[str],
+                 companion_media_dir: str = "media", interactive_prefix: str = "interactive__"):
         self.vault_path = Path(vault_path)
         self.notes_dir = self.vault_path / "notes"
         self.ignore_dirs = set(ignore_dirs)
+        # the companion-media convention, injected — see Settings.companion_media_dir. The
+        # defaults are the previous hard-coded literals, so every existing caller is unchanged.
+        self.companion_media_dir = companion_media_dir
+        self.interactive_prefix = interactive_prefix
 
     # ── discovery ─────────────────────────────────────────────────────────
     def scan_repo(self, repo_root: Path, errors: list[str] | None = None) -> list[SourceFile]:
@@ -301,6 +306,14 @@ class IngestService:
     # tag case-insensitive, inline allowed, self-closing optional.
     _VISUAL_RE = re.compile(r'<Visual\s+id="([^"]+)"[^>]*?/?>', re.IGNORECASE)
     _YOUTUBE_RE = re.compile(r'<YouTube\s+id="([^"]+)"[^>]*?/?>', re.IGNORECASE)
+    # An id becomes part of a FILENAME, so it must be a plain token — not a path. The old
+    # guard only split on "/", which leaves `..\..\x` (a real separator on Windows), NUL,
+    # and "|" (the asset_refs field separator, which would forge extra edges) all viable.
+    # Allow-list instead of block-list: ids that are not tokens are simply not resolved.
+    # (GBU 2026-08-04, P1.)
+    # \A…\Z, not ^…$: Python's `$` also matches BEFORE a trailing newline, so "safe\n" passed
+    # and a newline in a filename corrupts the one-line asset_refs field. (Codex GBU, P2.)
+    _SAFE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,80}\Z")
 
     def _resolve_asset_refs(self, src: SourceFile, body: str) -> str:
         vis = self._VISUAL_RE.findall(body)
@@ -308,15 +321,16 @@ class IngestService:
         if not vis and not yt:
             return ""
         stem = Path(src.rel_path).stem
-        media_dir = src.path.parent.parent / "media" / stem
+        folder = self.companion_media_dir
+        media_dir = src.path.parent.parent / folder / stem
         if not media_dir.is_dir():
             return ""
-        base = Path(src.rel_path).parent.parent / "media" / stem
+        base = Path(src.rel_path).parent.parent / folder / stem
         refs: list[str] = []
         for vid in vis:
-            if any(seg in ("", ".", "..") for seg in vid.split("/")):
+            if not self._SAFE_ID_RE.fullmatch(vid):
                 continue      # an id must never climb out of the article's media dir
-            f = media_dir / f"interactive__{vid}.html"
+            f = media_dir / f"{self.interactive_prefix}{vid}.html"
             if f.is_file():
                 refs.append((base / f.name).as_posix())
         # A YouTube id is NOT evidence of a particular local file. Linking the first mp4
@@ -325,6 +339,8 @@ class IngestService:
         # filename actually carries the id; otherwise the id stays a remote reference and
         # no edge is invented. (Codex GBU P1.)
         for vid in yt:
+            if not self._SAFE_ID_RE.fullmatch(vid):
+                continue
             for f in sorted(media_dir.glob("*.mp4")):
                 if vid.lower() in f.name.lower():
                     refs.append((base / f.name).as_posix())
@@ -336,18 +352,46 @@ class IngestService:
                 seen.add(r); out.append(r)
         return " | ".join(out)
 
+    @staticmethod
+    def _frontmatter_text(note_path: Path) -> str:
+        """The note's frontmatter block, whole — never a fixed byte window.
+
+        A window is a correctness bug, not just a limit: `synapse.asset_refs` is ONE line
+        holding every resolved ref, so an article with enough media pushes it past any
+        constant. The line then fails to match, the ingest concludes the refs changed, and
+        it rewrites the note — on every single run, forever, while never converging.
+        (GBU 2026-08-04, P1.) Bounded by the delimiter instead, so cost stays O(frontmatter)
+        even when the body is a megabyte."""
+        MAX_LINES, MAX_CHARS = 500, 256_000
+        lines: list[str] = []
+        size = 0
+        try:
+            with note_path.open(encoding="utf-8", errors="replace") as fh:
+                # a UTF-8 BOM is invisible to an editor but would make the first line "\ufeff---"
+                if fh.readline().lstrip("\ufeff").rstrip("\n") != "---":
+                    return ""
+                for line in fh:
+                    if line.rstrip("\n") == "---":
+                        return "".join(lines)          # only a CLOSED block is frontmatter
+                    lines.append(line)
+                    size += len(line)
+                    # bound BOTH dimensions: 500 lines does not bound one 40MB line
+                    if len(lines) > MAX_LINES or size > MAX_CHARS:
+                        return ""
+        except OSError:
+            return ""
+        return ""      # EOF with no closing delimiter — not a frontmatter block
+
     def _existing_refs(self, note_path: Path) -> str:
         if not note_path.is_file():
             return ""
-        head = note_path.read_text(encoding="utf-8", errors="replace")[:2000]
-        m = _REFS_RE.search(head)
+        m = _REFS_RE.search(self._frontmatter_text(note_path))
         return m.group(1).strip() if m else ""
 
     def existing_hash(self, note_path: Path) -> str | None:
         if not note_path.is_file():
             return None
-        head = note_path.read_text(encoding="utf-8", errors="replace")[:600]
-        m = _HASH_RE.search(head)
+        m = _HASH_RE.search(self._frontmatter_text(note_path))
         return m.group(1) if m else None
 
     def write_note(self, src: SourceFile, errors: list[str] | None = None) -> str:

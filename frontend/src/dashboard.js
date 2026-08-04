@@ -1,7 +1,7 @@
 /** Sprint-1 acceptance board (historical surface, kept fully functional at /dashboard.html).
  *  Uses the shared api/wiki/graph modules; the wiki article opens as a popup here. */
 import { api, health } from './api.js';
-import { buildNamespace, createReader } from './wiki.js';
+import { buildNamespace, createReader, esc, loadConventions } from './wiki.js';
 import { createGraph } from './graph.js';
 
 const $ = (id) => document.getElementById(id);
@@ -41,7 +41,7 @@ window.runIngest = async () => {
     ingests++;
     const t = rep.totals;
     $('report').innerHTML = `<table><tr><th>repo</th><th>found</th><th>written</th><th>unchanged</th><th>skipped</th></tr>` +
-      rep.repos.map(r => `<tr><td>${r.repo}</td><td class="num">${r.files_found}</td><td class="num">${r.notes_written}</td><td class="num">${r.unchanged}</td><td class="num">${r.skipped}</td></tr>`).join('') +
+      rep.repos.map(r => `<tr><td>${esc(r.repo)}</td><td class="num">${r.files_found}</td><td class="num">${r.notes_written}</td><td class="num">${r.unchanged}</td><td class="num">${r.skipped}</td></tr>`).join('') +
       `<tr><th>TOTAL</th><th class="num">${t.files_found}</th><th class="num">${t.notes_written}</th><th class="num">${t.unchanged}</th><th class="num">${t.skipped}</th></tr></table>`;
     $('action-msg').textContent = '';
     if (t.files_found > 0) setBadge('s1', 'pass', 'PASS');
@@ -77,10 +77,13 @@ async function refresh() {
     $('kpis').innerHTML =
       `<div class="kpi"><b>${s.notes}</b><span>notes</span></div>` +
       `<div class="kpi"><b>${s.repos}</b><span>repos</span></div>` +
-      Object.entries(s.edges_by_type).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('') +
+      Object.entries(s.edges_by_type).map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${esc(k)}</span></div>`).join('') +
       `<div class="kpi"><b>${s.unresolved_links}</b><span>unresolved</span></div>`;
     $('top').innerHTML = '<span class="muted">Top connected:</span> ' +
-      s.top_connected.map(t => `<div class="muted">· <a href="#" data-open="${t.id}">${t.title}</a> — ${t.degree} links</div>`).join('');
+      // 🔴 titles/ids/repo names come from the USER'S INDEXED REPOS — a heading like
+    // `# <img src=x onerror=…>` is a stored-XSS payload at THIS origin, which is exactly the
+    // origin CORS trusts to drive the API. Escape every one. (Codex GBU 2026-08-04, P0.)
+    s.top_connected.map(t => `<div class="muted">· <a href="#" data-open="${esc(t.id)}">${esc(t.title)}</a> — ${t.degree} links</div>`).join('');
     renderList();
     graph.setData(nodes, edges);
   } catch { /* no graph yet */ }
@@ -90,7 +93,7 @@ window.renderList = () => {
   const q = $('filter').value.toLowerCase();
   const list = nodes.filter(n => n.kind === 'note' && (n.id.toLowerCase().includes(q) || n.title.toLowerCase().includes(q)));
   $('notelist').innerHTML = list.slice(0, 400).map(n =>
-    `<div data-open="${n.id}" title="${n.id}">${n.title} <span class="muted">· ${n.repo}</span></div>`).join('')
+    `<div data-open="${esc(n.id)}" title="${esc(n.id)}">${esc(n.title)} <span class="muted">· ${esc(n.repo)}</span></div>`).join('')
     || '<span class="muted">no matches</span>';
 };
 
@@ -100,4 +103,6 @@ document.addEventListener('click', (ev) => {
 });
 
 health($('health'));
-refresh();
+// resolve the companion-media convention BEFORE the first render, so an <Visual/>
+// never resolves against a stale default on a vault that configures its own layout
+loadConventions().then(refresh);

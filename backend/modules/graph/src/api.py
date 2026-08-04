@@ -24,6 +24,16 @@ def get_node_classes() -> list[dict]:
     return load_classes(load_settings())
 
 
+@router.get("/conventions")
+def get_conventions() -> dict:
+    """The companion-media convention, so the READER resolves `<Visual id="X"/>` the same way
+    ingest did. Both used to hard-code the same two literals; when one vault's layout differs,
+    two independent copies of a convention drift and the reader shows a bundle the graph has
+    no edge for (or the reverse). One definition, served."""
+    s = load_settings()
+    return {"companion_media_dir": s.companion_media_dir, "interactive_prefix": s.interactive_prefix}
+
+
 @router.get("/graph")
 def get_graph() -> dict:
     graph = _service().load()
@@ -183,7 +193,41 @@ def get_asset(note_id: str):
             f"The file behind this sidecar is gone ({note['source_path']}) — "
             "re-run ingest to prune it."))
     media_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-    return FileResponse(target, media_type=media_type)
+
+    # 🔴 ACTIVE CONTENT (security review 2026-08-04, P0). A repo you ingest is UNTRUSTED
+    # INPUT. Serving its .html/.svg as text/html or image/svg+xml from THIS origin means
+    # repo-authored script would run same-origin with the unauthenticated ingest / delete /
+    # distill / roots endpoints — able to read the vault, mutate it, and spend model tokens.
+    # Sandboxing the <iframe> does not help: MDN is explicit that the sandbox is gone the
+    # moment the URL is opened directly, and nothing stops a user clicking it.
+    #
+    # So active types are neutralised at the boundary:
+    #   · served as an octet-stream attachment, never rendered inline by the browser
+    #   · nosniff, so the type cannot be re-guessed back into something executable
+    #   · a deny-all CSP and no-referrer as defence in depth
+    # The reader still DISPLAYS interactives — it fetches the bytes and mounts them in a
+    # sandboxed frame itself, which is where isolation actually holds.
+    # `sandbox` in a CSP applies to THIS response: the document gets an opaque origin and no
+    # script, whether it is framed or opened top-level. That is what makes an SVG safe to keep
+    # serving as an image (scripts in SVG never run via <img> anyway, and this covers the
+    # direct-navigation case too).
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
+    }
+    # HTML is different: an interactive NEEDS its own scripts to run, so no CSP can both
+    # allow it and contain it at this origin. Serve it as an inert attachment — the browser
+    # will never execute it from here — and let the reader fetch the bytes and mount them in
+    # its OWN sandboxed frame (srcdoc ⇒ opaque origin, no access back to this API).
+    if target.suffix.lower() in {".html", ".htm", ".xhtml"}:
+        # `filename=` + `content_disposition_type=`, never a hand-built header: the name comes
+        # from the user's repo, so a non-Latin-1 character raises UnicodeEncodeError inside the
+        # ASGI layer and a quote/newline yields a malformed header. Starlette emits the RFC 5987
+        # percent-encoded form correctly. (Codex GBU 2026-08-04, P1.)
+        return FileResponse(target, media_type="application/octet-stream", headers=headers,
+                            filename=target.name, content_disposition_type="attachment")
+    return FileResponse(target, media_type=media_type, headers=headers)
 
 
 @router.delete("/note/{note_id}")

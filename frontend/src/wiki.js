@@ -15,6 +15,15 @@ export const WIKILINK_RE = /\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|([^\[\]]*))?\]\]
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+/** The companion-media convention, from the backend — never re-hard-coded here (GBU
+ *  2026-08-04, P1: two copies of one convention drift). Fetched once; the defaults below
+ *  are only a fallback for an older backend that has no /conventions route. */
+let CONV = { companion_media_dir: 'media', interactive_prefix: 'interactive__' };
+export async function loadConventions() {
+  try { CONV = { ...CONV, ...(await api('/conventions')) }; } catch { /* keep the defaults */ }
+  return CONV;
+}
+
 export function buildNamespace(nodes) {
   const exact = new Map(), stems = new Map();
   const put = (map, key, id) => {
@@ -62,6 +71,48 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
   };
   addEventListener('message', onFrameMessage);
+
+  // Interactives are mounted from BYTES, never by pointing a frame at the API (security
+  // review 2026-08-04, P0). The API deliberately serves repo-authored HTML as an inert
+  // attachment, because anything it renders inline would run at the same origin as the
+  // unauthenticated ingest/delete/distill endpoints. Fetching it and handing it to `srcdoc`
+  // under sandbox="allow-scripts" (and NOT allow-same-origin) gives the pack an opaque
+  // origin: its own JS runs, its postMessage height seam still works — but it can reach
+  // neither this app nor the API.
+  //
+  // The sandbox alone is NOT enough, and an earlier version of this made it worse: it injected
+  // `<base href="<api>/">` so a bundle's relative siblings resolved at the API. But a sandbox
+  // does not block NETWORK access — a plain POST is dispatched without a preflight — so that
+  // base handed a hostile bundle a one-line `fetch('/api/v1/rebuild?fresh=true',{method:'POST'})`
+  // against the very server it was served from. It never needs to read the reply.
+  // (Codex GBU 2026-08-04, P1.) The base is gone, and an app-authored CSP goes in FIRST, before
+  // any bundle markup, closing the network and navigation lanes the sandbox leaves open. The
+  // server refuses cross-origin writes as well — neither layer is trusted alone.
+  const FRAME_CSP = "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; "
+    + "style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; "
+    + "connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'";
+  const MAX_BUNDLE_BYTES = 8 * 1024 * 1024;
+
+  async function mountSandboxed(frame, url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const declared = Number(res.headers.get('content-length') || 0);
+      if (declared > MAX_BUNDLE_BYTES) throw new Error(`bundle too large (${Math.round(declared / 1e6)}MB)`);
+      const body = await res.text();
+      if (body.length > MAX_BUNDLE_BYTES) throw new Error('bundle too large');
+      // Prepend, never patch <head>: a bundle may have no <head> at all (the browser builds one),
+      // and a meta CSP only binds when it precedes the content it governs.
+      const doc = `<meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">${body}`;
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.srcdoc = doc;
+    } catch (e) {
+      frame.replaceWith(Object.assign(document.createElement('p'), {
+        style: 'color:#8b93a6;border:1px dashed #2c3342;border-radius:8px;padding:10px',
+        textContent: `▶ interactive could not be loaded — ${e.message}`,
+      }));
+    }
+  }
 
   const resolveWiki = (target) => {
     const ns = getNs(); if (!ns) return null;
@@ -208,9 +259,13 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
         (_, id) => `<div class="embed-yt" data-yt="${id}"></div>`)
       .replace(/<Visual\s+id="([^"]+)"[^>]*?\/?>/gi,
         (_, id) => `<div class="embed-visual" data-visual="${id}"></div>`);
-    const html = DOMPurify.sanitize(marked.parse(mdBody), {
-      ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'sandbox', 'data-yt', 'data-visual'],
-    });
+    // 🔴 The sanitizer must NOT allow <iframe>. Adapter frames (YouTube / Visual) are created
+    // AFTER sanitization, by us, from ids we control — so allowing the tag here buys the
+    // feature nothing and hands untrusted vault markdown a way to embed an unsandboxed frame
+    // pointing at anything, including this app's own API origin. A repo you ingest is
+    // UNTRUSTED INPUT. (Security review 2026-08-04, P0.) data-* needs no ADD_ATTR: DOMPurify
+    // permits it by default.
+    const html = DOMPurify.sanitize(marked.parse(mdBody), { FORBID_TAGS: ['iframe', 'object', 'embed'] });
     crumbEl.textContent = crumb;
     bodyEl.innerHTML = (infobox || '') + (mediaHtml || '') + srcFm + html;
     linkifyWikilinks(bodyEl);
@@ -237,7 +292,8 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
     for (const el of bodyEl.querySelectorAll('.embed-visual')) {
       const id = el.getAttribute('data-visual');
-      let aid = sourceAssetId(currentNote, `../media/${(currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '')}/interactive__${id}.html`);
+      const stem = (currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '');
+      let aid = sourceAssetId(currentNote, `../${CONV.companion_media_dir}/${stem}/${CONV.interactive_prefix}${id}.html`);
       // sourceAssetId only does path arithmetic — it never checks the note EXISTS, so a
       // missing pack produced a truthy id and mounted a 404 iframe, making the honest
       // "no local bundle" fallback below unreachable. Verify against the real graph.
@@ -247,19 +303,30 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
         // A fixed height clips it — the packs here report 626/642/1446 depending on width,
         // so any single number is wrong somewhere. Start tall enough to avoid a jump, then
         // honour what the pack tells us (see the message listener below).
-        ? `<iframe src="${base}/api/v1/asset/${encodeURIComponent(aid)}" sandbox="allow-scripts" loading="lazy"
-             data-visual-frame="${esc(id)}" title="${esc(id)}"
+        ? `<iframe sandbox="allow-scripts" data-visual-frame="${esc(id)}" title="${esc(id)}"
+             data-visual-src="${base}/api/v1/asset/${encodeURIComponent(aid)}"
              style="width:100%;height:700px;border:1px solid #2c3342;border-radius:8px;background:#0d1117;display:block"></iframe>`
         : `<p style="color:#8b93a6;border:1px dashed #2c3342;border-radius:8px;padding:10px">
              ▶ interactive <code>${esc(id)}</code> — published, but this brain holds no local bundle for it yet</p>`;
+    }
+    for (const f of bodyEl.querySelectorAll('iframe[data-visual-src]')) {
+      const url = f.getAttribute('data-visual-src');
+      f.removeAttribute('data-visual-src');
+      mountSandboxed(f, url);
     }
     for (const img of bodyEl.querySelectorAll('img')) {
       const src = img.getAttribute('src') ?? '';
       if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
       const vault = src.match(/^(?:\.\.\/)?media\/(.+)$/);
       if (vault && currentNote?.kind === 'summary') { img.src = `${base}/media/${vault[1]}`; continue; }
+      // Same existence check the <Visual/> lane does: sourceAssetId is PATH ARITHMETIC and
+      // always returns a plausible id, so pointing at it unconditionally turns "this brain
+      // doesn't hold the image" into a broken-image 404 — and shadows the vault fallback
+      // right below, which would often have resolved it. (GBU 2026-08-04, P1.)
       const assetId = sourceAssetId(currentNote, src);
-      if (assetId) { img.src = `${base}/api/v1/asset/${encodeURIComponent(assetId)}`; continue; }
+      if (assetId && (getNodes() || []).some(n => n.id === assetId)) {
+        img.src = `${base}/api/v1/asset/${encodeURIComponent(assetId)}`; continue;
+      }
       if (vault) img.src = `${base}/media/${vault[1]}`;   // legacy fallback, unchanged
     }
     if (backBtn) backBtn.style.display = stack.length > 1 ? '' : 'none';
@@ -288,9 +355,11 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
           : n.asset_type === 'interactive'
             // sandboxed: allow-scripts for the pack's own JS, NOT allow-same-origin — a
             // vault-held bundle must never reach this app's origin, storage or cookies.
-            ? `<p class="asset-media"><iframe src="${url}" sandbox="allow-scripts" loading="lazy"
-                 style="width:100%;height:680px;border:1px solid #2c3342;border-radius:8px;background:#0d1117"
-                 title="${esc(n.source_path)}"></iframe></p>`
+            // same byte-mount as an in-body <Visual/> — see mountSandboxed(): the API serves
+            // this HTML as an inert attachment, so a frame pointed at it would download, not run
+            ? `<p class="asset-media"><iframe sandbox="allow-scripts" data-visual-src="${url}"
+                 data-visual-frame="${esc(n.source_path)}" title="${esc(n.source_path)}"
+                 style="width:100%;height:680px;border:1px solid #2c3342;border-radius:8px;background:#0d1117"></iframe></p>`
             : `<p class="asset-media"><a href="${url}" target="_blank" rel="noopener">📄 Open the PDF (${esc(n.source_path)})</a></p>`;
       }
       render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta), mediaHtml });

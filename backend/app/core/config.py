@@ -71,6 +71,27 @@ class Settings:
         from .roots import enabled_paths
         return enabled_paths(self)
 
+    # ── the companion-media convention (GBU 2026-08-04, P1) ──────────────────
+    #
+    # An article can reference an interactive by id — `<Visual id="X"/>` — and ingest turns
+    # that into a real graph edge by looking for a file next to the article. WHERE it looks
+    # was hard-coded to the layout of one private KB, which is the wrong shape for a public
+    # tool: a vault that nests media differently silently gets zero media edges, with no
+    # setting to point at and nothing in the output saying why.
+    #
+    # Defaults reproduce the previous behaviour exactly, so existing brains are unaffected:
+    #     <article>.md  →  ../<companion_media_dir>/<article-stem>/<interactive_prefix><id>.html
+    # (Not to be confused with `media_dir` below, which is the VAULT's own media folder.)
+    @property
+    def companion_media_dir(self) -> str:
+        """Folder holding an article's companion media (SYNAPSE_COMPANION_MEDIA_DIR)."""
+        return os.environ.get("SYNAPSE_COMPANION_MEDIA_DIR", "media").strip("/") or "media"
+
+    @property
+    def interactive_prefix(self) -> str:
+        """Filename prefix marking an interactive bundle (SYNAPSE_INTERACTIVE_PREFIX)."""
+        return os.environ.get("SYNAPSE_INTERACTIVE_PREFIX", "interactive__")
+
     # ── sprint-3 model seams (all env-driven; mocks by default in tests/CI) ──
     @property
     def mock_models(self) -> bool:

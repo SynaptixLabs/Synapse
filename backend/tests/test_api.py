@@ -170,12 +170,43 @@ def test_unhandled_500_carries_cors_for_the_frontend(client):
         def _boom():
             raise RuntimeError("kaboom")
     raw = TestClient(app, raise_server_exceptions=False)
-    r = raw.get("/__boom", headers={"Origin": "http://192.168.1.7:5173"})
+    r = raw.get("/__boom", headers={"Origin": "http://localhost:5173"})
     assert r.status_code == 500 and "kaboom" in r.json()["detail"]
-    assert r.headers.get("access-control-allow-origin") == "http://192.168.1.7:5173"
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
     # an untrusted origin gets the JSON but NO cross-origin read grant
     evil = raw.get("/__boom", headers={"Origin": "https://evil.example"})
     assert "access-control-allow-origin" not in evil.headers
+
+
+def test_a_foreign_host_on_the_dev_port_is_not_trusted(client):
+    """The allow-list used to be `https?://[^/]+:5173` — any host, as long as it used that
+    port. CORS is precisely the control deciding whether a foreign page may READ this API's
+    responses, so a page served from attacker.example:5173 could drive a local API that reads
+    the filesystem and spends model tokens. (Security review 2026-08-04.)"""
+    r = client.get("/health", headers={"Origin": "http://attacker.example:5173"})
+    assert "access-control-allow-origin" not in r.headers
+    # a LAN IP is no longer implied either — it is opt-in via SYNAPSE_ALLOWED_ORIGINS
+    lan = client.get("/health", headers={"Origin": "http://192.168.1.7:5173"})
+    assert "access-control-allow-origin" not in lan.headers
+    ok = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    assert ok.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_a_lan_origin_can_be_opted_in_explicitly(tmp_path, monkeypatch):
+    """The documented WSL → Windows direct-IP fallback stays possible — explicitly."""
+    monkeypatch.setenv("SYNAPSE_ALLOWED_ORIGINS", "http://172.19.5.5:5173")
+    monkeypatch.setenv("SYNAPSE_VAULT_PATH", str(tmp_path / "vault"))
+    monkeypatch.setenv("SYNAPSE_ENV_FILE", str(tmp_path / "envdir" / ".env"))
+    import importlib
+    import app.main as m
+    importlib.reload(m)
+    try:
+        c = TestClient(m.app)
+        r = c.get("/health", headers={"Origin": "http://172.19.5.5:5173"})
+        assert r.headers.get("access-control-allow-origin") == "http://172.19.5.5:5173"
+    finally:
+        monkeypatch.delenv("SYNAPSE_ALLOWED_ORIGINS", raising=False)
+        importlib.reload(m)   # never leave a widened policy behind for the next test
 
 
 def test_duplicate_basename_root_is_rejected(client, tmp_path):

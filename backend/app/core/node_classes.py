@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from .config import Settings
@@ -94,14 +95,32 @@ def load_classes(settings: Settings) -> list[dict]:
     return [_normalize(e) for e in entries]
 
 
+# A colour is #rgb/#rrggbb/#rrggbbaa or a bare CSS colour keyword. Anything else — notably
+# anything containing a quote — is rejected, because this value is interpolated into a style
+# attribute in the browser. (GBU 2026-08-04, P1: a hand-edited node-classes.json was a stored
+# XSS vector.) The reader escapes it too; this stops the bad value at the door.
+_COLOR_RE = re.compile(r"\A(#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|[a-zA-Z]{3,20})\Z")
+DEFAULT_COLOR = "#6f8fbf"
+
+
+def _color(raw: object) -> str:
+    c = str(raw or "").strip()
+    return c if _COLOR_RE.match(c) else DEFAULT_COLOR
+
+
 def _normalize(e: dict) -> dict:
     shape = str(e.get("shape", "circle"))
+    try:
+        size = float(e.get("size", 1.0))
+    except (TypeError, ValueError):
+        size = 1.0
     return {
         "id": str(e["id"]),
         "label": str(e.get("label", e["id"])),
-        "color": str(e.get("color", "#6f8fbf")),
+        "color": _color(e.get("color")),
         "shape": shape if shape in SHAPES else "circle",
-        "size": float(e.get("size", 1.0)),
+        # a NaN/inf or absurd radius here is a renderer hang, not a style choice
+        "size": min(max(size, 0.1), 8.0) if size == size and size not in (float("inf"), float("-inf")) else 1.0,
         "match": {k: v for k, v in (e.get("match") or {}).items()
                   if k in ("path_contains", "name_contains", "tag") and v},
     }

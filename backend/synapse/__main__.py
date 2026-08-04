@@ -47,7 +47,8 @@ def _cmd_ingest_locked(settings) -> int:
     from app.core.roots import asset_root_paths, load_roots
     from pathlib import Path as _P
     managed = {_P(e["path"]).name for e in load_roots(settings)}
-    report = IngestService(settings.vault_path, settings.ignore_dirs).ingest(
+    report = IngestService(settings.vault_path, settings.ignore_dirs,
+                            settings.companion_media_dir, settings.interactive_prefix).ingest(
         settings.source_repos, managed_names=managed, asset_roots=asset_root_paths(settings))
     print(report.render())
     stats = GraphService(settings.vault_path).rebuild().stats()
@@ -221,7 +222,7 @@ def cmd_roots(settings, args) -> int:
     """CLI ops on the source-roots list (founder ask, 2026-08-04: manage roots without
     hand-editing roots.json). Thin wrapper over app.core.roots — same load/save the
     UI/API use, so a CLI add/remove is exactly as durable as a Sources-panel change."""
-    from app.core.roots import load_roots, save_roots
+    from app.core.roots import add_conflict, load_roots, save_roots
 
     if args.roots_action == "list":
         roots = load_roots(settings)
@@ -247,8 +248,10 @@ def cmd_roots(settings, args) -> int:
         p = str(Path(args.path).expanduser().resolve())
         if not Path(p).is_dir():
             print(f"error: {p} is not a directory"); return 2
-        if p in by_path:
-            print(f"already configured: {p}"); return 0
+        conflict = add_conflict(roots, Path(p))
+        if conflict:
+            print(f"error: {conflict}")
+            return 0 if conflict.startswith("already configured") else 2
         roots.append({"path": p, "enabled": not args.disabled, "assets": args.assets})
         save_roots(settings, roots)
         print(f"added: {p}{'  [assets]' if args.assets else ''}{'  [disabled]' if args.disabled else ''}")
