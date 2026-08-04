@@ -297,8 +297,10 @@ class IngestService:
     #     <YouTube id="Y"/> → any *.mp4 in that article's media dir (the local cut)
     # Unresolvable ids are simply not recorded — a reference to media this brain does not
     # hold is honest absence, never a fabricated edge.
-    _VISUAL_RE = re.compile(r'<Visual\s+id="([^"]+)"', re.IGNORECASE)
-    _YOUTUBE_RE = re.compile(r'<YouTube\s+id="([^"]+)"', re.IGNORECASE)
+    # ONE component grammar, shared with the reader and the sync adapter (Codex GBU P1):
+    # tag case-insensitive, inline allowed, self-closing optional.
+    _VISUAL_RE = re.compile(r'<Visual\s+id="([^"]+)"[^>]*?/?>', re.IGNORECASE)
+    _YOUTUBE_RE = re.compile(r'<YouTube\s+id="([^"]+)"[^>]*?/?>', re.IGNORECASE)
 
     def _resolve_asset_refs(self, src: SourceFile, body: str) -> str:
         vis = self._VISUAL_RE.findall(body)
@@ -312,13 +314,21 @@ class IngestService:
         base = Path(src.rel_path).parent.parent / "media" / stem
         refs: list[str] = []
         for vid in vis:
+            if any(seg in ("", ".", "..") for seg in vid.split("/")):
+                continue      # an id must never climb out of the article's media dir
             f = media_dir / f"interactive__{vid}.html"
             if f.is_file():
                 refs.append((base / f.name).as_posix())
-        if yt:
+        # A YouTube id is NOT evidence of a particular local file. Linking the first mp4
+        # alphabetically claims a relationship that may be false — with two ids and two
+        # cuts in one folder it is wrong by construction. Link a local video ONLY when the
+        # filename actually carries the id; otherwise the id stays a remote reference and
+        # no edge is invented. (Codex GBU P1.)
+        for vid in yt:
             for f in sorted(media_dir.glob("*.mp4")):
-                refs.append((base / f.name).as_posix())
-                break   # the article's own local cut, not every video in the folder
+                if vid.lower() in f.name.lower():
+                    refs.append((base / f.name).as_posix())
+                    break
         # de-dup, preserve order
         seen, out = set(), []
         for r in refs:

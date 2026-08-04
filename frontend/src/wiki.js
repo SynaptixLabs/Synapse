@@ -51,7 +51,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
   // 1440px, 642 at 1024px, 1446 at 375px — no single constant is right). Bounded so a
   // malformed message can't blow the layout out; sandboxed frames are same-shape senders
   // but not same-origin, so the value is the only thing we trust from them.
-  addEventListener('message', (ev) => {
+  const onFrameMessage = (ev) => {
     const d = ev.data;
     if (!d || typeof d !== 'object') return;
     if (d.type !== 'height' && d.type !== 'figure-height') return;
@@ -60,7 +60,8 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     for (const f of bodyEl.querySelectorAll('iframe[data-visual-frame]')) {
       if (f.contentWindow === ev.source) { f.style.height = `${Math.ceil(h)}px`; return; }
     }
-  });
+  };
+  addEventListener('message', onFrameMessage);
 
   const resolveWiki = (target) => {
     const ns = getNs(); if (!ns) return null;
@@ -129,27 +130,27 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     let heroUrl = '';
     let heroRef = '';
 
-    // ── PACKAGING BLOCK (publishing metadata that must never read as prose) ──────
-    // An authored article can open with a `<!-- … PACKAGING … -->` block the publisher
-    // parses and strips. Two things break naive handling, both seen live:
-    //  1. The block legitimately CONTAINS the literal `-->` (e.g. prose explaining "push
-    //     the body below the closing `-->`"), which TERMINATES the HTML comment early —
-    //     so the remaining ~75 lines of build metadata render as article text.
-    //  2. The YAML frontmatter sits AFTER that block, so a `^---` match never fires.
-    // Fix without touching the source: if the head is a comment, cut to the LAST `-->`
-    // that still precedes the first markdown heading — the block's real end.
-    if (/^\s*<!--/.test(mdBody)) {
-      const firstHeading = mdBody.search(/^#\s/m);
-      const searchIn = firstHeading > 0 ? mdBody.slice(0, firstHeading) : mdBody;
-      const realEnd = searchIn.lastIndexOf('-->');
-      if (realEnd !== -1) {
-        const block = mdBody.slice(0, realEnd + 3);
-        srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">`
-               + `<summary style="cursor:pointer;color:#54595d">Publishing metadata (packaging block)</summary>`
-               + `<pre style="margin:6px 0 0;white-space:pre-wrap">${block.replace(/</g, '&lt;')}</pre></details>`;
-        mdBody = mdBody.slice(realEnd + 3).replace(/^\s*\n/, '');
-      }
-    }
+    // ── PACKAGING BLOCK + FRONTMATTER, in that order ────────────────────────────
+    // Both orders occur in the corpus: packaging-then-frontmatter AND
+    // frontmatter-then-packaging (04c-product-management, w1-academy-sw3-training). A
+    // packaging-first-only parser silently leaves the block as prose for the latter, so
+    // strip whichever leads, then the other. And a packaging comment can legitimately
+    // contain a literal `-->`, so the close is found by scanning only the HEAD of the
+    // document — never `lastIndexOf` over the whole body, which on a heading-less article
+    // would swallow everything up to a `-->` appearing in real prose. (Codex GBU P1.)
+    const stripPackaging = () => {
+      if (!/^\s*<!--/.test(mdBody)) return;
+      const heading = mdBody.search(/^#{1,3}\s/m);
+      const limit = heading > 0 ? heading : Math.min(mdBody.length, 8000);
+      const end = mdBody.slice(0, limit).lastIndexOf('-->');
+      if (end === -1) return;
+      const block = mdBody.slice(0, end + 3);
+      srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">`
+             + `<summary style="cursor:pointer;color:#54595d">Publishing metadata (packaging block)</summary>`
+             + `<pre style="margin:6px 0 0;white-space:pre-wrap">${block.replace(/</g, '&lt;')}</pre></details>`;
+      mdBody = mdBody.slice(end + 3).replace(/^\s*\n/, '');
+    };
+    stripPackaging();
 
     const fm = mdBody.match(/^\s*---\n([\s\S]*?)\n---\n/);
     if (fm) {
@@ -161,6 +162,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">` +
               `<summary style="cursor:pointer;color:#54595d">Source frontmatter</summary><pre style="margin:6px 0 0">${fm[1].replace(/</g, '&lt;')}</pre></details>`;
       mdBody = mdBody.slice(fm[0].length);
+      stripPackaging();   // frontmatter-first files carry the packaging block after it
     }
     // Hero: prefer the frontmatter URL (what the publisher uses). Not every article
     // carries one — a hero attached server-side after publish never lands back in the
@@ -194,10 +196,14 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     // a publishing platform's `<Visual id="…"/>` / `<YouTube id="…"/>` markers are
     // RESOLVED AT DISPLAY TIME against the media this brain actually holds, exactly as
     // the platform resolves them against its own store. Never rewrite the source.
+    // ONE grammar for both components, shared with ingest/sync: tag name case-insensitive,
+    // NOT line-anchored (inline markers exist in the corpus), self-closing optional. Three
+    // divergent regexes previously meant a marker could be graphed but not rendered, or
+    // downloaded but not linked. (Codex GBU P1.)
     mdBody = mdBody
-      .replace(/^<YouTube\s+id="([^"]+)"[^>]*\/>\s*$/gim,
+      .replace(/<YouTube\s+id="([^"]+)"[^>]*?\/?>/gi,
         (_, id) => `<div class="embed-yt" data-yt="${id}"></div>`)
-      .replace(/^<Visual\s+id="([^"]+)"[^>]*\/>\s*$/gim,
+      .replace(/<Visual\s+id="([^"]+)"[^>]*?\/?>/gi,
         (_, id) => `<div class="embed-visual" data-visual="${id}"></div>`);
     const html = DOMPurify.sanitize(marked.parse(mdBody), {
       ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'sandbox', 'data-yt', 'data-visual'],
@@ -321,5 +327,12 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
   });
 
-  return { openNote, loadIndex, back, reset: () => { stack = []; currentNote = null; } };
+  return {
+    openNote, loadIndex, back,
+    reset: () => { stack = []; currentNote = null; },
+    // Every createReader() used to add a global 'message' listener that was never removed
+    // and retained bodyEl — repeated mounts leaked, and each stray listener saw every
+    // frame message. Callers that discard a reader must call this. (Codex GBU P2.)
+    destroy: () => { removeEventListener('message', onFrameMessage); stack = []; currentNote = null; },
+  };
 }
