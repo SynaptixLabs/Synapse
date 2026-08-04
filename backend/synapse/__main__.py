@@ -9,6 +9,9 @@ SYNAPSE CLI — thin dispatcher over the module services (no logic here).
     python -m synapse explain ID    # one note's connections, grouped
     python -m synapse hook install|uninstall|status   # git-hook auto-sync in configured roots
     python -m synapse watch [--interval N]            # polling auto-sync (non-git roots)
+    python -m synapse roots list                      # show every configured root
+    python -m synapse roots add <path> [--assets] [--disabled]   # add a root
+    python -m synapse roots remove|enable|disable <path>         # manage an existing root
 
 Run from `backend/` (or via the `./synapse` wrapper at the repo root, which handles the venv).
 """
@@ -142,6 +145,61 @@ def cmd_watch(settings, args) -> int:
     return watch(settings, interval=args.interval, run_ingest=lambda: cmd_ingest(settings))
 
 
+def cmd_roots(settings, args) -> int:
+    """CLI ops on the source-roots list (founder ask, 2026-08-04: manage roots without
+    hand-editing roots.json). Thin wrapper over app.core.roots — same load/save the
+    UI/API use, so a CLI add/remove is exactly as durable as a Sources-panel change."""
+    from app.core.roots import load_roots, save_roots
+
+    if args.roots_action == "list":
+        roots = load_roots(settings)
+        if not roots:
+            print("No roots configured."); return 0
+        for r in roots:
+            flags = []
+            if not r["enabled"]:
+                flags.append("disabled")
+            if r["assets"]:
+                flags.append("assets")
+            if not r["exists"]:
+                flags.append("MISSING ON DISK")
+            suffix = f"  [{', '.join(flags)}]" if flags else ""
+            print(f"{r['path']}{suffix}")
+        return 0
+
+    roots = load_roots(settings)
+    by_path = {r["path"]: r for r in roots}
+
+    if args.roots_action == "add":
+        from pathlib import Path
+        p = str(Path(args.path).expanduser().resolve())
+        if not Path(p).is_dir():
+            print(f"error: {p} is not a directory"); return 2
+        if p in by_path:
+            print(f"already configured: {p}"); return 0
+        roots.append({"path": p, "enabled": not args.disabled, "assets": args.assets})
+        save_roots(settings, roots)
+        print(f"added: {p}{'  [assets]' if args.assets else ''}{'  [disabled]' if args.disabled else ''}")
+        return 0
+
+    if args.roots_action in ("remove", "enable", "disable"):
+        from pathlib import Path
+        p = str(Path(args.path).expanduser().resolve())
+        if p not in by_path:
+            print(f"error: {p} is not a configured root (see `synapse roots list`)"); return 2
+        if args.roots_action == "remove":
+            roots = [r for r in roots if r["path"] != p]
+            save_roots(settings, roots)
+            print(f"removed: {p} (its notes are pruned on the next ingest, not deleted now)")
+        else:
+            by_path[p]["enabled"] = (args.roots_action == "enable")
+            save_roots(settings, roots)
+            print(f"{args.roots_action}d: {p}")
+        return 0
+
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="synapse", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -159,6 +217,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=("install", "uninstall", "status"))
     p = sub.add_parser("watch", help="polling auto-sync (for non-git roots)")
     p.add_argument("--interval", type=int, default=10)
+    p = sub.add_parser("roots", help="manage the source-roots list (list|add|remove|enable|disable)")
+    rsub = p.add_subparsers(dest="roots_action", required=True)
+    rsub.add_parser("list", help="show every configured root")
+    ra = rsub.add_parser("add", help="add a new root")
+    ra.add_argument("path")
+    ra.add_argument("--assets", action="store_true", help="also sync images/PDFs as sidecar notes")
+    ra.add_argument("--disabled", action="store_true", help="add it OFF (won't ingest until enabled)")
+    for name in ("remove", "enable", "disable"):
+        rp = rsub.add_parser(name)
+        rp.add_argument("path")
     args = parser.parse_args(argv)
 
     settings = load_settings()
@@ -166,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in simple:
         return simple[args.command](settings)
     return {"query": cmd_query, "path": cmd_path, "explain": cmd_explain,
-            "hook": cmd_hook, "watch": cmd_watch}[args.command](settings, args)
+            "hook": cmd_hook, "watch": cmd_watch, "roots": cmd_roots}[args.command](settings, args)
 
 
 if __name__ == "__main__":
