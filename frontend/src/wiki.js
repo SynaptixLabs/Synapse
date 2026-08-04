@@ -127,6 +127,7 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
   function render({ crumb, mdBody, infobox, mediaHtml = '' }) {
     let srcFm = '';
     let heroUrl = '';
+    let heroRef = '';
 
     // ── PACKAGING BLOCK (publishing metadata that must never read as prose) ──────
     // An authored article can open with a `<!-- … PACKAGING … -->` block the publisher
@@ -152,8 +153,11 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
 
     const fm = mdBody.match(/^\s*---\n([\s\S]*?)\n---\n/);
     if (fm) {
-      const hm = fm[1].match(/^hero:\s*["']?(https?:\/\/[^"'\s]+)["']?\s*$/m);
-      if (hm) heroUrl = hm[1];   // the platform renders this at the top; so do we
+      // A hero is EITHER an absolute URL or a path on the publisher's origin
+      // (`/images/x.svg`). Accepting only absolute left 7 articles with no hero at all
+      // while the file sat right there in the KB. (Codex GBU P1.)
+      const hm = fm[1].match(/^hero:\s*["']?([^"'\s]+)["']?\s*$/m);
+      if (hm) heroRef = hm[1];
       srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">` +
               `<summary style="cursor:pointer;color:#54595d">Source frontmatter</summary><pre style="margin:6px 0 0">${fm[1].replace(/</g, '&lt;')}</pre></details>`;
       mdBody = mdBody.slice(fm[0].length);
@@ -162,12 +166,22 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     // carries one — a hero attached server-side after publish never lands back in the
     // source file — so fall back to the local hero this brain holds for that article
     // (same media-dir convention the ingest adapter uses for interactives/video).
+    // Prefer a LOCAL copy of the referenced hero over the remote one — the KB holds it,
+    // and a relative ref has no meaning outside the publisher's origin anyway.
+    if (heroRef) {
+      const wanted = heroRef.split('/').pop().toLowerCase();
+      const localRef = (getNodes() || []).find(n =>
+        n.repo === currentNote?.repo && /hero/i.test(n.source_path || '') &&
+        (n.source_path || '').toLowerCase().endsWith(wanted));
+      if (localRef) heroUrl = `${API.replace('/api/v1', '')}/api/v1/asset/${encodeURIComponent(localRef.id)}`;
+      else if (/^https?:/i.test(heroRef)) heroUrl = heroRef;
+    }
     if (!heroUrl && currentNote?.source_path) {
       const stem = currentNote.source_path.split('/').pop().replace(/\.md$/, '');
       const localHero = (getNodes() || []).find(n =>
         n.id?.startsWith(`${currentNote.repo}__`) &&
         n.source_path?.startsWith(`${currentNote.source_path.split('/').slice(0, -2).join('/')}/media/${stem}/`) &&
-        /hero/i.test(n.source_path) && /\.(png|jpe?g|webp)$/i.test(n.source_path));
+        /hero/i.test(n.source_path) && /\.(png|jpe?g|webp|svg|gif)$/i.test(n.source_path));
       if (localHero) {
         heroUrl = `${API.replace('/api/v1', '')}/api/v1/asset/${encodeURIComponent(localHero.id)}`;
       }
@@ -214,7 +228,11 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     }
     for (const el of bodyEl.querySelectorAll('.embed-visual')) {
       const id = el.getAttribute('data-visual');
-      const aid = sourceAssetId(currentNote, `../media/${(currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '')}/interactive__${id}.html`);
+      let aid = sourceAssetId(currentNote, `../media/${(currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '')}/interactive__${id}.html`);
+      // sourceAssetId only does path arithmetic — it never checks the note EXISTS, so a
+      // missing pack produced a truthy id and mounted a 404 iframe, making the honest
+      // "no local bundle" fallback below unreachable. Verify against the real graph.
+      if (aid && !(getNodes() || []).some(n => n.id === aid)) aid = null;
       el.innerHTML = aid
         // A pack reports its OWN height over the host seam ({type:'height'|'figure-height'}).
         // A fixed height clips it — the packs here report 626/642/1446 depending on width,

@@ -47,6 +47,9 @@ class SourceFile:
 # Asset extensions the sidecar pass understands (sprint 05, Epic K — issue #13 stage 1)
 ASSET_TYPES = {
     ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
+    # .svg: heroes ship as SVG on several articles. Omitting it meant the file was synced
+    # into the KB, never became a node, and so no article could resolve its own hero.
+    ".svg": "image",
     ".pdf": "pdf",
     # video/audio (2026-08-04): a marketing brain whose whole point is "where are the
     # videos?" cannot answer that if the only ingestible media is stills and PDFs. A
