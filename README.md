@@ -157,6 +157,17 @@ patterns.) Notes under a newly-ignored path are pruned on the next sync, with ho
 - **Type lens** — pill buttons over the canvas (📝 notes · 📷 images · 📄 PDFs · ✦ distills,
   with honest counts): click to hide/show a type; **📦 assets grouped** keeps image/PDF
   sidecars in their own hull per source instead of scattering through folder groups.
+- **Node classes** — hue alone says *where a note came from*, which stops meaning anything the
+  moment a brain is one repo. A **node class** additionally says what a note **is**, by
+  matching its own path/name/tag: colour, shape and size together. Articles are big gold
+  stars, each social channel keeps its own colour, media splits by kind (hero · carousel ·
+  slide · card · scene). Edit them from the CLI — `synapse classes list|add|remove` — and a
+  page reload is enough, because matching happens client-side against data the graph already
+  carries. Never an ingest, never a rebuild.
+- **Media as first-class nodes** — an article that references media by component
+  (`<Visual id="…"/>`, `<YouTube id="…"/>`) gets **real graph edges** to the local bundle,
+  recorded at ingest in `synapse.asset_refs`. So what you *see* in the reader and what the
+  *graph* links are the same file, and media is reachable from both directions.
 - **👻 Ghosts** — Glossary → "unresolved links as ghost nodes": every link pointing at
   nothing yet becomes a hollow dashed node beside its referrer, with an honest hover
   explanation (future note · dead link · outside the brain). Toggle off, they vanish.
@@ -176,6 +187,15 @@ patterns.) Notes under a newly-ignored path are pruned on the next sync, with ho
 | The distills panel: read, select, bulk-delete |
 |---|
 | ![The ✦ My distills panel over the graph](docs/screenshots/distills-panel.png) |
+
+**Node classes — colour *and* shape, so the graph says what a node is:**
+
+![The Glossary drawer listing every node class with live counts — articles as gold stars, each social channel its own colour, media split by kind — over a graph where those shapes are visible at a glance](docs/screenshots/node-classes.png)
+
+**An interactive bundle, rendered inline in the reader** (sandboxed, sized by the bundle's own
+height seam — the graph holds a real edge to the same file):
+
+![An article open in the docked reader with its interactive figure mounted inline and fully rendered, beside the graph showing the article node and its linked media](docs/screenshots/reader-interactive.png)
 
 ## CLI & API
 
@@ -297,6 +317,9 @@ listed there is actually read by the app; shell/CI variables override the file):
 | `SUMMARIZE_CONFIRM_THRESHOLD` | `20000` | est. tokens above which distill asks first |
 | `SYNAPSE_SOURCE_REPOS` | this repo | comma-separated roots (seed only; UI list wins) |
 | `SYNAPSE_VAULT_PATH` | `./data/vault` | where the vault lives (repo-root-relative) |
+| `SYNAPSE_COMPANION_MEDIA_DIR` | `media` | folder holding an article's companion media, beside it |
+| `SYNAPSE_INTERACTIVE_PREFIX` | `interactive__` | filename prefix marking an interactive bundle |
+| `SYNAPSE_ALLOWED_ORIGINS` | — | extra browser origins allowed to read the API (see [Security](SECURITY.md)); loopback always is |
 
 ## Tests
 
@@ -345,6 +368,27 @@ No gate closes on assertion):
 | [03](project-management/sprints/sprint_03/index.md) | **The Twist** | distill any node/subtree + render it as an image; 21k-note scale arc; POC close | ✅ founder PASS · **v0.1.0** |
 | [04](project-management/sprints/sprint_04/index.md) | **The Open Brain** | deterministic query/path/explain (CLI · API · UI path-mode + connections footer) · `.gitignore`/`.synapseignore` + git-hook/watch auto-sync · **MCP server** (Claude Code & Desktop) · edge-confidence schema v3 | ✅ closed 2026-07-17 · close GBU 4.7 |
 | [05](project-management/sprints/sprint_05/index.md) | **Everything In** | images + PDFs as first-class sidecar notes (📷 per-root) · 👁 AI descriptions with grounded links (first INFERRED edges) · 👻 ghost nodes · type lens + asset regrouping · the brain published as [this repo's wiki](https://github.com/SynaptixLabs/Synapse/wiki) · coding-agent workflow (dormant) | ✅ closed 2026-07-17 · founder PASS · close GBU 4.6 |
+
+**Unreleased, on `main`** — the graph learned to say what a node *is*, and the reader learned
+to show media inline:
+
+- **Node classes** (`synapse classes`, `synapse roots`) — colour · shape · size by path/name/tag.
+- **Media as real edges** — `<Visual/>` / `<YouTube/>` resolved at ingest into `synapse.asset_refs`,
+  rendered inline in the reader, and reachable from the graph in both directions.
+- **A security pass** (2026-08-04, external review). An ingested repo is **untrusted input**, and
+  two paths did not treat it that way: the reader accepted raw `<iframe>` from vault markdown, and
+  the API served repo-authored `.html`/`.svg` as active content from the same origin as its own
+  unauthenticated endpoints. Both closed — interactives are now fetched and mounted from bytes into
+  a sandboxed, opaque-origin frame, and the API serves active types inert. CORS was narrowed from
+  *any host on port 5173* to loopback plus an explicit opt-in list. Details: [`SECURITY.md`](SECURITY.md).
+
+**Known gaps** (honest, not hidden):
+
+- Interactive bundles that load **sibling files** (webfonts, libraries) render degraded — a brain
+  holds the entry file, not the whole bundle directory.
+- The e2e specs assert **fixture-vault** counts, so a few report failures against a different
+  brain; they are vault-shape assertions, not product defects (`E2E_FILTER` picks the note used).
+- The API stays **unauthenticated by design** (local, single-user). Do not expose it.
 
 The wider v0.2 backlog (WebGL engine, entity extraction, ripple maintenance, chat,
 semantic re-rank): [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).

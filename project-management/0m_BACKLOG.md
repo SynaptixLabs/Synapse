@@ -82,7 +82,27 @@
     summarizer seam. Shipped already: filename-token recall, IDF rarity weighting, seed
     snippets, sectioned get_note, get_brain_info coverage disclosure. → issue #16.
 
+## Security-review wave 2026-08-04 (source: external GBU on the node-classes + media work)
+
+The review's P0s were fixed in the same pass and are recorded in [`SECURITY.md`](../SECURITY.md).
+What it surfaced that is **real but not yet done**:
+
+20. **Bundle completeness** — a brain holds an interactive's entry file, not its directory, so a
+    bundle that loads sibling webfonts/libraries renders degraded. Needs either a bundle-directory
+    ingest (fetch the folder, not the file) or an explicit manifest. Affects 3 of 28 articles in
+    the reference brain. *Cosmetic today, structural to fix.*
+21. **E2E specs assert fixture-vault counts** — `sprint05_assets` wants a `sunset` photo,
+    `sprint05_lens` wants exactly `📷 1`, `sprint05_ghosts` wants a named ghost. Against any other
+    brain they fail for content reasons, which makes a genuine regression easy to wave away. They
+    should either boot their own fixture stack or skip honestly when the shape is absent.
+22. **Symlinked roots** — `scan_repo` never follows symlinks, and the asset route resolves before
+    its traversal check, so the current behaviour is safe but *implicit*. Worth an explicit
+    decision + test rather than an emergent property.
+23. **A first-run trust prompt** — adding a root is an act of trust in that repo's contents
+    (see the threat model). Today nothing says so at the moment it matters.
+
 Items 1 (entity extraction) and 8 gain the **edge-confidence vocabulary** prerequisite
 (`EXTRACTED`/`INFERRED`+score/`AMBIGUOUS`) — adopted as schema groundwork in Sprint 04 Epic J.
 
-— `cpto` (JANUS), 2026-07-15 (12–13 appended, 14–15 founder wave, 16–18 graphify wave, 2026-07-16)
+— `cpto` (JANUS), 2026-07-15 (12–13 appended, 14–15 founder wave, 16–18 graphify wave, 2026-07-16;
+  20–23 security-review wave, 2026-08-04)
