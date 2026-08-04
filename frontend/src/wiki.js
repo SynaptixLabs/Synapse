@@ -61,6 +61,24 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     return ns.exact.get(`${note.repo}/${base.join('/')}`.toLowerCase()) ?? null;
   };
 
+  /** A relative image path inside a SOURCE note → the id of the asset sidecar ingest wrote
+   *  for it. Mirrors ingest's own note-id convention exactly (`repo__a__b__c.ext.asset.md`),
+   *  so a manifest can embed its neighbours with a plain `![](file.png)` and still render.
+   *  Returns null when the note has no source location or the path escapes its repo. */
+  function sourceAssetId(note, src) {
+    if (!note?.repo || !note?.source_path) return null;
+    const clean = src.split('#')[0].split('?')[0];
+    if (!clean || clean.startsWith('/')) return null;
+    const parts = note.source_path.split('/').slice(0, -1);   // the note's own directory
+    for (const seg of clean.split('/')) {
+      if (seg === '' || seg === '.') continue;
+      if (seg === '..') { if (!parts.length) return null; parts.pop(); continue; }
+      parts.push(seg);
+    }
+    if (!parts.length) return null;
+    return `${note.repo}__${parts.join('__')}.asset.md`;
+  }
+
   /** Linkify [[wikilinks]] AFTER markdown rendering, walking text nodes only — so wikilinks
    *  inside `code`/`pre` (docs ABOUT wikilinks) stay literal instead of becoming anchors. */
   function linkifyWikilinks(rootEl) {
@@ -103,11 +121,23 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     bodyEl.innerHTML = (infobox || '') + (mediaHtml || '') + srcFm + html;
     linkifyWikilinks(bodyEl);
     for (const a of bodyEl.querySelectorAll('a[href^="http"]')) { a.target = '_blank'; a.rel = 'noopener'; }
-    // vault media (generated images) is served by the backend — rewrite relative srcs
+    // Images resolve down TWO different lanes, and confusing them shows a broken image:
+    //  1. VAULT media — a distill's own rendered PNG lives in the vault's media/ dir.
+    //  2. SOURCE-REPO media — a `![](foo.png)` inside a real source note (e.g. a KB
+    //     MEDIA.md manifest sitting next to its images). Those bytes never enter the
+    //     vault; ingest records them as ASSET SIDECAR notes and the backend streams the
+    //     original from its source root. Resolve the relative path against THIS note's
+    //     own source_path, then address the sidecar by its id convention
+    //     (`<repo>__<source/path/with/slashes>.asset.md`) — same naming ingest writes.
+    const base = API.replace('/api/v1', '');
     for (const img of bodyEl.querySelectorAll('img')) {
       const src = img.getAttribute('src') ?? '';
-      const m = src.match(/(?:\.\.\/)?media\/(.+)$/);
-      if (m) img.src = `${API.replace('/api/v1', '')}/media/${m[1]}`;
+      if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
+      const vault = src.match(/^(?:\.\.\/)?media\/(.+)$/);
+      if (vault && currentNote?.kind === 'summary') { img.src = `${base}/media/${vault[1]}`; continue; }
+      const assetId = sourceAssetId(currentNote, src);
+      if (assetId) { img.src = `${base}/api/v1/asset/${encodeURIComponent(assetId)}`; continue; }
+      if (vault) img.src = `${base}/media/${vault[1]}`;   // legacy fallback, unchanged
     }
     if (backBtn) backBtn.style.display = stack.length > 1 ? '' : 'none';
     bodyEl.scrollTop = 0;

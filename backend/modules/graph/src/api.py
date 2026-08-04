@@ -15,6 +15,15 @@ def _service() -> GraphService:
     return GraphService(load_settings().vault_path)
 
 
+@router.get("/node-classes")
+def get_node_classes() -> list[dict]:
+    """The visual vocabulary (colour/shape/size per node class) the canvas + glossary read.
+    Client-side matching against each node's own source_path, so editing a class is a page
+    reload — never an ingest or a graph rebuild."""
+    from app.core.node_classes import load_classes
+    return load_classes(load_settings())
+
+
 @router.get("/graph")
 def get_graph() -> dict:
     graph = _service().load()

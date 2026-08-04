@@ -255,7 +255,19 @@ document.addEventListener('click', (ev) => {
 // zoom/search-oriented, capped by importance — never all 20k at once). Search, the reader and
 // the drawer always cover the FULL brain; opening an off-window note pulls it + its direct
 // neighbors into the picture.
-const WINDOW_CAP = 1500;
+//
+// The cap is overridable — "show me the ENTIRE graph" is a legitimate ask on a brain that
+// fits: `?cap=all` (no window at all) · `?cap=4000` (a wider window) · `?cap=1500` (the
+// default). A URL choice sticks (localStorage) so a reload keeps the view you asked for.
+const CAP_KEY = 'synapse.windowCap';
+const WINDOW_CAP = (() => {
+  const q = new URLSearchParams(location.search).get('cap');
+  if (q !== null) localStorage.setItem(CAP_KEY, q);
+  const raw = localStorage.getItem(CAP_KEY) ?? '1500';
+  if (raw === 'all') return Infinity;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 1500;
+})();
 let winIds = null;   // Set of displayed ids · null = the whole brain fits the budget
 let vNodes = [], vEdges = [];   // the DISPLAY view (grouped); search/reader keep the originals
 
@@ -457,6 +469,10 @@ async function refresh() {
     ({ vnodes: vNodes, vedges: vEdges } = groupView());
     _vRepo = null;
     stats = await api('/stats');
+    // The visual vocabulary (colour/shape/size per node class). Optional by design: an
+    // older backend without the route just leaves the canvas on the original repo-hue
+    // circles rather than failing the whole load.
+    try { graph.setNodeClasses(await api('/node-classes')); } catch { /* defaults stand */ }
     $('empty').style.display = 'none';
     const view = windowed();
     const vg = withGhosts(view.n, view.e);   // Epic N: ghosts ride on top when toggled
@@ -715,8 +731,19 @@ function buildDrawer() {
   for (const n of vNodes) if (n.kind === 'note') repoCounts[n.repo] = (repoCounts[n.repo] ?? 0) + 1;
   const unresolved = [];
   for (const n of vNodes) if (n.kind === 'note') for (const u of n.unresolved) unresolved.push({ u, n });
-  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', sibling: '#2c3342' };
+  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', asset: '#b85fa8', sibling: '#2c3342' };
+  // Node classes (founder ask): what each colour+shape on the canvas actually MEANS.
+  // Rendered only when classes are configured, and each row shows its live match count —
+  // a class matching 0 notes is visible as such instead of quietly implying coverage.
+  const legend = (graph.nodeClassLegend?.() ?? []).filter(c => c.count > 0);
+  const SHAPE_GLYPH = { circle: '●', square: '■', diamond: '◆', triangle: '▲', star: '★', hexagon: '⬢' };
   $('drawer').innerHTML =
+    (legend.length
+      ? `<h4>Node types — colour + shape</h4>` +
+        legend.map(c =>
+          `<div class="row"><span style="color:${c.color};font-size:15px;width:16px;display:inline-block">` +
+          `${SHAPE_GLYPH[c.shape] ?? '●'}</span> ${esc(c.label)} <span class="tg">${c.count}</span></div>`).join('')
+      : '') +
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
       `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${colors.get(r)}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
