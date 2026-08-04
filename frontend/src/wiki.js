@@ -155,9 +155,14 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       let mediaHtml = '';
       if (n.kind === 'asset') {
         const url = `${API.replace('/api/v1', '')}/api/v1/asset/${encodeURIComponent(id)}`;
-        mediaHtml = n.asset_type === 'image'
-          ? `<p class="asset-media"><img src="${url}" alt="${esc(n.source_path)}" loading="lazy"></p>`
-          : `<p class="asset-media"><a href="${url}" target="_blank" rel="noopener">📄 Open the PDF (${esc(n.source_path)})</a></p>`;
+        mediaHtml =
+          n.asset_type === 'image'
+            ? `<p class="asset-media"><img src="${url}" alt="${esc(n.source_path)}" loading="lazy"></p>`
+          : n.asset_type === 'video'
+            ? `<p class="asset-media"><video src="${url}" controls preload="metadata" style="max-width:100%"></video></p>`
+          : n.asset_type === 'audio'
+            ? `<p class="asset-media"><audio src="${url}" controls preload="metadata" style="width:100%"></audio></p>`
+            : `<p class="asset-media"><a href="${url}" target="_blank" rel="noopener">📄 Open the PDF (${esc(n.source_path)})</a></p>`;
       }
       render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta), mediaHtml });
       // EVERY successful open — including in-body wikilink clicks and Back, which call this

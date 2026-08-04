@@ -48,6 +48,13 @@ class SourceFile:
 ASSET_TYPES = {
     ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
     ".pdf": "pdf",
+    # video/audio (2026-08-04): a marketing brain whose whole point is "where are the
+    # videos?" cannot answer that if the only ingestible media is stills and PDFs. A
+    # sidecar is METADATA — the bytes never enter the vault — so a 2 GB footage folder
+    # costs the same as a screenshot. Text extraction obviously doesn't apply; these
+    # sidecars carry provenance + type, and the reader renders a real player.
+    ".mp4": "video", ".webm": "video", ".mov": "video", ".m4v": "video",
+    ".mp3": "audio", ".m4a": "audio", ".wav": "audio",
 }
 
 
