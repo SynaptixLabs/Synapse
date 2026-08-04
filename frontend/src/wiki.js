@@ -189,8 +189,11 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       }
     }
     if (heroUrl) {
+      // width:100% (not just max-width): an SVG carrying only a viewBox has NO intrinsic
+      // size, so max-width alone collapses it — one hero rendered at 44x24px, technically
+      // visible and effectively invisible. height:auto keeps the aspect ratio from viewBox.
       mediaHtml = `<p class="asset-media"><img src="${heroUrl}" alt="hero" loading="lazy"
-        style="max-width:100%;border-radius:8px"></p>` + (mediaHtml || '');
+        style="width:100%;height:auto;max-width:100%;border-radius:8px"></p>` + (mediaHtml || '');
     }
     // COMPONENT ADAPTER (founder ruling 2026-08-04): the document stays byte-verbatim —
     // a publishing platform's `<Visual id="…"/>` / `<YouTube id="…"/>` markers are
