@@ -46,6 +46,22 @@ export function noteInfobox(n, meta) {
 export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow, onOpen, onError }) {
   let stack = [], currentNote = null;
 
+  // Visual packs size themselves and report it over the host seam. Honour it, or the
+  // figure is clipped at whatever fixed height we guessed (packs here report 626 at
+  // 1440px, 642 at 1024px, 1446 at 375px — no single constant is right). Bounded so a
+  // malformed message can't blow the layout out; sandboxed frames are same-shape senders
+  // but not same-origin, so the value is the only thing we trust from them.
+  addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.type !== 'height' && d.type !== 'figure-height') return;
+    const h = Number(d.value ?? d.height);
+    if (!Number.isFinite(h) || h < 120 || h > 4000) return;
+    for (const f of bodyEl.querySelectorAll('iframe[data-visual-frame]')) {
+      if (f.contentWindow === ev.source) { f.style.height = `${Math.ceil(h)}px`; return; }
+    }
+  });
+
   const resolveWiki = (target) => {
     const ns = getNs(); if (!ns) return null;
     const t = target.trim().toLowerCase();
@@ -110,11 +126,55 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
 
   function render({ crumb, mdBody, infobox, mediaHtml = '' }) {
     let srcFm = '';
-    const fm = mdBody.match(/^---\n([\s\S]*?)\n---\n/);
+    let heroUrl = '';
+
+    // ── PACKAGING BLOCK (publishing metadata that must never read as prose) ──────
+    // An authored article can open with a `<!-- … PACKAGING … -->` block the publisher
+    // parses and strips. Two things break naive handling, both seen live:
+    //  1. The block legitimately CONTAINS the literal `-->` (e.g. prose explaining "push
+    //     the body below the closing `-->`"), which TERMINATES the HTML comment early —
+    //     so the remaining ~75 lines of build metadata render as article text.
+    //  2. The YAML frontmatter sits AFTER that block, so a `^---` match never fires.
+    // Fix without touching the source: if the head is a comment, cut to the LAST `-->`
+    // that still precedes the first markdown heading — the block's real end.
+    if (/^\s*<!--/.test(mdBody)) {
+      const firstHeading = mdBody.search(/^#\s/m);
+      const searchIn = firstHeading > 0 ? mdBody.slice(0, firstHeading) : mdBody;
+      const realEnd = searchIn.lastIndexOf('-->');
+      if (realEnd !== -1) {
+        const block = mdBody.slice(0, realEnd + 3);
+        srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">`
+               + `<summary style="cursor:pointer;color:#54595d">Publishing metadata (packaging block)</summary>`
+               + `<pre style="margin:6px 0 0;white-space:pre-wrap">${block.replace(/</g, '&lt;')}</pre></details>`;
+        mdBody = mdBody.slice(realEnd + 3).replace(/^\s*\n/, '');
+      }
+    }
+
+    const fm = mdBody.match(/^\s*---\n([\s\S]*?)\n---\n/);
     if (fm) {
-      srcFm = `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">` +
+      const hm = fm[1].match(/^hero:\s*["']?(https?:\/\/[^"'\s]+)["']?\s*$/m);
+      if (hm) heroUrl = hm[1];   // the platform renders this at the top; so do we
+      srcFm += `<details style="font-family:sans-serif;font-size:12px;background:#f8f9fa;border:1px solid #eaecf0;border-radius:4px;padding:6px 10px;margin-bottom:12px">` +
               `<summary style="cursor:pointer;color:#54595d">Source frontmatter</summary><pre style="margin:6px 0 0">${fm[1].replace(/</g, '&lt;')}</pre></details>`;
       mdBody = mdBody.slice(fm[0].length);
+    }
+    // Hero: prefer the frontmatter URL (what the publisher uses). Not every article
+    // carries one — a hero attached server-side after publish never lands back in the
+    // source file — so fall back to the local hero this brain holds for that article
+    // (same media-dir convention the ingest adapter uses for interactives/video).
+    if (!heroUrl && currentNote?.source_path) {
+      const stem = currentNote.source_path.split('/').pop().replace(/\.md$/, '');
+      const localHero = (getNodes() || []).find(n =>
+        n.id?.startsWith(`${currentNote.repo}__`) &&
+        n.source_path?.startsWith(`${currentNote.source_path.split('/').slice(0, -2).join('/')}/media/${stem}/`) &&
+        /hero/i.test(n.source_path) && /\.(png|jpe?g|webp)$/i.test(n.source_path));
+      if (localHero) {
+        heroUrl = `${API.replace('/api/v1', '')}/api/v1/asset/${encodeURIComponent(localHero.id)}`;
+      }
+    }
+    if (heroUrl) {
+      mediaHtml = `<p class="asset-media"><img src="${heroUrl}" alt="hero" loading="lazy"
+        style="max-width:100%;border-radius:8px"></p>` + (mediaHtml || '');
     }
     // COMPONENT ADAPTER (founder ruling 2026-08-04): the document stays byte-verbatim —
     // a publishing platform's `<Visual id="…"/>` / `<YouTube id="…"/>` markers are
@@ -156,8 +216,13 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
       const id = el.getAttribute('data-visual');
       const aid = sourceAssetId(currentNote, `../media/${(currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '')}/interactive__${id}.html`);
       el.innerHTML = aid
+        // A pack reports its OWN height over the host seam ({type:'height'|'figure-height'}).
+        // A fixed height clips it — the packs here report 626/642/1446 depending on width,
+        // so any single number is wrong somewhere. Start tall enough to avoid a jump, then
+        // honour what the pack tells us (see the message listener below).
         ? `<iframe src="${base}/api/v1/asset/${encodeURIComponent(aid)}" sandbox="allow-scripts" loading="lazy"
-             title="${esc(id)}" style="width:100%;height:680px;border:1px solid #2c3342;border-radius:8px;background:#0d1117"></iframe>`
+             data-visual-frame="${esc(id)}" title="${esc(id)}"
+             style="width:100%;height:700px;border:1px solid #2c3342;border-radius:8px;background:#0d1117;display:block"></iframe>`
         : `<p style="color:#8b93a6;border:1px dashed #2c3342;border-radius:8px;padding:10px">
              ▶ interactive <code>${esc(id)}</code> — published, but this brain holds no local bundle for it yet</p>`;
     }
