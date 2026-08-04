@@ -55,6 +55,10 @@ ASSET_TYPES = {
     # sidecars carry provenance + type, and the reader renders a real player.
     ".mp4": "video", ".webm": "video", ".mov": "video", ".m4v": "video",
     ".mp3": "audio", ".m4a": "audio", ".wav": "audio",
+    # interactives (2026-08-04): a self-contained HTML visual pack IS media — the KB is
+    # the source of truth for it, and must be able to hold and PLAY it whether or not the
+    # publishing platform can render it. Sandboxed at display time (see wiki.js).
+    ".html": "interactive", ".htm": "interactive",
 }
 
 

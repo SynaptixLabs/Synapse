@@ -162,6 +162,12 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
             ? `<p class="asset-media"><video src="${url}" controls preload="metadata" style="max-width:100%"></video></p>`
           : n.asset_type === 'audio'
             ? `<p class="asset-media"><audio src="${url}" controls preload="metadata" style="width:100%"></audio></p>`
+          : n.asset_type === 'interactive'
+            // sandboxed: allow-scripts for the pack's own JS, NOT allow-same-origin — a
+            // vault-held bundle must never reach this app's origin, storage or cookies.
+            ? `<p class="asset-media"><iframe src="${url}" sandbox="allow-scripts" loading="lazy"
+                 style="width:100%;height:680px;border:1px solid #2c3342;border-radius:8px;background:#0d1117"
+                 title="${esc(n.source_path)}"></iframe></p>`
             : `<p class="asset-media"><a href="${url}" target="_blank" rel="noopener">📄 Open the PDF (${esc(n.source_path)})</a></p>`;
       }
       render({ crumb: `${n.repo} / ${n.source_path}`, mdBody: n.body, infobox: noteInfobox(n, meta), mediaHtml });
