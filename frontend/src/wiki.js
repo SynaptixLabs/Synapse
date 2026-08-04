@@ -116,7 +116,18 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
               `<summary style="cursor:pointer;color:#54595d">Source frontmatter</summary><pre style="margin:6px 0 0">${fm[1].replace(/</g, '&lt;')}</pre></details>`;
       mdBody = mdBody.slice(fm[0].length);
     }
-    const html = DOMPurify.sanitize(marked.parse(mdBody));
+    // COMPONENT ADAPTER (founder ruling 2026-08-04): the document stays byte-verbatim —
+    // a publishing platform's `<Visual id="…"/>` / `<YouTube id="…"/>` markers are
+    // RESOLVED AT DISPLAY TIME against the media this brain actually holds, exactly as
+    // the platform resolves them against its own store. Never rewrite the source.
+    mdBody = mdBody
+      .replace(/^<YouTube\s+id="([^"]+)"[^>]*\/>\s*$/gim,
+        (_, id) => `<div class="embed-yt" data-yt="${id}"></div>`)
+      .replace(/^<Visual\s+id="([^"]+)"[^>]*\/>\s*$/gim,
+        (_, id) => `<div class="embed-visual" data-visual="${id}"></div>`);
+    const html = DOMPurify.sanitize(marked.parse(mdBody), {
+      ADD_TAGS: ['iframe'], ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'sandbox', 'data-yt', 'data-visual'],
+    });
     crumbEl.textContent = crumb;
     bodyEl.innerHTML = (infobox || '') + (mediaHtml || '') + srcFm + html;
     linkifyWikilinks(bodyEl);
@@ -130,6 +141,26 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     //     own source_path, then address the sidecar by its id convention
     //     (`<repo>__<source/path/with/slashes>.asset.md`) — same naming ingest writes.
     const base = API.replace('/api/v1', '');
+    // Fill the adapter placeholders. YouTube renders the same privacy-preserving embed the
+    // platform uses; a Visual resolves to the LOCAL bundle this brain holds (convention:
+    // ../media/<article-stem>/interactive__<id>.html — the same mapping ingest recorded in
+    // synapse.asset_refs, so what you SEE and what the GRAPH links are the same file).
+    for (const el of bodyEl.querySelectorAll('.embed-yt')) {
+      const id = el.getAttribute('data-yt');
+      el.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}"
+        title="YouTube video" allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+        allowfullscreen loading="lazy"
+        style="width:100%;aspect-ratio:16/9;border:0;border-radius:8px"></iframe>`;
+    }
+    for (const el of bodyEl.querySelectorAll('.embed-visual')) {
+      const id = el.getAttribute('data-visual');
+      const aid = sourceAssetId(currentNote, `../media/${(currentNote?.source_path || '').split('/').pop().replace(/\.md$/, '')}/interactive__${id}.html`);
+      el.innerHTML = aid
+        ? `<iframe src="${base}/api/v1/asset/${encodeURIComponent(aid)}" sandbox="allow-scripts" loading="lazy"
+             title="${esc(id)}" style="width:100%;height:680px;border:1px solid #2c3342;border-radius:8px;background:#0d1117"></iframe>`
+        : `<p style="color:#8b93a6;border:1px dashed #2c3342;border-radius:8px;padding:10px">
+             ▶ interactive <code>${esc(id)}</code> — published, but this brain holds no local bundle for it yet</p>`;
+    }
     for (const img of bodyEl.querySelectorAll('img')) {
       const src = img.getAttribute('src') ?? '';
       if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;

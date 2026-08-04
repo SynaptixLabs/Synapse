@@ -269,7 +269,7 @@ class IngestService:
     def content_hash(data: bytes) -> str:
         return hashlib.sha256(data).hexdigest()
 
-    def _frontmatter(self, src: SourceFile, digest: str) -> str:
+    def _frontmatter(self, src: SourceFile, digest: str, asset_refs: str = "") -> str:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         return (
             "---\n"
@@ -277,8 +277,53 @@ class IngestService:
             f"synapse.source_path: {src.rel_path}\n"
             f"synapse.ingested_at: {now}\n"
             f"synapse.content_hash: {digest}\n"
-            "---\n"
+            + (f"synapse.asset_refs: {asset_refs}\n" if asset_refs else "")
+            + "---\n"
         )
+
+    # ── the component ADAPTER (founder ruling 2026-08-04) ─────────────────────
+    # A publishing platform's markdown references media by ID, not by path:
+    #     <Visual id="aios-planning-process" height={660} />
+    #     <YouTube id="O0bXo-4I8rY" />
+    # The document is the SOURCE OF TRUTH and must stay byte-verbatim — rewriting those
+    # markers into local links (as an earlier pass did) forks the source and is exactly
+    # what must not happen. Instead this resolves each id to the real local file at INGEST
+    # time, by convention, and records the resolution in `synapse.asset_refs`, so the
+    # graph gets REAL edges (id → file) while the body is never touched.
+    #
+    # Convention (matches how the KB stores its media, next to the article):
+    #     <Visual id="X"/>  → ../media/<article-stem>/interactive__X.html
+    #     <YouTube id="Y"/> → any *.mp4 in that article's media dir (the local cut)
+    # Unresolvable ids are simply not recorded — a reference to media this brain does not
+    # hold is honest absence, never a fabricated edge.
+    _VISUAL_RE = re.compile(r'<Visual\s+id="([^"]+)"', re.IGNORECASE)
+    _YOUTUBE_RE = re.compile(r'<YouTube\s+id="([^"]+)"', re.IGNORECASE)
+
+    def _resolve_asset_refs(self, src: SourceFile, body: str) -> str:
+        vis = self._VISUAL_RE.findall(body)
+        yt = self._YOUTUBE_RE.findall(body)
+        if not vis and not yt:
+            return ""
+        stem = Path(src.rel_path).stem
+        media_dir = src.path.parent.parent / "media" / stem
+        if not media_dir.is_dir():
+            return ""
+        base = Path(src.rel_path).parent.parent / "media" / stem
+        refs: list[str] = []
+        for vid in vis:
+            f = media_dir / f"interactive__{vid}.html"
+            if f.is_file():
+                refs.append((base / f.name).as_posix())
+        if yt:
+            for f in sorted(media_dir.glob("*.mp4")):
+                refs.append((base / f.name).as_posix())
+                break   # the article's own local cut, not every video in the folder
+        # de-dup, preserve order
+        seen, out = set(), []
+        for r in refs:
+            if r not in seen:
+                seen.add(r); out.append(r)
+        return " | ".join(out)
 
     def existing_hash(self, note_path: Path) -> str | None:
         if not note_path.is_file():
@@ -311,7 +356,8 @@ class IngestService:
             # unique temp name: concurrent writers must never share an intermediate
             # (the vault lock serializes entry points; this is belt-and-braces)
             tmp = note_path.parent / f"{note_path.name}.{os.getpid()}.tmp"
-            tmp.write_text(self._frontmatter(src, digest) + body, encoding="utf-8")
+            tmp.write_text(self._frontmatter(src, digest, self._resolve_asset_refs(src, body)) + body,
+                           encoding="utf-8")
             os.replace(tmp, note_path)
         except OSError as e:
             if errors is not None:

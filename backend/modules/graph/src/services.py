@@ -20,7 +20,7 @@ from .models import Edge, Graph, Node
 
 _FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _FM_FIELD_RE = re.compile(
-    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links):\s*(.+?)\s*$",
+    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links|asset_refs):\s*(.+?)\s*$",
     re.MULTILINE)
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
@@ -69,6 +69,7 @@ class GraphService:
                 "body": body,
                 "asset_type": fields.get("asset_type", "") if fields.get("kind") == "asset" else "",
                 "inferred_links": fields.get("inferred_links", ""),
+                "asset_refs": fields.get("asset_refs", ""),
             })
         return notes
 
@@ -162,6 +163,13 @@ class GraphService:
             # asset links — an article/post/manifest pointing at a real image or PDF. Same
             # resolution as above; unresolvable ones are NOT recorded as unresolved links
             # (a doc quoting an illustrative filename is not a broken reference).
+            # ADAPTER resolutions (ingest turned `<Visual id=…>` / `<YouTube id=…>` into
+            # real local paths without touching the verbatim body) — these are the edges
+            # that make an id-referenced interactive/video a first-class graph citizen.
+            for ref in (t.strip() for t in n["asset_refs"].split(" | ") if t.strip()):
+                dst = exact.get(f"{n['repo']}/{ref}".lower())
+                if dst and dst != n["id"]:
+                    g.edges.add(Edge(src=n["id"], dst=dst, type="asset"))
             for rx in (_MDASSET_RE, _CODEASSET_RE):
                 for m in rx.finditer(n["body"]):
                     token = m.group(1)
