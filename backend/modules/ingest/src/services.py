@@ -22,6 +22,7 @@ from typing import Iterable
 from .models import IngestReport, RepoReport, SourceFile
 
 _HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
+_REFS_RE = re.compile(r"^synapse\.asset_refs:\s*(.*?)\s*$", re.MULTILINE)
 _REPO_RE = re.compile(r"^synapse\.source_repo:\s*(.+?)\s*$", re.MULTILINE)
 _FM_KEY_RE = re.compile(r"^synapse\.[a-z_]+:", re.MULTILINE)
 FRONTMATTER_END = "---"
@@ -325,6 +326,13 @@ class IngestService:
                 seen.add(r); out.append(r)
         return " | ".join(out)
 
+    def _existing_refs(self, note_path: Path) -> str:
+        if not note_path.is_file():
+            return ""
+        head = note_path.read_text(encoding="utf-8", errors="replace")[:2000]
+        m = _REFS_RE.search(head)
+        return m.group(1).strip() if m else ""
+
     def existing_hash(self, note_path: Path) -> str | None:
         if not note_path.is_file():
             return None
@@ -344,20 +352,25 @@ class IngestService:
             return "skipped"
         digest = self.content_hash(raw)
         note_path = self.notes_dir / src.note_id
-        if self.existing_hash(note_path) == digest:
-            return "unchanged"
         try:
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
             return "skipped"   # not honest UTF-8 markdown — report, don't mangle
+        refs = self._resolve_asset_refs(src, body)
+        # An unchanged BODY is not the whole story: the adapter resolves `<Visual id=…>` /
+        # `<YouTube id=…>` against media that can arrive LATER. If a bundle shows up after
+        # the article was last ingested, the body hash still matches and the note would
+        # keep its stale (empty) asset_refs forever — the media would sit in the vault
+        # unlinked. So the refs are part of the freshness check, not just the digest.
+        if self.existing_hash(note_path) == digest and self._existing_refs(note_path) == refs:
+            return "unchanged"
         try:
             self.notes_dir.mkdir(parents=True, exist_ok=True)
             # atomic: a concurrent rebuild must never index a half-written note
             # unique temp name: concurrent writers must never share an intermediate
             # (the vault lock serializes entry points; this is belt-and-braces)
             tmp = note_path.parent / f"{note_path.name}.{os.getpid()}.tmp"
-            tmp.write_text(self._frontmatter(src, digest, self._resolve_asset_refs(src, body)) + body,
-                           encoding="utf-8")
+            tmp.write_text(self._frontmatter(src, digest, refs) + body, encoding="utf-8")
             os.replace(tmp, note_path)
         except OSError as e:
             if errors is not None:
