@@ -19,15 +19,13 @@ your brain knows.
 > every CLI). · Concept: natural20.com's
 > ["second brain / LLM wiki"](https://natural20.com/using-claude-code-to-setup-a-second-brain-aka-llm-wiki).
 
-![SYNAPSE — a second brain for your repos: markdown in, an explorable knowledge graph out](docs/media/hero__synapse-guided-tour.png)
+[![The guided tour in motion — the real explorer driving search, evidence and connections. Click for the full narrated 60-second cut, with sound and controls.](docs/media/synapse-guided-tour-preview.gif)](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)
 
 ## See it in 60 seconds — or drive it yourself
 
 - **▶ [Watch the 60-second tour](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)** — narrated, captioned, recorded against the real app ([full 5:35 video, 16 chapters](docs/tour/README.md) builds from this repo).
 - **🖱 [Open the interactive guided tour](https://synaptixlabs.github.io/Synapse/tour/out/tutorial.html)** — a self-contained, click-through walkthrough of search, vocabulary, evidence, connections, paths, and ghosts. No install, runs in your browser.
 - **⌨ Run it on your own repos:** `./start.sh` → explorer at `localhost:5173` — a fresh clone ships with its own repo already ingested.
-
-[![14 seconds of the guided tour — the real explorer driving search, evidence and connections. Click for the full narrated 60-second cut, with sound and captions.](docs/media/synapse-guided-tour-preview.gif)](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)
 
 ## The loop
 
