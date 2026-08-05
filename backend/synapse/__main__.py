@@ -9,6 +9,8 @@ SYNAPSE CLI — thin dispatcher over the module services (no logic here).
     python -m synapse explain ID    # one note's connections, grouped
     python -m synapse hook install|uninstall|status   # git-hook auto-sync in configured roots
     python -m synapse watch [--interval N]            # polling auto-sync (non-git roots)
+    python -m synapse export [--out PATH]             # vault → one verifiable zip (sha256 manifest)
+    python -m synapse import ARCHIVE [--force]        # verify manifest, then unpack (refuses on mismatch)
     python -m synapse roots list                      # show every configured root
     python -m synapse roots add <path> [--assets] [--disabled]   # add a root
     python -m synapse roots remove|enable|disable <path>         # manage an existing root
@@ -149,6 +151,38 @@ def cmd_watch(settings, args) -> int:
     return watch(settings, interval=args.interval, run_ingest=lambda: cmd_ingest(settings))
 
 
+def _default_export_path(settings):
+    from datetime import datetime, timezone
+    from pathlib import Path
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Path(settings.vault_path).parent / f"synapse-vault-{stamp}.zip"
+
+
+def cmd_export(settings, args) -> int:
+    from app.core.vault_transfer import VaultTransferError, export_vault
+    from pathlib import Path
+    out = Path(args.out) if args.out else _default_export_path(settings)
+    try:
+        result = export_vault(settings.vault_path, out)
+    except VaultTransferError as exc:
+        print(f"Export failed: {exc}")
+        return 2
+    print(f"Exported {result.file_count} file(s) → {result.archive_path}")
+    return 0
+
+
+def cmd_import(settings, args) -> int:
+    from app.core.vault_lock import vault_write_lock
+    from app.core.vault_transfer import VaultTransferError, import_vault
+    try:
+        with vault_write_lock(settings.vault_path):
+            result = import_vault(args.archive, settings.vault_path, force=args.force)
+    except VaultTransferError as exc:
+        print(f"Import failed: {exc}")
+        return 2
+    tail = "" if result.graph_included else " (run `synapse rebuild` to regenerate graph.json)"
+    print(f"Imported {result.file_count} file(s) → {result.vault_path}{tail}")
+    return 0
 def cmd_classes(settings, args) -> int:
     """CLI ops on the graph's visual vocabulary (founder ask 2026-08-04: node types must be
     distinguishable by colour/shape/size, and it must be CLI-driven). Thin wrapper over
@@ -292,6 +326,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=("install", "uninstall", "status"))
     p = sub.add_parser("watch", help="polling auto-sync (for non-git roots)")
     p.add_argument("--interval", type=int, default=10)
+    p = sub.add_parser("export", help="vault → one verifiable zip (sha256 manifest)")
+    p.add_argument("--out", help="archive path (default: synapse-vault-<ts>.zip beside the vault)")
+    p = sub.add_parser("import", help="verify a vault archive's manifest, then unpack it")
+    p.add_argument("archive")
+    p.add_argument("--force", action="store_true",
+                   help="overwrite an existing vault (default: refuse)")
     p = sub.add_parser("roots", help="manage the source-roots list (list|add|remove|enable|disable)")
     rsub = p.add_subparsers(dest="roots_action", required=True)
     rsub.add_parser("list", help="show every configured root")
@@ -328,7 +368,8 @@ def main(argv: list[str] | None = None) -> int:
         return simple[args.command](settings)
     return {"query": cmd_query, "path": cmd_path, "explain": cmd_explain,
             "hook": cmd_hook, "watch": cmd_watch, "roots": cmd_roots,
-            "classes": cmd_classes}[args.command](settings, args)
+            "classes": cmd_classes,
+            "export": cmd_export, "import": cmd_import}[args.command](settings, args)
 
 
 if __name__ == "__main__":
