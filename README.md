@@ -19,7 +19,15 @@ your brain knows.
 > every CLI). · Concept: natural20.com's
 > ["second brain / LLM wiki"](https://natural20.com/using-claude-code-to-setup-a-second-brain-aka-llm-wiki).
 
-![The SYNAPSE explorer on its own repository — the default self-ingested brain a fresh clone gives you (point Sources at your own repos and it scales past 21,000 notes)](docs/screenshots/explorer-hero.png)
+![SYNAPSE — a second brain for your repos: markdown in, an explorable knowledge graph out](docs/media/hero__synapse-guided-tour.png)
+
+## See it in 60 seconds — or drive it yourself
+
+- **▶ [Watch the 60-second tour](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)** — narrated, captioned, recorded against the real app ([full 5:35 video, 16 chapters](docs/tour/README.md) builds from this repo).
+- **🖱 [Open the interactive guided tour](https://synaptixlabs.github.io/Synapse/tour/out/tutorial.html)** — a self-contained, click-through walkthrough of search, vocabulary, evidence, connections, paths, and ghosts. No install, runs in your browser.
+- **⌨ Run it on your own repos:** `./start.sh` → explorer at `localhost:5173` — the screenshot below is the default self-ingested brain a fresh clone gives you.
+
+![The SYNAPSE explorer on its own repository — the default self-ingested brain a fresh clone gives you; point Sources at your own repos to grow it](docs/screenshots/explorer-hero.png)
 
 ## The loop
 
