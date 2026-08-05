@@ -21,6 +21,14 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   // their repo hub: no physics, drawn only past REVEAL_K, hoverable + clickable (a click
   // promotes the note into the living graph via the host's onNodeClick → pull-in).
   const REVEAL_K = 1.5;
+  // When the host is showing the ENTIRE brain (explorer `?cap=all`) the per-frame edge
+  // ceiling has to follow it — otherwise "all nodes" renders with most of its links
+  // silently missing, which is exactly the dishonesty the budgets exist to avoid.
+  // Viewport culling and big-mode edge-typing still apply; only the ceiling moves.
+  // (the URL is read here too — the host writes the localStorage key AFTER this module is
+  // constructed, so a first load with `?cap=all` would otherwise render the thinned view)
+  const SHOW_ALL = new URLSearchParams(location.search).get('cap') === 'all'
+    || (localStorage.getItem('synapse.windowCap') ?? '') === 'all';
   let statics = [];        // [{ n, dx, dy }] — deterministic halo offset from the repo hub
   let staticsDrawn = 0;    // last-frame count (exposed via state() for honest verification)
   let layerCounts = {};    // last-frame per-layer draw counts (edges/labels) — state() too
@@ -28,9 +36,71 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
   const W = () => canvas.clientWidth, H = () => canvas.clientHeight || 340;
   // Beyond the POC budget (~2k nodes) the O(n²) physics + full edge draw would freeze the tab:
   // degrade honestly — spring/gravity-only layout, wikilink-only edges until zoomed, no hulls.
-  const big = () => nodes.filter(n => n.kind === 'note').length > 3000;
+  // MEMOISED (recomputed in setData): this used to re-filter the whole node array on every
+  // call — and it is called once PER NODE inside draw(). On an 11k-note brain that is ~120M
+  // comparisons a frame, and it dominated the profile (53% of samples) long before any
+  // stroke did. The threshold semantics are unchanged.
+  let noteCount = 0;
+  const big = () => noteCount > 3000;
   const hue = (repo) => repoHue.get(repo) ?? 220;
-  const noteColor = (n) => `hsl(${hue(n.repo)} 65% ${52 + Math.min(n.in_degree + n.out_degree, 12) * 2.2}%)`;
+  const repoColor = (n) => `hsl(${hue(n.repo)} 65% ${52 + Math.min(n.in_degree + n.out_degree, 12) * 2.2}%)`;
+
+  /* ── NODE CLASSES (founder ask 2026-08-04) ──────────────────────────────────
+   * hue=repo says only WHERE a note came from — useless in a one-repo brain, where an
+   * article, a LinkedIn post and a hero image all render identically. A class assigns
+   * {colour, shape, size} by matching the node's own path/name/tag, so the canvas says
+   * what a node IS. Served by GET /api/v1/node-classes, CLI-managed (`synapse classes`),
+   * FIRST MATCH WINS. Empty list ⇒ every node falls back to the original repo-hue circle,
+   * so this is additive: nothing regresses when no classes are configured. */
+  let nodeClasses = [];
+  const classCache = new Map();
+  function classOf(n) {
+    if (!nodeClasses.length || n.kind === 'repo' || n.kind === 'ghost') return null;
+    if (classCache.has(n.id)) return classCache.get(n.id);
+    const path = n.source_path || '';
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    let hit = null;
+    for (const c of nodeClasses) {
+      const m = c.match || {};
+      if (m.path_contains && !path.includes(m.path_contains)) continue;
+      if (m.name_contains && !name.toLowerCase().includes(String(m.name_contains).toLowerCase())) continue;
+      if (m.tag && !(n.tags || []).includes(m.tag)) continue;
+      if (!m.path_contains && !m.name_contains && !m.tag) continue;   // a ruleless class matches nothing
+      hit = c; break;
+    }
+    classCache.set(n.id, hit);
+    return hit;
+  }
+  const noteColor = (n) => classOf(n)?.color ?? repoColor(n);
+
+  /** Draw one node's symbol. Shapes are how a class reads at a glance when colours are
+   *  close together (and the only cue that survives a colour-blind viewer). */
+  function drawSymbol(ctx, shape, x, y, r) {
+    ctx.beginPath();
+    switch (shape) {
+      case 'square':   ctx.rect(x - r, y - r, r * 2, r * 2); break;
+      case 'diamond':  ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); break;
+      case 'triangle': ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.8); ctx.lineTo(x - r, y + r * 0.8); ctx.closePath(); break;
+      case 'star': {
+        for (let i = 0; i < 10; i++) {
+          const rad = i % 2 ? r * 0.46 : r, a = (Math.PI / 5) * i - Math.PI / 2;
+          i ? ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad)
+            : ctx.moveTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+        }
+        ctx.closePath(); break;
+      }
+      case 'hexagon': {
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI / 3) * i - Math.PI / 2;
+          i ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r)
+            : ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+        ctx.closePath(); break;
+      }
+      default: ctx.arc(x, y, r, 0, 7);
+    }
+    ctx.fill();
+  }
 
   function setData(n, e, { preserve = false } = {}) {
     // preserve=true (incremental pull-in): keep the camera, every existing position and every
@@ -38,6 +108,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     // layout the user was working in (second-opinion finding #3). Default (false) is a fresh
     // layout — that's what refresh and ⟲ reset mean.
     nodes = n; edges = e;
+    noteCount = nodes.reduce((c, x) => c + (x.kind === 'note' ? 1 : 0), 0);
     const repos = nodes.filter(x => x.kind === 'repo');
     repoHue = new Map(repos.map((r, i) => [r.repo, (i * 137.5) % 360]));
     if (!preserve) sim.p = new Map();
@@ -228,7 +299,7 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     // world zooms underneath, labels declutter on a screen-space grid (no label soup), and
     // every z-layer has a HARD per-frame budget (founder ruling) + viewport culling.
     const K = sim.view.k;
-    const BUDGET = { edges: 3500, labels: 80, statics: 800 };
+    const BUDGET = { edges: SHOW_ALL ? 60000 : 3500, labels: 80, statics: 800 };
     let edgesDrawn = 0, labelsDrawn = 0;
     const vMinX = -sim.view.x / K, vMinY = -sim.view.y / K;
     const vMaxX = vMinX + W() / K, vMaxY = vMinY + H() / K;
@@ -253,7 +324,10 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     for (const e of edges) {
       if (!visibleEdge(e)) continue;
       const lit0 = hood && (e.src === sim.hover || e.dst === sim.hover) && e.type !== 'sibling';
-      if (bigMode && !lit0 && e.type !== 'wikilink' && sim.view.k < 1.2) continue;
+      // big-mode thinning normally keeps only wikilinks until you zoom in — but a brain
+      // whose links are mostly pathref/relative would then read as "no connections at all".
+      // With SHOW_ALL the type gate lifts; culling + the edge budget still bound the frame.
+      if (bigMode && !SHOW_ALL && !lit0 && e.type !== 'wikilink' && sim.view.k < 1.2) continue;
       const a = sim.p.get(e.src), b = sim.p.get(e.dst); if (!a || !b) continue;
       if (!lit0) {
         if (!inView(a.x, a.y) && !inView(b.x, b.y)) continue;   // off-screen — skip
@@ -329,10 +403,13 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
       if (inMatch) { ctx.shadowColor = '#7c9eff'; ctx.shadowBlur = 14; }
       ctx.fillStyle = noteColor(n);
       if (!dim && deg >= 8) { ctx.shadowColor = `hsl(${hue(n.repo)} 70% 60%)`; ctx.shadowBlur = 10; }
-      const r = (2.8 + Math.min(deg, 14) * 0.5) / symScale;
+      const cls = classOf(n);
+      const r = (2.8 + Math.min(deg, 14) * 0.5) * (cls?.size ?? 1) / symScale;
       if (big() && !inMatch && sim.hover !== n.id) {
         ctx.shadowBlur = 0;
         ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);   // fast path: 18k arcs/frame won't fly
+      } else if (cls?.shape && cls.shape !== 'circle') {
+        drawSymbol(ctx, cls.shape, p.x, p.y, r);
       } else {
         ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
       }
@@ -540,6 +617,19 @@ export function createGraph(canvas, { tooltipEl, infoEl, onNodeClick }) {
     toggleEdgeType(t) { hiddenEdges.has(t) ? hiddenEdges.delete(t) : hiddenEdges.add(t); draw(); return !hiddenEdges.has(t); },
     toggleRepo(r) { hiddenRepos.has(r) ? hiddenRepos.delete(r) : hiddenRepos.add(r); draw(); return !hiddenRepos.has(r); },
     repoColors: () => new Map([...repoHue].map(([r, h]) => [r, `hsl(${h} 65% 62%)`])),
+    /** Install the visual vocabulary (GET /api/v1/node-classes). Recolours immediately —
+     *  never needs an ingest or a rebuild, so `synapse classes set …` + reload is the loop. */
+    setNodeClasses(list) { nodeClasses = Array.isArray(list) ? list : []; classCache.clear(); draw(); },
+    /** What the glossary renders: every class + how many visible notes currently match it. */
+    nodeClassLegend() {
+      const counts = new Map();
+      for (const n of nodes) {
+        if (n.kind !== 'note') continue;
+        const c = classOf(n);
+        if (c) counts.set(c.id, (counts.get(c.id) ?? 0) + 1);
+      }
+      return nodeClasses.map(c => ({ ...c, count: counts.get(c.id) ?? 0 }));
+    },
     state: () => ({ hiddenEdges: [...hiddenEdges], hiddenRepos: [...hiddenRepos], hasMatch: !!matchSet, pinned: [...pinned], focus: sim.focus, path: pathIds ? [...pathIds] : null, statics: statics.length, staticsDrawn, layerCounts: { ...layerCounts }, zoom: sim.view.k, view: { ...sim.view }, hubAt: (repo) => (nodes.some(n => n.id === `repo:${repo}`) ? { ...(sim.p.get(`repo:${repo}`) ?? {}) } : {}), posOf: (id) => (nodes.some(n => n.id === id) ? { ...(sim.p.get(id) ?? {}) } : {}) }),
   };
 }

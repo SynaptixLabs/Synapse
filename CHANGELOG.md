@@ -5,7 +5,78 @@ All notable changes to **SYNAPSE** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — sprint 04 "The Open Brain" (dev-complete, founder acceptance pending)
+## [Unreleased]
+
+The graph learned to say what a node **is**, the reader learned to show media inline — and an
+external security review found that an ingested repo was not being treated as untrusted input.
+
+### Added
+- **Node classes** — colour · shape · size assigned by matching a node's own path/name/tag, so a
+  one-repo brain is still legible (articles as gold stars, each social channel its own colour,
+  media split by kind). First-match-wins over an ordered list; edit via `synapse classes
+  list|add|remove`, and a page reload is enough — matching happens client-side, never an ingest.
+- **`synapse roots`** — add/remove/enable/disable source roots from the CLI, the same store the
+  Sources panel writes.
+- **Media as real graph edges** — `<Visual id="…"/>` and `<YouTube id="…"/>` are resolved at ingest
+  against the article's companion media folder and recorded in `synapse.asset_refs`, so what the
+  reader shows and what the graph links are the same file. Interactive bundles render inline,
+  sized by the bundle's own height seam.
+- Asset sidecars now cover `.svg`, video (`.mp4/.webm/.mov/.m4v`), audio (`.mp3/.m4a/.wav`) and
+  interactive `.html`.
+- `GET /api/v1/conventions` — the companion-media convention, published so the reader resolves it
+  the same way ingest did instead of keeping a second, drifting copy.
+- `SYNAPSE_COMPANION_MEDIA_DIR` / `SYNAPSE_INTERACTIVE_PREFIX` — that convention is configuration
+  now, not a literal baked into the public core for one private KB's layout.
+- Regression suite for all of the above (`backend/tests/test_security_and_classes.py`) and a
+  real-Chromium spec asserting both halves of the security fix — the boundary holds *and* the
+  content still renders (`tests/e2e/security_active_content.spec.mjs`).
+
+### Security
+See [`SECURITY.md`](SECURITY.md) for the threat model. A repo you ingest is untrusted input:
+- The reader no longer accepts `<iframe>`/`<object>`/`<embed>` from vault markdown.
+- Interactive bundles are fetched and mounted via `srcdoc` into a sandboxed, **opaque-origin**
+  frame — no `allow-same-origin`, so a bundle can reach neither the app nor the API.
+- The API serves repo-authored `.html` as an inert attachment, and every asset response carries
+  `nosniff` plus a sandboxing CSP, so active content cannot execute at the API's origin — the
+  same origin as its unauthenticated ingest/delete/distill endpoints.
+- CORS narrowed from *any host on port 5173* to loopback, plus an explicit `SYNAPSE_ALLOWED_ORIGINS`
+  opt-in for the documented WSL → Windows direct-IP path.
+- Node-class colours are validated at write time and escaped at render time (they were
+  interpolated into a `style` attribute unescaped); sizes are clamped.
+- Component ids are allow-listed as plain tokens — the previous guard split on `/` only, letting
+  `..\..\x`, NUL and the `|` field separator through.
+
+A second review round, on the fixes themselves, closed:
+- **Stored XSS in the dashboard** — note titles/ids/repo names were interpolated into `innerHTML`
+  unescaped, so a repo heading could execute at the app origin (the origin CORS trusts).
+- **Cross-origin writes** — a sandbox does not block the network, and a simple `POST` needs no
+  preflight, so a bundle could still trigger `/ingest` or `/rebuild`. The frame now carries an
+  app-authored CSP (`connect-src 'none'`) and the server refuses state-changing requests from an
+  untrusted `Origin` (including the `null` a sandboxed frame sends). No-`Origin` callers — the
+  CLI, the MCP server — are untouched.
+- **CORS lookalikes** — the 500 handler matched an unanchored alternation, accepting
+  `http://localhost.attacker.example` whenever `SYNAPSE_ALLOWED_ORIGINS` was set.
+- **Malformed attachment headers** — `Content-Disposition` was hand-built from an untrusted
+  filename (a non-Latin-1 name raised `UnicodeEncodeError` in the ASGI layer).
+- **Non-portable root identity** — basenames were compared case-sensitively and unresolved, so
+  `KB`/`kb` and symlinked aliases both slipped past the collision guard.
+- Stricter grammars and bounds: `\A…\Z` id termination (Python's `$` matches before a trailing
+  newline), hex colours limited to 3/4/6/8 digits, and a frontmatter reader that requires a closed
+  block and bounds characters as well as lines.
+
+### Fixed
+- The ingest freshness check read a fixed byte window of a note, so an article with enough media
+  pushed its (single-line) `asset_refs` past it: the check never matched, concluded the note had
+  changed, and rewrote it on **every** run without converging. It now reads the frontmatter block
+  by its delimiter.
+- Images in source notes were pointed at an asset id derived by path arithmetic without checking
+  the asset exists, turning "this brain doesn't hold it" into a broken-image 404 and shadowing the
+  fallback that would often have resolved it.
+- `synapse roots add` bypassed the duplicate-basename guard the HTTP API enforced — two roots with
+  the same folder name collide in the vault and cross-delete each other's notes. The invariant now
+  lives in one place and both callers use it.
+
+## [0.2.0-dev] — sprints 04 "The Open Brain" + 05 "Everything In" (both closed, founder PASS)
 
 The brain becomes infrastructure — queryable, always fresh, reachable from your AI assistant:
 

@@ -43,6 +43,30 @@ def load_roots(settings: Settings) -> list[dict]:
              "exists": Path(e["path"]).is_dir(), "source": src} for e in entries]
 
 
+def add_conflict(entries: list[dict], candidate: Path) -> str | None:
+    """Why `candidate` can't join `entries` — or None if it can.
+
+    Note ids are keyed by the root's folder NAME (`<name>__<rel/path>.asset.md`), and the
+    asset endpoint resolves a root by that name too. So two roots sharing a basename don't
+    merely look confusing: they collide in the vault, cross-delete each other's notes on
+    prune, and make `/asset/<id>` serve from whichever one matched first.
+
+    This lives HERE, not in the API handler, because there are two ways to add a root — the
+    Sources panel and `synapse roots add` — and a guard on one of them is not a guard.
+    (GBU 2026-08-04, P1: the CLI path had no check at all.)"""
+    # resolve BOTH sides (an existing entry may be a symlink or an unresolved env path) and
+    # compare basenames case-insensitively — `KB` and `kb` are one folder on Windows/macOS and
+    # would collide in the vault there. (Codex GBU 2026-08-04, P1.)
+    resolved = candidate.resolve()
+    existing = [Path(e["path"]).resolve() for e in entries]
+    if any(e == resolved for e in existing):
+        return f"already configured: {resolved}"
+    if any(e.name.casefold() == resolved.name.casefold() for e in existing):
+        return (f"a root named '{resolved.name}' is already in the list — two roots with the "
+                "same folder name would collide in the vault. Rename one of the folders.")
+    return None
+
+
 def save_roots(settings: Settings, entries: list[dict]) -> None:
     f = roots_file(settings)
     f.parent.mkdir(parents=True, exist_ok=True)

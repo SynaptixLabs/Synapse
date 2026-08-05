@@ -47,7 +47,21 @@ class SourceFile:
 # Asset extensions the sidecar pass understands (sprint 05, Epic K — issue #13 stage 1)
 ASSET_TYPES = {
     ".png": "image", ".jpg": "image", ".jpeg": "image", ".webp": "image", ".gif": "image",
+    # .svg: heroes ship as SVG on several articles. Omitting it meant the file was synced
+    # into the KB, never became a node, and so no article could resolve its own hero.
+    ".svg": "image",
     ".pdf": "pdf",
+    # video/audio (2026-08-04): a marketing brain whose whole point is "where are the
+    # videos?" cannot answer that if the only ingestible media is stills and PDFs. A
+    # sidecar is METADATA — the bytes never enter the vault — so a 2 GB footage folder
+    # costs the same as a screenshot. Text extraction obviously doesn't apply; these
+    # sidecars carry provenance + type, and the reader renders a real player.
+    ".mp4": "video", ".webm": "video", ".mov": "video", ".m4v": "video",
+    ".mp3": "audio", ".m4a": "audio", ".wav": "audio",
+    # interactives (2026-08-04): a self-contained HTML visual pack IS media — the KB is
+    # the source of truth for it, and must be able to hold and PLAY it whether or not the
+    # publishing platform can render it. Sandboxed at display time (see wiki.js).
+    ".html": "interactive", ".htm": "interactive",
 }
 
 

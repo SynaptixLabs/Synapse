@@ -20,7 +20,7 @@ from .models import Edge, Graph, Node
 
 _FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _FM_FIELD_RE = re.compile(
-    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links):\s*(.+?)\s*$",
+    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links|asset_refs):\s*(.+?)\s*$",
     re.MULTILINE)
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
@@ -28,6 +28,16 @@ _MDLINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+?\.md)(?:#[^)]*)?\)")
 # backticked path pointers: `../roles/cpto.md`, `.claude/policies/commandments.md` — the
 # thin-adapter convention (agents point at contracts as code paths, not hyperlinks)
 _CODEPATH_RE = re.compile(r"`([^`\s]+?\.md)`")
+# ASSET links (founder ask 2026-08-04: "media nodes MUST be linked to posts, articles").
+# Assets already become NODES (sidecars, sprint 05) but nothing could ever LINK to one:
+# both link regexes above hard-require `.md`, so `![hero](hero.png)` or `[deck](x.pdf)`
+# resolved to nothing and every image/PDF sat at degree 1 — a node in name only. These
+# match the same markdown/backtick forms against the extensions ingest actually sidecars,
+# and resolve to the sidecar the same way (the exact map is keyed by the ORIGINAL
+# source_path, `…/hero.png`, so no id munging is needed here).
+_ASSET_EXT = r"(?:png|jpe?g|gif|webp|svg|pdf|mp4|webm|mov|m4v|mp3|m4a|wav|html?)"
+_MDASSET_RE = re.compile(rf"\[[^\]]*\]\(([^)\s]+?\.{_ASSET_EXT})(?:#[^)]*)?\)", re.IGNORECASE)
+_CODEASSET_RE = re.compile(rf"`([^`\s]+?\.{_ASSET_EXT})`", re.IGNORECASE)
 
 
 class GraphService:
@@ -59,6 +69,7 @@ class GraphService:
                 "body": body,
                 "asset_type": fields.get("asset_type", "") if fields.get("kind") == "asset" else "",
                 "inferred_links": fields.get("inferred_links", ""),
+                "asset_refs": fields.get("asset_refs", ""),
             })
         return notes
 
@@ -149,6 +160,26 @@ class GraphService:
                     or exact.get(f"{n['repo']}/{root_tok}".lower())
                 if dst and dst != n["id"]:
                     g.edges.add(Edge(src=n["id"], dst=dst, type="pathref"))
+            # asset links — an article/post/manifest pointing at a real image or PDF. Same
+            # resolution as above; unresolvable ones are NOT recorded as unresolved links
+            # (a doc quoting an illustrative filename is not a broken reference).
+            # ADAPTER resolutions (ingest turned `<Visual id=…>` / `<YouTube id=…>` into
+            # real local paths without touching the verbatim body) — these are the edges
+            # that make an id-referenced interactive/video a first-class graph citizen.
+            for ref in (t.strip() for t in n["asset_refs"].split(" | ") if t.strip()):
+                dst = exact.get(f"{n['repo']}/{ref}".lower())
+                if dst and dst != n["id"]:
+                    g.edges.add(Edge(src=n["id"], dst=dst, type="asset"))
+            for rx in (_MDASSET_RE, _CODEASSET_RE):
+                for m in rx.finditer(n["body"]):
+                    token = m.group(1)
+                    if token.startswith(("http://", "https://", "data:")):
+                        continue
+                    root_tok = re.sub(r"^(?:\./)+", "", token)
+                    dst = self._resolve_relative(n, token, exact) \
+                        or exact.get(f"{n['repo']}/{root_tok}".lower())
+                    if dst and dst != n["id"]:
+                        g.edges.add(Edge(src=n["id"], dst=dst, type="asset"))
 
         for e in g.edges:
             if e.type != "sibling":

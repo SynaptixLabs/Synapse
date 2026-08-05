@@ -141,3 +141,13 @@ tests/screenshots/*.png
 
 # SYNAPSE vault (user data — local-first, never committed)
 /data/
+
+# guided tour — generated media. A blanket `out/` rule above would swallow this whole folder,
+# so re-include it explicitly: the captions, script, manifest, compressed stills and the built
+# page ARE the deliverable and belong in git. The raw recording and full-res frames do not —
+# they are large and regenerable in one command.
+!docs/tour/out/
+!docs/tour/out/**
+docs/tour/out/*.webm
+docs/tour/out/frames/
+docs/tour/out/page-*.png

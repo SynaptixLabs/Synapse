@@ -1,0 +1,375 @@
+{
+  "generated": "2026-08-04T21:24:24.674Z",
+  "brain": {
+    "notes": 254,
+    "edges": 554,
+    "display_groups": 2,
+    "classes": 21
+  },
+  "scope": {
+    "root_count": 1,
+    "configured_roots": [
+      {
+        "label": "website/KB",
+        "assets": true
+      }
+    ],
+    "statement": "This recorded run indexes 1 configured source root."
+  },
+  "featured": {
+    "id": "KB__marketing__articles__ai-in-2026-from-zero-to-agents.md",
+    "stem": "ai-in-2026-from-zero-to-agents",
+    "media_edges": 9
+  },
+  "video": "synapse-tour.webm",
+  "width": 1600,
+  "height": 900,
+  "duration": 317.013,
+  "beats": [
+    {
+      "id": "open",
+      "title": "A second brain for the knowledge you choose",
+      "text": "This run maps one configured source root: website slash K B. Its 254 notes and 554 edges come from that knowledge base, not the whole workspace. Synapse can ingest one root or several.",
+      "t_start": 5.395,
+      "t_end": 20.531,
+      "frame": "01-open.png"
+    },
+    {
+      "id": "vocabulary",
+      "title": "Colour and shape are a vocabulary",
+      "text": "Open the glossary and the graph starts speaking. Hue alone would only tell you which repository a note came from — useless once a brain is one repo. So a node class says what a note IS: articles are gold stars, each social channel keeps its own colour, and media splits by kind. 21 classes, matched on each note's own path and name.",
+      "t_start": 20.531,
+      "t_end": 48.923,
+      "frame": "02-vocabulary.png"
+    },
+    {
+      "id": "legend-scan",
+      "title": "Every type, with a live count",
+      "text": "These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, LinkedIn cards, videos, interactive bundles. The tour reads the same live legend the application uses.",
+      "t_start": 48.923,
+      "t_end": 65.181,
+      "frame": "03-legend-scan.png"
+    },
+    {
+      "id": "close-drawer",
+      "title": "Back to the map",
+      "text": "Close it, and the shapes stay legible on their own.",
+      "t_start": 65.181,
+      "t_end": 70.425,
+      "frame": "04-close-drawer.png"
+    },
+    {
+      "id": "search",
+      "title": "Search is how you arrive",
+      "text": "Type, and matches light up across the whole graph at once. Press Enter and the top hit opens — the camera flies to it, and the note renders as a wiki article on the right.",
+      "t_start": 70.425,
+      "t_end": 86.159,
+      "frame": "05-search.png"
+    },
+    {
+      "id": "article-root",
+      "title": "The gold star is an article",
+      "text": "This is an article root. Hover any node and the graph tells you what it is, where it came from, and how connected it is. Around it sit the things that belong to it.",
+      "t_start": 86.159,
+      "t_end": 105.159,
+      "frame": "06-article-root.png"
+    },
+    {
+      "id": "zoom-in",
+      "title": "Zoom is semantic, not cosmetic",
+      "text": "Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — so the map stays readable as the selected knowledge grows.",
+      "t_start": 105.159,
+      "t_end": 119.75,
+      "frame": "07-zoom-in.png"
+    },
+    {
+      "id": "posts",
+      "title": "Squares are posts, one colour per channel",
+      "text": "The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own file, linked back to the article it came from. You can see at a glance which articles have channel-specific post records.",
+      "t_start": 119.751,
+      "t_end": 148.765,
+      "frame": "08-posts.png"
+    },
+    {
+      "id": "media",
+      "title": "Media are nodes too — not attachments",
+      "text": "Media is first class. A hero image, a carousel, an interactive bundle — each is a real node with a real edge, because the reference was resolved at ingest, not guessed at render time. What you see and what the graph links are the same file.",
+      "t_start": 148.766,
+      "t_end": 178.15,
+      "frame": "09-media.png"
+    },
+    {
+      "id": "pan",
+      "title": "Drag to pan, drag a node to place it",
+      "text": "Drag empty space to pan the map. Drag a node instead and it stays where you put it — the layout is yours to arrange, and it survives while you work.",
+      "t_start": 178.15,
+      "t_end": 195.953,
+      "frame": "10-pan.png"
+    },
+    {
+      "id": "reader",
+      "title": "The note reads as a wiki article",
+      "text": "On the right, the same note is a readable article: wikilinks are clickable, and the media the graph linked renders inline — the hero at the top, the interactive figure in place, sized by the figure itself.",
+      "t_start": 195.953,
+      "t_end": 213.157,
+      "frame": "11-reader.png"
+    },
+    {
+      "id": "reader-scroll",
+      "title": "Interactive, sandboxed, inline",
+      "text": "That figure is a live bundle from the repository, running inside a sandbox with no route back to the app or the API. Untrusted input, rendered safely — you can read the piece exactly as it ships.",
+      "t_start": 213.158,
+      "t_end": 231.756,
+      "frame": "12-reader-scroll.png"
+    },
+    {
+      "id": "connections",
+      "title": "Every link, grouped and clickable",
+      "text": "At the foot of every note is its connections — grouped by how the link was made: a wikilink, a relative path, a sibling in the same folder, an asset. Click one and you are reading the neighbour.",
+      "t_start": 231.756,
+      "t_end": 248.32,
+      "frame": "13-connections.png"
+    },
+    {
+      "id": "path",
+      "title": "Ask how two ideas connect",
+      "text": "Path mode answers a different question: not \"what is near this\", but \"how do these two things relate at all\". Pick two notes and the shortest chain of real links between them glows, hop by hop.",
+      "t_start": 248.32,
+      "t_end": 273.516,
+      "frame": "14-path.png"
+    },
+    {
+      "id": "ghosts",
+      "title": "Honest about what is missing",
+      "text": "A link pointing at nothing is not hidden. Ghosts draws every unresolved reference as a hollow node beside whatever referred to it, and says which kind it is: a note not written yet, a file the brain never ingested, or a dead path. The brain admits its own gaps.",
+      "t_start": 273.516,
+      "t_end": 297.511,
+      "frame": "15-ghosts.png"
+    },
+    {
+      "id": "close",
+      "title": "The vault is the truth",
+      "text": "Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown away at any time. Point Synapse at one repository root or several, and it builds the same kind of map from the knowledge you choose.",
+      "t_start": 297.511,
+      "t_end": 317.013,
+      "frame": "16-close.png"
+    }
+  ],
+  "node_classes": [
+    {
+      "id": "media-interactive",
+      "label": "Media — interactive",
+      "color": "#4bd6a4",
+      "shape": "star",
+      "size": 1.5,
+      "match": {
+        "tag": "asset:interactive"
+      }
+    },
+    {
+      "id": "media-audio",
+      "label": "Media — audio",
+      "color": "#c08fd6",
+      "shape": "triangle",
+      "size": 1,
+      "match": {
+        "tag": "asset:audio"
+      }
+    },
+    {
+      "id": "media-video",
+      "label": "Media — video",
+      "color": "#e0507a",
+      "shape": "hexagon",
+      "size": 1.35,
+      "match": {
+        "tag": "asset:video"
+      }
+    },
+    {
+      "id": "article",
+      "label": "Article (root)",
+      "color": "#e0a33e",
+      "shape": "star",
+      "size": 1.4,
+      "match": {
+        "path_contains": "/articles/"
+      }
+    },
+    {
+      "id": "post-linkedin",
+      "label": "Post — LinkedIn",
+      "color": "#3b82c4",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "linkedin"
+      }
+    },
+    {
+      "id": "post-li-short",
+      "label": "Post — LinkedIn (li-*)",
+      "color": "#3b82c4",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "-li-"
+      }
+    },
+    {
+      "id": "post-x",
+      "label": "Post — X",
+      "color": "#8b8f96",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "-x"
+      }
+    },
+    {
+      "id": "post-reddit",
+      "label": "Post — Reddit",
+      "color": "#e06a3b",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "reddit"
+      }
+    },
+    {
+      "id": "post-carousel",
+      "label": "Post — carousel",
+      "color": "#7f6bd6",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "carousel"
+      }
+    },
+    {
+      "id": "post",
+      "label": "Post — other channel",
+      "color": "#5aa9a2",
+      "shape": "square",
+      "size": 1.05,
+      "match": {
+        "path_contains": "/posts/"
+      }
+    },
+    {
+      "id": "media-manifest",
+      "label": "Media manifest",
+      "color": "#b85fa8",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "MEDIA.md"
+      }
+    },
+    {
+      "id": "media-hero",
+      "label": "Media — hero",
+      "color": "#d98b2b",
+      "shape": "star",
+      "size": 1.1,
+      "match": {
+        "name_contains": "hero"
+      }
+    },
+    {
+      "id": "media-carousel",
+      "label": "Media — carousel (PDF)",
+      "color": "#c0504d",
+      "shape": "hexagon",
+      "size": 1.05,
+      "match": {
+        "name_contains": "carousel"
+      }
+    },
+    {
+      "id": "media-slide",
+      "label": "Media — carousel slide",
+      "color": "#d9a05b",
+      "shape": "square",
+      "size": 0.9,
+      "match": {
+        "name_contains": "-slide-"
+      }
+    },
+    {
+      "id": "media-card-li",
+      "label": "Media — LinkedIn card",
+      "color": "#3b82c4",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "-li-"
+      }
+    },
+    {
+      "id": "media-card-x",
+      "label": "Media — X card",
+      "color": "#8b8f96",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "-x-"
+      }
+    },
+    {
+      "id": "media-endcard",
+      "label": "Media — end card",
+      "color": "#4bb3a4",
+      "shape": "diamond",
+      "size": 1,
+      "match": {
+        "name_contains": "end-card"
+      }
+    },
+    {
+      "id": "media-cartoon",
+      "label": "Media — cartoon / scene",
+      "color": "#9b7fd6",
+      "shape": "triangle",
+      "size": 1.1,
+      "match": {
+        "name_contains": "cartoon"
+      }
+    },
+    {
+      "id": "asset-image",
+      "label": "Image (other)",
+      "color": "#5fa85f",
+      "shape": "triangle",
+      "size": 0.95,
+      "match": {
+        "tag": "asset:image"
+      }
+    },
+    {
+      "id": "asset-pdf",
+      "label": "PDF (other)",
+      "color": "#c05050",
+      "shape": "triangle",
+      "size": 0.95,
+      "match": {
+        "tag": "asset:pdf"
+      }
+    },
+    {
+      "id": "index",
+      "label": "Index / front door",
+      "color": "#4bb3c4",
+      "shape": "hexagon",
+      "size": 1.3,
+      "match": {
+        "name_contains": "INDEX.md"
+      }
+    }
+  ]
+}

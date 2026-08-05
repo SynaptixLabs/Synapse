@@ -1,6 +1,6 @@
 /** SYNAPSE explorer — sprint-02 Epic C, implements ui_kit/explorer KIT.md REV 2 1:1. */
 import { api, health } from './api.js';
-import { buildNamespace, createReader, esc } from './wiki.js';
+import { buildNamespace, createReader, esc, loadConventions } from './wiki.js';
 import { createGraph } from './graph.js';
 
 const $ = (id) => document.getElementById(id);
@@ -255,7 +255,19 @@ document.addEventListener('click', (ev) => {
 // zoom/search-oriented, capped by importance — never all 20k at once). Search, the reader and
 // the drawer always cover the FULL brain; opening an off-window note pulls it + its direct
 // neighbors into the picture.
-const WINDOW_CAP = 1500;
+//
+// The cap is overridable — "show me the ENTIRE graph" is a legitimate ask on a brain that
+// fits: `?cap=all` (no window at all) · `?cap=4000` (a wider window) · `?cap=1500` (the
+// default). A URL choice sticks (localStorage) so a reload keeps the view you asked for.
+const CAP_KEY = 'synapse.windowCap';
+const WINDOW_CAP = (() => {
+  const q = new URLSearchParams(location.search).get('cap');
+  if (q !== null) localStorage.setItem(CAP_KEY, q);
+  const raw = localStorage.getItem(CAP_KEY) ?? '1500';
+  if (raw === 'all') return Infinity;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 1500;
+})();
 let winIds = null;   // Set of displayed ids · null = the whole brain fits the budget
 let vNodes = [], vEdges = [];   // the DISPLAY view (grouped); search/reader keep the originals
 
@@ -277,6 +289,12 @@ function nodeTypeOf(n) {
   if (n.repo === '✦ summaries' || n.repo?.startsWith('✦ summaries')) return 'distill';
   if (n.tags?.includes('asset:image')) return 'image';
   if (n.tags?.includes('asset:pdf')) return 'pdf';
+  // video/audio (2026-08-04): without these a video fell through to 'note', so the type
+  // lens had no pill for it and the count landed in 📝 — "I still see no videos" even
+  // though six were ingested and linked. Every asset kind ingest can produce needs a
+  // lens entry, or it is invisible as a CATEGORY however well it renders as a node.
+  if (n.tags?.includes('asset:video')) return 'video';
+  if (n.tags?.includes('asset:audio')) return 'audio';
   return 'note';
 }
 
@@ -327,15 +345,15 @@ function rebuildView() {
 
 function buildTypebar() {
   const el = $('typebar'); if (!el) return;
-  const counts = { note: 0, image: 0, pdf: 0, distill: 0 };
+  const counts = { note: 0, image: 0, pdf: 0, video: 0, audio: 0, distill: 0 };
   for (const n of nodes) if (n.kind === 'note') counts[nodeTypeOf(n)]++;
-  const PILLS = [['note', '📝'], ['image', '📷'], ['pdf', '📄'], ['distill', '✦']];
+  const PILLS = [['note', '📝'], ['image', '📷'], ['pdf', '📄'], ['video', '🎬'], ['audio', '🎧'], ['distill', '✦']];
   let html = PILLS.filter(([t]) => counts[t] > 0)
     .map(([t, icon]) => {
       const off = hiddenTypes.has(t);
       return `<button class="pill ${off ? 'off' : ''}" data-type="${t}" title="${off ? 'show' : 'hide'} ${t}s">${icon} ${counts[t]}</button>`;
     }).join('');
-  if (counts.image + counts.pdf > 0) {
+  if (counts.image + counts.pdf + counts.video + counts.audio > 0) {
     html += `<button class="pill ${assetsGrouped ? '' : 'off'}" data-regroup="1" title="assets as their own group (hull) vs mixed into folders">📦 ${assetsGrouped ? 'assets grouped' : 'assets mixed'}</button>`;
   }
   el.innerHTML = html;
@@ -457,6 +475,10 @@ async function refresh() {
     ({ vnodes: vNodes, vedges: vEdges } = groupView());
     _vRepo = null;
     stats = await api('/stats');
+    // The visual vocabulary (colour/shape/size per node class). Optional by design: an
+    // older backend without the route just leaves the canvas on the original repo-hue
+    // circles rather than failing the whole load.
+    try { graph.setNodeClasses(await api('/node-classes')); } catch { /* defaults stand */ }
     $('empty').style.display = 'none';
     const view = windowed();
     const vg = withGhosts(view.n, view.e);   // Epic N: ghosts ride on top when toggled
@@ -715,15 +737,31 @@ function buildDrawer() {
   for (const n of vNodes) if (n.kind === 'note') repoCounts[n.repo] = (repoCounts[n.repo] ?? 0) + 1;
   const unresolved = [];
   for (const n of vNodes) if (n.kind === 'note') for (const u of n.unresolved) unresolved.push({ u, n });
-  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', sibling: '#2c3342' };
+  const EDGE = { wikilink: '#7c9eff', relative: '#8b93a6', pathref: '#4ec9b0', asset: '#b85fa8', sibling: '#2c3342' };
+  // Node classes (founder ask): what each colour+shape on the canvas actually MEANS.
+  // Rendered only when classes are configured, and each row shows its live match count —
+  // a class matching 0 notes is visible as such instead of quietly implying coverage.
+  const legend = (graph.nodeClassLegend?.() ?? []).filter(c => c.count > 0);
+  const SHAPE_GLYPH = { circle: '●', square: '■', diamond: '◆', triangle: '▲', star: '★', hexagon: '⬢' };
   $('drawer').innerHTML =
+    (legend.length
+      ? `<h4>Node types — colour + shape</h4>` +
+        legend.map(c =>
+          // c.color is CONFIG, and config is not trust — an unescaped `"` here breaks out of the
+          // style attribute (stored XSS from node-classes.json). Escaped here AND validated
+          // at write time in node_classes.py; either alone is one typo away from a hole.
+          `<div class="row"><span style="color:${esc(c.color)};font-size:15px;width:16px;display:inline-block">` +
+          `${SHAPE_GLYPH[c.shape] ?? '●'}</span> ${esc(c.label)} <span class="tg">${c.count}</span></div>`).join('')
+      : '') +
     `<h4>Repos (click toggles)</h4>` +
     Object.entries(repoCounts).map(([r, c]) =>
-      `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${colors.get(r)}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
+      `<div class="row" data-repo="${esc(r)}"><span class="dot" style="background:${esc(colors.get(r) ?? "#6f8fbf")}"></span> ${esc(r)} <span class="tg">${c} · on</span></div>`).join('') +
     `<h4>Edges (click toggles) — hue = repo · brightness = connectedness</h4>` +
     Object.entries(EDGE).map(([t, c]) => {
       const off = graph.state().hiddenEdges.includes(t);
-      const name = t === 'sibling' ? 'repo grouping (shown as hulls)' : t === 'pathref' ? 'path reference (`code` pointers)' : t;
+      const name = t === 'sibling' ? 'repo grouping (shown as hulls)'
+                 : t === 'pathref' ? 'path reference (`code` pointers)'
+                 : t === 'asset' ? 'media link (image · PDF · video · audio)' : t;
       return `<div class="row ${off ? 'off' : ''}" data-edge="${t}"><span class="edot" style="background:${c}"></span> ${name} <span class="tg">${off ? 'off' : 'on'}</span></div>`;
     }).join('') +
     `<h4>👻 Future notes (ghosts)</h4>` +
@@ -1000,7 +1038,9 @@ refresh = async function () {
 };
 
 health($('health'));
-refresh();
+// resolve the companion-media convention BEFORE the first render, so an <Visual/>
+// never resolves against a stale default on a vault that configures its own layout
+loadConventions().then(refresh);
 refreshModelStatus();
 acRender();
 // app version in the statusbar — single source of truth: package.json (via vite define)

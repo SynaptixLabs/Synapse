@@ -11,6 +11,12 @@ SYNAPSE CLI — thin dispatcher over the module services (no logic here).
     python -m synapse watch [--interval N]            # polling auto-sync (non-git roots)
     python -m synapse export [--out PATH]             # vault → one verifiable zip (sha256 manifest)
     python -m synapse import ARCHIVE [--force]        # verify manifest, then unpack (refuses on mismatch)
+    python -m synapse roots list                      # show every configured root
+    python -m synapse roots add <path> [--assets] [--disabled]   # add a root
+    python -m synapse roots remove|enable|disable <path>         # manage an existing root
+    python -m synapse classes list|reset                         # graph colour/shape vocabulary
+    python -m synapse classes add|set <id> [--color --shape --size --path-contains …]
+    python -m synapse classes remove <id>
 
 Run from `backend/` (or via the `./synapse` wrapper at the repo root, which handles the venv).
 """
@@ -43,7 +49,8 @@ def _cmd_ingest_locked(settings) -> int:
     from app.core.roots import asset_root_paths, load_roots
     from pathlib import Path as _P
     managed = {_P(e["path"]).name for e in load_roots(settings)}
-    report = IngestService(settings.vault_path, settings.ignore_dirs).ingest(
+    report = IngestService(settings.vault_path, settings.ignore_dirs,
+                            settings.companion_media_dir, settings.interactive_prefix).ingest(
         settings.source_repos, managed_names=managed, asset_roots=asset_root_paths(settings))
     print(report.render())
     stats = GraphService(settings.vault_path).rebuild().stats()
@@ -176,6 +183,130 @@ def cmd_import(settings, args) -> int:
     tail = "" if result.graph_included else " (run `synapse rebuild` to regenerate graph.json)"
     print(f"Imported {result.file_count} file(s) → {result.vault_path}{tail}")
     return 0
+def cmd_classes(settings, args) -> int:
+    """CLI ops on the graph's visual vocabulary (founder ask 2026-08-04: node types must be
+    distinguishable by colour/shape/size, and it must be CLI-driven). Thin wrapper over
+    app.core.node_classes — the same list the API serves and the canvas + glossary render."""
+    from app.core.node_classes import DEFAULT_CLASSES, SHAPES, classes_file, load_classes, save_classes
+
+    classes = load_classes(settings)
+
+    if args.classes_action == "list":
+        src = "file" if classes_file(settings).is_file() else "built-in defaults"
+        print(f"{len(classes)} node class(es)  [{src}] — first match wins, top to bottom\n")
+        for c in classes:
+            m = c["match"]
+            crit = " ".join(f"{k}={v!r}" for k, v in m.items()) or "(matches nothing — no criteria)"
+            print(f"  {c['id']:<16} {c['shape']:<9} {c['color']:<9} x{c['size']:<5} {c['label']}")
+            print(f"  {'':<16} match: {crit}")
+        return 0
+
+    if args.classes_action == "reset":
+        save_classes(settings, [dict(c) for c in DEFAULT_CLASSES])
+        print(f"reset to the {len(DEFAULT_CLASSES)} built-in default classes")
+        return 0
+
+    if args.classes_action == "remove":
+        keep = [c for c in classes if c["id"] != args.id]
+        if len(keep) == len(classes):
+            print(f"error: no class with id '{args.id}' (see `synapse classes list`)"); return 2
+        save_classes(settings, keep)
+        print(f"removed: {args.id}")
+        return 0
+
+    if args.classes_action in ("add", "set"):
+        if args.shape and args.shape not in SHAPES:
+            print(f"error: --shape must be one of: {', '.join(SHAPES)}"); return 2
+        match = {}
+        if args.path_contains: match["path_contains"] = args.path_contains
+        if args.name_contains: match["name_contains"] = args.name_contains
+        if args.tag: match["tag"] = args.tag
+        existing = next((c for c in classes if c["id"] == args.id), None)
+        if args.classes_action == "add" and existing:
+            print(f"error: class '{args.id}' already exists — use `classes set` to change it"); return 2
+        if args.classes_action == "set" and not existing:
+            print(f"error: no class '{args.id}' — use `classes add` to create it"); return 2
+        if not existing and not match:
+            print("error: a new class needs at least one match rule "
+                  "(--path-contains / --name-contains / --tag)"); return 2
+        entry = existing or {"id": args.id}
+        if args.label: entry["label"] = args.label
+        if args.color: entry["color"] = args.color
+        if args.shape: entry["shape"] = args.shape
+        if args.size is not None: entry["size"] = args.size
+        if match: entry["match"] = match
+        entry.setdefault("label", args.id)
+        entry.setdefault("color", "#6f8fbf")
+        entry.setdefault("shape", "circle")
+        entry.setdefault("size", 1.0)
+        if not existing:
+            # ORDER MATTERS (first match wins): a new rule goes to the FRONT by default so a
+            # narrow rule is never shadowed by a broad one already in the list. --last opts out.
+            classes.append(entry) if args.last else classes.insert(0, entry)
+        save_classes(settings, classes)
+        where = "" if existing else (" (appended last)" if args.last else " (inserted first — first match wins)")
+        print(f"{'updated' if existing else 'added'}: {entry['id']}  "
+              f"{entry['shape']} {entry['color']} x{entry['size']}{where}")
+        return 0
+
+    return 2
+
+
+def cmd_roots(settings, args) -> int:
+    """CLI ops on the source-roots list (founder ask, 2026-08-04: manage roots without
+    hand-editing roots.json). Thin wrapper over app.core.roots — same load/save the
+    UI/API use, so a CLI add/remove is exactly as durable as a Sources-panel change."""
+    from app.core.roots import add_conflict, load_roots, save_roots
+
+    if args.roots_action == "list":
+        roots = load_roots(settings)
+        if not roots:
+            print("No roots configured."); return 0
+        for r in roots:
+            flags = []
+            if not r["enabled"]:
+                flags.append("disabled")
+            if r["assets"]:
+                flags.append("assets")
+            if not r["exists"]:
+                flags.append("MISSING ON DISK")
+            suffix = f"  [{', '.join(flags)}]" if flags else ""
+            print(f"{r['path']}{suffix}")
+        return 0
+
+    roots = load_roots(settings)
+    by_path = {r["path"]: r for r in roots}
+
+    if args.roots_action == "add":
+        from pathlib import Path
+        p = str(Path(args.path).expanduser().resolve())
+        if not Path(p).is_dir():
+            print(f"error: {p} is not a directory"); return 2
+        conflict = add_conflict(roots, Path(p))
+        if conflict:
+            print(f"error: {conflict}")
+            return 0 if conflict.startswith("already configured") else 2
+        roots.append({"path": p, "enabled": not args.disabled, "assets": args.assets})
+        save_roots(settings, roots)
+        print(f"added: {p}{'  [assets]' if args.assets else ''}{'  [disabled]' if args.disabled else ''}")
+        return 0
+
+    if args.roots_action in ("remove", "enable", "disable"):
+        from pathlib import Path
+        p = str(Path(args.path).expanduser().resolve())
+        if p not in by_path:
+            print(f"error: {p} is not a configured root (see `synapse roots list`)"); return 2
+        if args.roots_action == "remove":
+            roots = [r for r in roots if r["path"] != p]
+            save_roots(settings, roots)
+            print(f"removed: {p} (its notes are pruned on the next ingest, not deleted now)")
+        else:
+            by_path[p]["enabled"] = (args.roots_action == "enable")
+            save_roots(settings, roots)
+            print(f"{args.roots_action}d: {p}")
+        return 0
+
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,6 +332,34 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("archive")
     p.add_argument("--force", action="store_true",
                    help="overwrite an existing vault (default: refuse)")
+    p = sub.add_parser("roots", help="manage the source-roots list (list|add|remove|enable|disable)")
+    rsub = p.add_subparsers(dest="roots_action", required=True)
+    rsub.add_parser("list", help="show every configured root")
+    ra = rsub.add_parser("add", help="add a new root")
+    ra.add_argument("path")
+    ra.add_argument("--assets", action="store_true", help="also sync images/PDFs as sidecar notes")
+    ra.add_argument("--disabled", action="store_true", help="add it OFF (won't ingest until enabled)")
+    for name in ("remove", "enable", "disable"):
+        rp = rsub.add_parser(name)
+        rp.add_argument("path")
+    p = sub.add_parser("classes", help="graph visual vocabulary — colour/shape/size per node class")
+    csub = p.add_subparsers(dest="classes_action", required=True)
+    csub.add_parser("list", help="show every class, in match order")
+    csub.add_parser("reset", help="restore the built-in defaults")
+    cr = csub.add_parser("remove"); cr.add_argument("id")
+    for name in ("add", "set"):
+        cp = csub.add_parser(name)
+        cp.add_argument("id")
+        cp.add_argument("--label")
+        cp.add_argument("--color", help="any CSS colour, e.g. '#e0a33e'")
+        cp.add_argument("--shape", help="circle|square|diamond|triangle|star|hexagon")
+        cp.add_argument("--size", type=float, help="radius multiplier, e.g. 2.4 for a root")
+        cp.add_argument("--path-contains", dest="path_contains")
+        cp.add_argument("--name-contains", dest="name_contains")
+        cp.add_argument("--tag")
+        if name == "add":
+            cp.add_argument("--last", action="store_true",
+                            help="append instead of inserting first (first match wins)")
     args = parser.parse_args(argv)
 
     settings = load_settings()
@@ -208,7 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command in simple:
         return simple[args.command](settings)
     return {"query": cmd_query, "path": cmd_path, "explain": cmd_explain,
-            "hook": cmd_hook, "watch": cmd_watch,
+            "hook": cmd_hook, "watch": cmd_watch, "roots": cmd_roots,
+            "classes": cmd_classes,
             "export": cmd_export, "import": cmd_import}[args.command](settings, args)
 
 
