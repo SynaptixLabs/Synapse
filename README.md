@@ -25,9 +25,9 @@ your brain knows.
 
 - **▶ [Watch the 60-second tour](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)** — narrated, captioned, recorded against the real app ([full 5:35 video, 16 chapters](docs/tour/README.md) builds from this repo).
 - **🖱 [Open the interactive guided tour](https://synaptixlabs.github.io/Synapse/tour/out/tutorial.html)** — a self-contained, click-through walkthrough of search, vocabulary, evidence, connections, paths, and ghosts. No install, runs in your browser.
-- **⌨ Run it on your own repos:** `./start.sh` → explorer at `localhost:5173` — the screenshot below is the default self-ingested brain a fresh clone gives you.
+- **⌨ Run it on your own repos:** `./start.sh` → explorer at `localhost:5173` — a fresh clone ships with its own repo already ingested.
 
-![The SYNAPSE explorer on its own repository — the default self-ingested brain a fresh clone gives you; point Sources at your own repos to grow it](docs/screenshots/explorer-hero.png)
+[![14 seconds of the guided tour — the real explorer driving search, evidence and connections. Click for the full narrated 60-second cut, with sound and captions.](docs/media/synapse-guided-tour-preview.gif)](https://synaptixlabs.github.io/Synapse/media/synapse-guided-tour-social-60s.mp4)
 
 ## The loop
 
