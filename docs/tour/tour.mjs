@@ -39,7 +39,19 @@ mkdirSync(FRAMES, { recursive: true });
 const stats = await (await fetch(`${API}/api/v1/stats`)).json();
 const graph = await (await fetch(`${API}/api/v1/graph`)).json();
 const classes = await (await fetch(`${API}/api/v1/node-classes`)).json();
+const roots = await (await fetch(`${API}/api/v1/roots`)).json();
 const notes = graph.nodes.filter((n) => n.kind === 'note');
+
+const rootLabel = (p) => String(p).split(/[\\/]/).filter(Boolean).slice(-2).join('/');
+const enabledRoots = roots.filter((r) => r.enabled).map((r) => ({
+  label: rootLabel(r.path),
+  assets: Boolean(r.assets),
+}));
+if (!enabledRoots.length) throw new Error('Tour requires at least one enabled source root.');
+const spokenRoots = enabledRoots.map((r) => r.label.replaceAll('/', ' slash ').replace(/\bKB\b/g, 'K B'));
+const spokenRootList = spokenRoots.length === 1
+  ? spokenRoots[0]
+  : `${spokenRoots.slice(0, -1).join(', ')}, and ${spokenRoots.at(-1)}`;
 
 const byPath = (re) => graph.nodes.filter((n) => re.test(n.source_path || ''));
 const first = (re) => byPath(re)[0];
@@ -93,11 +105,11 @@ const dwellFor = (text) => Math.max(4200, Math.round((text.split(/\s+/).length /
 async function beat(id, title, text, action, beforeShot) {
   const t_start = at();
   process.stdout.write(`  ${String(beats.length + 1).padStart(2, '0')} ${id} … `);
-  try { if (action) await action(); } catch (e) { console.log(`(step failed: ${e.message})`); }
+  if (action && await action() === false) throw new Error(`Tour action returned false: ${id}`);
   await wait(dwellFor(text));
   // Re-assert the pose right before the still: a hover set 20 seconds ago may no longer be
   // under the cursor, and a frame that shows the aftermath teaches nothing.
-  try { if (beforeShot) await beforeShot(); } catch { /* the still is still worth taking */ }
+  if (beforeShot && await beforeShot() === false) throw new Error(`Tour pose failed: ${id}`);
   const frame = `${String(beats.length + 1).padStart(2, '0')}-${id}.png`;
   await page.screenshot({ path: join(FRAMES, frame) });
   const t_end = at();
@@ -152,6 +164,11 @@ async function hoverNode(id, settle = 900) {
   return true;
 }
 
+async function hoverFirst(nodes, settle) {
+  for (const node of nodes) if (node && await hoverNode(node.id, settle)) return true;
+  return false;
+}
+
 async function zoomAt(id, clicks, step = 130) {
   const p = (await screenOf(id)) || { x: (await canvasBox()).x + W / 3, y: (await canvasBox()).y + H / 2 };
   await page.mouse.move(p.x, p.y, { steps: 12 });
@@ -190,10 +207,10 @@ await wait(5200);   // let the force simulation settle into its shape
 
 const topHub = stats.top_connected?.[0];
 
-await beat('open', 'A second brain for your repos',
-  `This is every markdown file across our repositories, in one graph. ${stats.notes} notes, ${stats.edges_total} edges, `
-  + `built from the files themselves — no database, no manual tagging. Each document became a node, and each reference between `
-  + `documents became an edge.`);
+await beat('open', 'A second brain for the knowledge you choose',
+  `This run maps ${enabledRoots.length} configured source root${enabledRoots.length === 1 ? '' : 's'}: ${spokenRootList}. `
+  + `Its ${stats.notes} notes and ${stats.edges_total} edges come from ${enabledRoots.length === 1 ? 'that source' : 'those sources'}, `
+  + `not the whole workspace. Synapse can ingest one root or several.`);
 
 await beat('vocabulary', 'Colour and shape are a vocabulary',
   `Open the glossary and the graph starts speaking. Hue alone would only tell you which repository a note came from — useless `
@@ -203,7 +220,7 @@ await beat('vocabulary', 'Colour and shape are a vocabulary',
 
 await beat('legend-scan', 'Every type, with a live count',
   `These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, `
-  + `LinkedIn cards, videos, interactive bundles. Nothing here was configured by hand for the demo.`,
+  + `LinkedIn cards, videos, interactive bundles. The tour reads the same live legend the application uses.`,
   async () => { await page.hover('#drawer'); await wait(600); });
 
 await beat('close-drawer', 'Back to the map',
@@ -218,12 +235,12 @@ await beat('search', 'Search is how you arrive',
 await beat('article-root', 'The gold star is an article',
   `This is an article root. Hover any node and the graph tells you what it is, where it came from, and how connected it is. `
   + `Around it sit the things that belong to it.`,
-  async () => { await hoverNode(ARTICLE, 1400); },
-  async () => { await hoverNode(ARTICLE, 700); });
+  async () => hoverNode(ARTICLE, 1400),
+  async () => hoverNode(ARTICLE, 700));
 
 await beat('zoom-in', 'Zoom is semantic, not cosmetic',
   `Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — `
-  + `so the map stays readable at 254 notes and at 21,000.`,
+  + `so the map stays readable as the selected knowledge grows.`,
   async () => { await zoomAt(ARTICLE, 5); });
 
 const liPost = nbr(/\/posts\/.*(linkedin|-li-)/i) || first(/\/posts\/.*(linkedin|-li-)/i);
@@ -234,19 +251,25 @@ const redditPost = nbr(/\/posts\/.*reddit/i) || first(/\/posts\/.*reddit/i);
  *  one a multi-select search uses. Without it these beats describe a cluster the viewer is not
  *  actually looking at. */
 const frameCluster = async (ids) => {
-  await page.evaluate((list) => window.__synapseFit?.(list), [ARTICLE, ...ids].filter(Boolean));
+  const framed = await page.evaluate((list) => {
+    if (typeof window.__synapseFit !== 'function') return false;
+    window.__synapseFit(list);
+    return true;
+  }, [ARTICLE, ...ids].filter(Boolean));
+  if (!framed) return false;
   await wait(1600);
+  return true;
 };
 
 await beat('posts', 'Squares are posts, one colour per channel',
   `The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own `
-  + `file, linked back to the article it came from. You can see at a glance which article was actually distributed and where.`,
+  + `file, linked back to the article it came from. You can see at a glance which articles have channel-specific post records.`,
   async () => {
-    await frameCluster(neighbourIds.filter((id) => /\/posts\//.test(
-      graph.nodes.find((n) => n.id === id)?.source_path || '')).map((id) => id));
-    for (const p of [liPost, xPost, redditPost]) if (p) await hoverNode(p.id, 1600);
+    if (!await frameCluster(neighbourIds.filter((id) => /\/posts\//.test(
+      graph.nodes.find((n) => n.id === id)?.source_path || '')).map((id) => id))) return false;
+    return hoverFirst([liPost, xPost, redditPost], 1600);
   },
-  async () => { for (const p of [liPost, xPost, redditPost]) if (p && await hoverNode(p.id, 700)) break; });
+  async () => hoverFirst([liPost, xPost, redditPost], 700));
 
 const hero = sat(/hero/i) || first(/hero/i);
 const interactive = sat(/\.html$/i) || first(/\.html$/i);
@@ -257,10 +280,10 @@ await beat('media', 'Media are nodes too — not attachments',
   + `because the reference was resolved at ingest, not guessed at render time. What you see and what the graph links `
   + `are the same file.`,
   async () => {
-    await frameCluster(satellites);
-    for (const m of [hero, interactive, carousel]) if (m) await hoverNode(m.id, 1600);
+    if (!await frameCluster(satellites)) return false;
+    return hoverFirst([hero, interactive, carousel], 1600);
   },
-  async () => { for (const m of [interactive, hero, carousel]) if (m && await hoverNode(m.id, 700)) break; });
+  async () => hoverFirst([interactive, hero, carousel], 700));
 
 await beat('pan', 'Drag to pan, drag a node to place it',
   `Drag empty space to pan the map. Drag a node instead and it stays where you put it — the layout is yours to arrange, `
@@ -326,7 +349,7 @@ await beat('path', 'Ask how two ideas connect',
     if (endId) await clickNode(endId);
     await wait(1600);
     const drawn = await page.evaluate(() => window.__synapse?.graph?.().path?.length ?? 0);
-    if (!drawn) console.log('(no path drawn — reported, not hidden) ');
+    if (!drawn) throw new Error('Path chapter could not draw a route — refusing to record the claim.');
   });
 
 await beat('ghosts', 'Honest about what is missing',
@@ -340,7 +363,8 @@ await beat('ghosts', 'Honest about what is missing',
 
 await beat('close', 'The vault is the truth',
   `Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown `
-  + `away at any time. Point it at your own repositories and the same map appears — for whatever you already wrote.`,
+  + `away at any time. Point Synapse at one repository root or several, and it builds the same kind of map from the knowledge `
+  + `you choose.`,
   async () => {
     await page.evaluate(() => window.toggleGhosts?.());
     await wait(600);
@@ -392,7 +416,13 @@ writeFileSync(join(OUT, 'narration.md'),
 
 writeFileSync(join(OUT, 'beats.json'), JSON.stringify({
   generated: new Date(T0).toISOString(),
-  brain: { notes: stats.notes, edges: stats.edges_total, repos: stats.repos, classes: classes.length },
+  brain: { notes: stats.notes, edges: stats.edges_total, display_groups: stats.repos, classes: classes.length },
+  scope: {
+    root_count: enabledRoots.length,
+    configured_roots: enabledRoots,
+    statement: `This recorded run indexes ${enabledRoots.length} configured source root${enabledRoots.length === 1 ? '' : 's'}.`,
+  },
+  node_classes: classes,
   featured: { id: ARTICLE, stem: articleStem, media_edges: satellites.length },
   video, width: W, height: H, duration: beats.at(-1)?.t_end ?? 0,
   beats,

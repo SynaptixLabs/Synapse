@@ -1,13 +1,13 @@
 # SYNAPSE — tour narration
 
 > Generated 2026-08-04T21:24:24.674Z against a live brain of **254 notes / 554 edges**, featuring `ai-in-2026-from-zero-to-agents`.
-> Timings are the recorded video's clock. Read at ~2.6 words/second to stay in sync.
+> Scope: **1 configured source root — `website/KB`**. Timings are the recorded video's clock.
 
-## 1. A second brain for your repos
+## 1. A second brain for the knowledge you choose
 
-`00:00:05.395 → 00:00:20.531` · 39 words · frame `01-open.png`
+`00:00:05.395 → 00:00:20.531` · 33 words · frame `01-open.png`
 
-This is every markdown file across our repositories, in one graph. 254 notes, 554 edges, built from the files themselves — no database, no manual tagging. Each document became a node, and each reference between documents became an edge.
+This run maps one configured source root: website slash K B. Its 254 notes and 554 edges come from that knowledge base, not the whole workspace. Synapse can ingest one root or several.
 
 ## 2. Colour and shape are a vocabulary
 
@@ -17,9 +17,9 @@ Open the glossary and the graph starts speaking. Hue alone would only tell you w
 
 ## 3. Every type, with a live count
 
-`00:00:48.923 → 00:01:05.181` · 33 words · frame `03-legend-scan.png`
+`00:00:48.923 → 00:01:05.181` · 34 words · frame `03-legend-scan.png`
 
-These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, LinkedIn cards, videos, interactive bundles. Nothing here was configured by hand for the demo.
+These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, LinkedIn cards, videos, interactive bundles. The tour reads the same live legend the application uses.
 
 ## 4. Back to the map
 
@@ -41,15 +41,15 @@ This is an article root. Hover any node and the graph tells you what it is, wher
 
 ## 7. Zoom is semantic, not cosmetic
 
-`00:01:45.159 → 00:01:59.750` · 35 words · frame `07-zoom-in.png`
+`00:01:45.159 → 00:01:59.750` · 34 words · frame `07-zoom-in.png`
 
-Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — so the map stays readable at 254 notes and at 21,000.
+Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — so the map stays readable as the selected knowledge grows.
 
 ## 8. Squares are posts, one colour per channel
 
-`00:01:59.751 → 00:02:28.765` · 45 words · frame `08-posts.png`
+`00:01:59.751 → 00:02:28.765` · 44 words · frame `08-posts.png`
 
-The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own file, linked back to the article it came from. You can see at a glance which article was actually distributed and where.
+The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own file, linked back to the article it came from. You can see at a glance which articles have channel-specific post records.
 
 ## 9. Media are nodes too — not attachments
 
@@ -95,6 +95,6 @@ A link pointing at nothing is not hidden. Ghosts draws every unresolved referenc
 
 ## 16. The vault is the truth
 
-`00:04:57.511 → 00:05:17.013` · 43 words · frame `16-close.png`
+`00:04:57.511 → 00:05:17.013` · 47 words · frame `16-close.png`
 
-Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown away at any time. Point it at your own repositories and the same map appears — for whatever you already wrote.
+Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown away at any time. Point Synapse at one repository root or several, and it builds the same kind of map from the knowledge you choose.

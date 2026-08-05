@@ -16,9 +16,11 @@ const OUT = join(HERE, 'out');
 const manifest = JSON.parse(readFileSync(join(OUT, 'beats.json'), 'utf8'));
 const vtt = existsSync(join(OUT, 'captions.vtt')) ? readFileSync(join(OUT, 'captions.vtt'), 'utf8') : '';
 
-let classes = [];
-try { classes = await (await fetch('http://localhost:8000/api/v1/node-classes')).json(); }
-catch { console.log('  (backend down — legend omitted)'); }
+let classes = manifest.node_classes || [];
+if (!classes.length) {
+  try { classes = await (await fetch('http://localhost:8000/api/v1/node-classes')).json(); }
+  catch { console.log('  (backend down and manifest has no node classes — legend omitted)'); }
+}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -136,14 +138,15 @@ const html = `<title>SYNAPSE — a guided tour of a repo second brain</title>
 <div class="wrap">
   <header>
     <p class="eyebrow">SYNAPSE · guided tour</p>
-    <h1>Every markdown file you have ever written, as one map</h1>
-    <p class="sub">A recorded walk through a real second brain — ${manifest.brain.notes} notes pulled out of
-    our own repositories. Nothing here is a mock-up: a browser drove the actual app, and these are the frames
-    it captured.</p>
+    <h1>A living map of the knowledge you choose</h1>
+    <p class="sub">A recorded walk through a real second brain built from one configured source root:
+    <b>${esc(manifest.scope?.configured_roots?.[0]?.label || 'website/KB')}</b>. Synapse can ingest one repository
+    root or several. Nothing here is a mock-up: a browser drove the actual app, and these are the frames it captured.</p>
     <div class="facts">
       <span><b>${manifest.brain.notes}</b> notes</span>
       <span><b>${manifest.brain.edges}</b> edges</span>
       <span><b>${manifest.brain.classes}</b> node classes</span>
+      <span><b>${manifest.scope?.root_count ?? 1}</b> configured source root</span>
       <span><b>${beats.length}</b> chapters</span>
       <span><b>${mmss(total)}</b> run time</span>
       <span>featuring <b>${esc(manifest.featured.stem)}</b></span>
@@ -183,9 +186,8 @@ const html = `<title>SYNAPSE — a guided tour of a repo second brain</title>
   </div>` : ''}
 
   <h3 class="section">Narration</h3>
-  <p style="max-width:68ch;color:var(--dim);font-size:.93rem">Each chapter's text is the script, paced at
-  about 2.6 words per second. The WebVTT below is aligned to the recording's clock, so it can be attached to
-  the video as a subtitle track or handed to a voice-over as-is.</p>
+  <p style="max-width:68ch;color:var(--dim);font-size:.93rem">Each chapter's text is the narration script.
+  The WebVTT below is aligned to the recording's clock and is retained in the narrated video master.</p>
   <details>
     <summary>captions.vtt — ${vtt.split('\n\n').length - 1} cues, aligned to the video</summary>
     <pre>${esc(vtt)}</pre>
@@ -206,36 +208,52 @@ const html = `<title>SYNAPSE — a guided tour of a repo second brain</title>
   const imgs = [...document.querySelectorAll('.shot img')];
   const items = [...document.querySelectorAll('#rail li')];
   const $ = (id) => document.getElementById(id);
-  let cur = 0, playing = false, timer = null;
+  let cur = 0, playing = false, frame = null;
+  let position = BEATS[0].t, startedAt = 0;
 
   const mmss = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
-  function show(i, { scroll = true } = {}) {
+  function renderProgress() {
+    $('bar').style.width = (position / TOTAL * 100) + '%';
+    $('clock').textContent = mmss(position) + ' / ' + mmss(TOTAL);
+  }
+
+  function show(i, { scroll = true, at = null } = {}) {
     cur = (i + BEATS.length) % BEATS.length;
+    position = typeof at === 'number' ? at : BEATS[cur].t;
     imgs.forEach((im, n) => im.classList.toggle('hidden', n !== cur));
     items.forEach((li, n) => li.setAttribute('aria-current', String(n === cur)));
     $('ct').textContent = BEATS[cur].title;
     $('cp').textContent = BEATS[cur].text;
-    $('bar').style.width = (BEATS[cur].e / TOTAL * 100) + '%';
-    $('clock').textContent = mmss(BEATS[cur].t) + ' / ' + mmss(TOTAL);
+    renderProgress();
     if (scroll) items[cur].scrollIntoView({ block: 'nearest' });
   }
 
-  function stop() { playing = false; clearTimeout(timer); $('play').textContent = '▶ Play'; }
-  function tick() {
-    // advance using each chapter's REAL recorded duration, so reading pace matches the video
-    const dur = (BEATS[cur].e - BEATS[cur].t) * 1000;
-    timer = setTimeout(() => {
-      if (!playing) return;
-      if (cur === BEATS.length - 1) return stop();
-      show(cur + 1); tick();
-    }, dur);
+  function stop() {
+    playing = false;
+    cancelAnimationFrame(frame);
+    frame = null;
+    $('play').textContent = '▶ Play';
+    $('play').setAttribute('aria-label', 'Play the tour');
+  }
+  function tick(now) {
+    if (!playing) return;
+    position = Math.min(TOTAL, (now - startedAt) / 1000);
+    let next = cur;
+    while (next < BEATS.length - 1 && position >= BEATS[next].e) next++;
+    if (next !== cur) show(next, { at: position });
+    else renderProgress();
+    if (position >= TOTAL) return stop();
+    frame = requestAnimationFrame(tick);
   }
   function play() {
     if (playing) return stop();
-    playing = true; $('play').textContent = '❚❚ Pause';
-    if (cur === BEATS.length - 1) show(0);
-    tick();
+    if (position >= TOTAL) show(0);
+    playing = true;
+    $('play').textContent = '❚❚ Pause';
+    $('play').setAttribute('aria-label', 'Pause the tour');
+    startedAt = performance.now() - position * 1000;
+    frame = requestAnimationFrame(tick);
   }
 
   $('prev').onclick = () => { stop(); show(cur - 1); };

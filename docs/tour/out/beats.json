@@ -3,8 +3,18 @@
   "brain": {
     "notes": 254,
     "edges": 554,
-    "repos": 2,
+    "display_groups": 2,
     "classes": 21
+  },
+  "scope": {
+    "root_count": 1,
+    "configured_roots": [
+      {
+        "label": "website/KB",
+        "assets": true
+      }
+    ],
+    "statement": "This recorded run indexes 1 configured source root."
   },
   "featured": {
     "id": "KB__marketing__articles__ai-in-2026-from-zero-to-agents.md",
@@ -18,8 +28,8 @@
   "beats": [
     {
       "id": "open",
-      "title": "A second brain for your repos",
-      "text": "This is every markdown file across our repositories, in one graph. 254 notes, 554 edges, built from the files themselves — no database, no manual tagging. Each document became a node, and each reference between documents became an edge.",
+      "title": "A second brain for the knowledge you choose",
+      "text": "This run maps one configured source root: website slash K B. Its 254 notes and 554 edges come from that knowledge base, not the whole workspace. Synapse can ingest one root or several.",
       "t_start": 5.395,
       "t_end": 20.531,
       "frame": "01-open.png"
@@ -35,7 +45,7 @@
     {
       "id": "legend-scan",
       "title": "Every type, with a live count",
-      "text": "These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, LinkedIn cards, videos, interactive bundles. Nothing here was configured by hand for the demo.",
+      "text": "These counts are live. Whatever this brain currently holds is what the legend reports — hero images, carousel slides, LinkedIn cards, videos, interactive bundles. The tour reads the same live legend the application uses.",
       "t_start": 48.923,
       "t_end": 65.181,
       "frame": "03-legend-scan.png"
@@ -67,7 +77,7 @@
     {
       "id": "zoom-in",
       "title": "Zoom is semantic, not cosmetic",
-      "text": "Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — so the map stays readable at 254 notes and at 21,000.",
+      "text": "Scroll to zoom. On a big brain the canvas shows the most-connected window first and reveals the long tail as you go in — so the map stays readable as the selected knowledge grows.",
       "t_start": 105.159,
       "t_end": 119.75,
       "frame": "07-zoom-in.png"
@@ -75,7 +85,7 @@
     {
       "id": "posts",
       "title": "Squares are posts, one colour per channel",
-      "text": "The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own file, linked back to the article it came from. You can see at a glance which article was actually distributed and where.",
+      "text": "The squares are social posts, and the colour is the channel — LinkedIn blue, X grey, Reddit orange. Each one is its own file, linked back to the article it came from. You can see at a glance which articles have channel-specific post records.",
       "t_start": 119.751,
       "t_end": 148.765,
       "frame": "08-posts.png"
@@ -139,10 +149,227 @@
     {
       "id": "close",
       "title": "The vault is the truth",
-      "text": "Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown away at any time. Point it at your own repositories and the same map appears — for whatever you already wrote.",
+      "text": "Everything here is derived. The notes are plain markdown on your disk; the graph is rebuilt from them and can be thrown away at any time. Point Synapse at one repository root or several, and it builds the same kind of map from the knowledge you choose.",
       "t_start": 297.511,
       "t_end": 317.013,
       "frame": "16-close.png"
+    }
+  ],
+  "node_classes": [
+    {
+      "id": "media-interactive",
+      "label": "Media — interactive",
+      "color": "#4bd6a4",
+      "shape": "star",
+      "size": 1.5,
+      "match": {
+        "tag": "asset:interactive"
+      }
+    },
+    {
+      "id": "media-audio",
+      "label": "Media — audio",
+      "color": "#c08fd6",
+      "shape": "triangle",
+      "size": 1,
+      "match": {
+        "tag": "asset:audio"
+      }
+    },
+    {
+      "id": "media-video",
+      "label": "Media — video",
+      "color": "#e0507a",
+      "shape": "hexagon",
+      "size": 1.35,
+      "match": {
+        "tag": "asset:video"
+      }
+    },
+    {
+      "id": "article",
+      "label": "Article (root)",
+      "color": "#e0a33e",
+      "shape": "star",
+      "size": 1.4,
+      "match": {
+        "path_contains": "/articles/"
+      }
+    },
+    {
+      "id": "post-linkedin",
+      "label": "Post — LinkedIn",
+      "color": "#3b82c4",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "linkedin"
+      }
+    },
+    {
+      "id": "post-li-short",
+      "label": "Post — LinkedIn (li-*)",
+      "color": "#3b82c4",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "-li-"
+      }
+    },
+    {
+      "id": "post-x",
+      "label": "Post — X",
+      "color": "#8b8f96",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "-x"
+      }
+    },
+    {
+      "id": "post-reddit",
+      "label": "Post — Reddit",
+      "color": "#e06a3b",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "reddit"
+      }
+    },
+    {
+      "id": "post-carousel",
+      "label": "Post — carousel",
+      "color": "#7f6bd6",
+      "shape": "square",
+      "size": 1.15,
+      "match": {
+        "path_contains": "/posts/",
+        "name_contains": "carousel"
+      }
+    },
+    {
+      "id": "post",
+      "label": "Post — other channel",
+      "color": "#5aa9a2",
+      "shape": "square",
+      "size": 1.05,
+      "match": {
+        "path_contains": "/posts/"
+      }
+    },
+    {
+      "id": "media-manifest",
+      "label": "Media manifest",
+      "color": "#b85fa8",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "MEDIA.md"
+      }
+    },
+    {
+      "id": "media-hero",
+      "label": "Media — hero",
+      "color": "#d98b2b",
+      "shape": "star",
+      "size": 1.1,
+      "match": {
+        "name_contains": "hero"
+      }
+    },
+    {
+      "id": "media-carousel",
+      "label": "Media — carousel (PDF)",
+      "color": "#c0504d",
+      "shape": "hexagon",
+      "size": 1.05,
+      "match": {
+        "name_contains": "carousel"
+      }
+    },
+    {
+      "id": "media-slide",
+      "label": "Media — carousel slide",
+      "color": "#d9a05b",
+      "shape": "square",
+      "size": 0.9,
+      "match": {
+        "name_contains": "-slide-"
+      }
+    },
+    {
+      "id": "media-card-li",
+      "label": "Media — LinkedIn card",
+      "color": "#3b82c4",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "-li-"
+      }
+    },
+    {
+      "id": "media-card-x",
+      "label": "Media — X card",
+      "color": "#8b8f96",
+      "shape": "diamond",
+      "size": 1.1,
+      "match": {
+        "name_contains": "-x-"
+      }
+    },
+    {
+      "id": "media-endcard",
+      "label": "Media — end card",
+      "color": "#4bb3a4",
+      "shape": "diamond",
+      "size": 1,
+      "match": {
+        "name_contains": "end-card"
+      }
+    },
+    {
+      "id": "media-cartoon",
+      "label": "Media — cartoon / scene",
+      "color": "#9b7fd6",
+      "shape": "triangle",
+      "size": 1.1,
+      "match": {
+        "name_contains": "cartoon"
+      }
+    },
+    {
+      "id": "asset-image",
+      "label": "Image (other)",
+      "color": "#5fa85f",
+      "shape": "triangle",
+      "size": 0.95,
+      "match": {
+        "tag": "asset:image"
+      }
+    },
+    {
+      "id": "asset-pdf",
+      "label": "PDF (other)",
+      "color": "#c05050",
+      "shape": "triangle",
+      "size": 0.95,
+      "match": {
+        "tag": "asset:pdf"
+      }
+    },
+    {
+      "id": "index",
+      "label": "Index / front door",
+      "color": "#4bb3c4",
+      "shape": "hexagon",
+      "size": 1.3,
+      "match": {
+        "name_contains": "INDEX.md"
+      }
     }
   ]
 }
