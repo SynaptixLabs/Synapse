@@ -1052,3 +1052,78 @@ $('typebar').addEventListener('click', (ev) => {
   if (pill.dataset.type) toggleType(pill.dataset.type);
   else if (pill.dataset.regroup) toggleAssetsGroup();
 });
+
+// ── Project switcher (sprint 06 R5 · founder ask: "Switch should be in GUI also") ────────────
+//
+// Kit: project-management/ui_kit/explorer/project-switcher.html
+//
+// The active project lives SERVER-side (data/active-project), not in localStorage, so the UI,
+// the CLI (`synapse --project`) and the MCP server all agree about which brain is open. A switch
+// here is a switch everywhere. That also means the correct thing after a switch is a full reload:
+// the whole page — graph, index, reader, search, glossary — is derived from one brain, and
+// hand-patching each surface would leave one of them showing the previous one.
+let _projects = [];
+
+async function loadProjects() {
+  try {
+    _projects = await api('/projects');
+    const { active } = await api('/projects/active');
+    const cur = _projects.find((p) => p.slug === active);
+    const btn = document.getElementById('projName');
+    if (btn) btn.textContent = cur ? cur.name : (_projects.length ? 'pick a project' : 'no projects');
+    renderProjects(active);
+  } catch {
+    const btn = document.getElementById('projName');
+    if (btn) btn.textContent = 'unavailable';   // backend down — say so, don't show a stale name
+  }
+}
+
+function renderProjects(active) {
+  const menu = document.getElementById('projMenu');
+  if (!menu) return;
+  if (!_projects.length) {
+    menu.innerHTML = '<div class="proj-opt"><span class="nm muted">No projects yet</span></div>';
+    return;
+  }
+  menu.innerHTML = _projects.map((p) => {
+    // An un-ingested brain says so. Rendering it as an empty graph is indistinguishable from a
+    // working brain that happens to be empty — the one confusion this control could create.
+    const ct = p.has_graph
+      ? `${p.roots} root${p.roots === 1 ? '' : 's'}`
+      : '<span class="warn">not ingested</span>';
+    return `<div class="proj-opt" role="option" data-proj="${esc(p.slug)}"
+                 aria-selected="${p.slug === active}">
+              <span class="nm">${esc(p.name)}</span><span class="ct">${ct}</span>
+            </div>`;
+  }).join('');
+}
+
+window.toggleProjects = () => {
+  const menu = document.getElementById('projMenu');
+  const btn = document.getElementById('projBtn');
+  if (!menu) return;
+  const open = menu.hasAttribute('hidden');
+  menu.toggleAttribute('hidden', !open);
+  btn?.setAttribute('aria-expanded', String(open));
+};
+
+window.switchProject = async (slug) => {
+  const cur = document.getElementById('projName')?.textContent;
+  try {
+    const p = await api(`/projects/${encodeURIComponent(slug)}/activate`, { method: 'POST' });
+    setMsg(`switched to ${p.name} — reloading`);
+    location.reload();          // one brain per page; see the note above
+  } catch (e) {
+    setMsg(`could not switch to ${slug}: ${e?.message || e}`);
+    const n = document.getElementById('projName');
+    if (n && cur) n.textContent = cur;
+  }
+};
+
+document.addEventListener('click', (ev) => {
+  const opt = ev.target.closest?.('.proj-opt[data-proj]');
+  if (opt) { window.switchProject(opt.dataset.proj); return; }
+  if (!ev.target.closest?.('.proj')) document.getElementById('projMenu')?.setAttribute('hidden', '');
+});
+
+loadProjects();

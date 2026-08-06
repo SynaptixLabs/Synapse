@@ -86,13 +86,13 @@ Two figures I wrote were wrong and one of them was load-bearing:
       single byte inside a source root.
       *Evidence:* unit tests incl. a delete-refusal case and a traversal attempt.
 
-- [ ] **R3 — re-parent roots under projects** (~15V) · blocked_by R2
+- [x] **R3 — re-parent roots under projects** (~15V) · `dev_done` · `2febccb`
       `roots.json` moves inside the project record; `POST /roots` gains a required project (attach)
       or creates one (update-or-create, per the ruling). The existing root contract changes shape —
       every caller found and updated, including the Sources UI and the MCP server.
       *Evidence:* `rg` sweep showing zero callers left on the old shape; unit tests.
 
-- [ ] **R4 — INIT: attach the current roots, then re-ingest per project** (~8V, was ~20V) · blocked_by R3
+- [x] **R4 — INIT: attach the current roots, then re-ingest per project** (~8V) · `dev_done` · `2febccb` · website 352/810 == pre-INIT backup
       Per the ruling, a one-shot INIT: create Website · Nexus · HappySeniors, attach today's three
       roots, re-ingest each project. The graph is derived, so it is regenerated per project, not
       split. **Carry `✦ summaries` across explicitly** — they are paid model output that no
@@ -102,7 +102,7 @@ Two figures I wrote were wrong and one of them was load-bearing:
       *Evidence:* before/after counts in `reports/`; the copy run precedes the real run; summary
       count identical after.
 
-- [ ] **R5 — project selector in the explorer** (~10V) · blocked_by R2 · **UI — kit first (Epic V)**
+- [x] **R5 — project selector in the explorer** (~10V) · `dev_done` · kit + real-Chromium E2E
       Choose which project(s) are in view; selection persists across reloads; the statusbar names
       the active projects and their counts honestly.
       *Evidence:* real-Chromium E2E (`page.goto()`), screenshots in `tests/screenshots/`.

@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field
 
 from app.core.config import load_settings
 from app.core.projects import (
-    ProjectError, create_project, delete_project, get_project, load_projects,
-    rename_project, settings_for,
+    ProjectError, create_project, delete_project, get_active, get_project, load_projects,
+    rename_project, set_active, settings_for,
 )
 from app.core.roots import load_roots
 
@@ -69,6 +69,28 @@ def list_projects() -> list[dict]:
         return [_describe(settings, p) for p in load_projects(settings)]
     except ProjectError as e:
         raise _err(e) from e
+
+
+@router.get("/projects/active")
+def read_active() -> dict:
+    """Which brain reads resolve to right now. Declared BEFORE `/projects/{slug}` — FastAPI
+    matches in declaration order, and `active` would otherwise be swallowed as a slug."""
+    settings = load_settings()
+    slug = get_active(settings)
+    return {"active": slug}
+
+
+@router.post("/projects/{slug}/activate")
+def activate_project(slug: str) -> dict:
+    """Switch the active brain. Server-side on purpose: the UI, the CLI and the MCP server all
+    read through this, so a switch in one is a switch everywhere rather than one client's
+    localStorage disagreeing with the others."""
+    settings = load_settings()
+    try:
+        set_active(settings, slug)
+    except ProjectError as e:
+        raise _err(e) from e
+    return _describe(settings, get_project(settings, slug))
 
 
 @router.get("/projects/{slug}")

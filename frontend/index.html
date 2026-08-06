@@ -26,6 +26,27 @@
       #sresults .r small { color:var(--dim); margin-left:auto; white-space:nowrap; }
       .mi { color:var(--dim); font-size:0.85rem; cursor:pointer; padding:0.3rem 0.6rem; border-radius:6px; background:none; border:none; font-family:inherit; }
       .mi:hover, .mi.open { background:var(--panel2); color:var(--text); }
+      /* sprint 06 R5 — the project switcher. Kit: project-management/ui_kit/explorer/project-switcher.html
+         Chrome only: adds no colour to the canvas, which already spends colour on repo, shape on
+         node class and dashed/hollow on ghosts. The active brain is named in text, not hued. */
+      .proj { position:relative; }
+      .proj-btn { display:flex; align-items:center; gap:0.45rem; background:var(--panel2);
+                  border:1px solid var(--border); border-radius:8px; color:var(--text);
+                  padding:0.35rem 0.7rem; cursor:pointer; font:inherit; white-space:nowrap; }
+      .proj-btn .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
+      .proj-btn .chev { color:var(--dim); font-size:0.8em; }
+      .proj-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:230px;
+                   background:var(--panel); border:1px solid var(--border); border-radius:10px;
+                   padding:0.3rem; z-index:30; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+      .proj-menu[hidden] { display:none; }
+      .proj-opt { display:flex; align-items:baseline; gap:0.5rem; padding:0.45rem 0.6rem;
+                  border-radius:7px; cursor:pointer; }
+      .proj-opt:hover { background:var(--panel2); }
+      .proj-opt[aria-selected="true"] { background:var(--panel2); }
+      .proj-opt[aria-selected="true"] .nm { color:var(--accent); }
+      .proj-opt .nm { flex:1; }
+      .proj-opt .ct { color:var(--dim); font-size:0.82em; white-space:nowrap; }
+      .proj-opt .ct.warn { color:#e0a458; }
       .topbar .right { margin-left:auto; display:flex; gap:0.3rem; align-items:center; font-size:0.85rem; color:var(--dim); }
       #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
 
@@ -192,6 +213,13 @@
     <div class="topbar">
       <button class="mi mobile-menu" onclick="toggleLhs()">☰</button>
       <b>SYNAPSE<i>.</i></b>
+      <div class="proj">
+        <button class="proj-btn" id="projBtn" onclick="toggleProjects()" title="switch project (brain)"
+                aria-haspopup="listbox" aria-expanded="false">
+          <span class="dot"></span><span id="projName">…</span><span class="chev">▾</span>
+        </button>
+        <div class="proj-menu" id="projMenu" role="listbox" hidden></div>
+      </div>
       <div class="searchwrap">
         <input id="filter" placeholder="/  search notes… (results open here; Enter = top hit)" autocomplete="off" />
         <div id="sresults"></div>
