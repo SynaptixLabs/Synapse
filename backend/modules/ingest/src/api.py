@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.config import load_settings
+from app.core.projects import ProjectError, resolve_scope
 from app.core.roots import add_conflict, load_roots, save_roots
 
 from .services import IngestService, note_repo
@@ -15,13 +16,26 @@ from .services import IngestService, note_repo
 router = APIRouter(prefix="/api/v1", tags=["ingest"])
 
 
+def scoped(project: str | None):
+    """Settings for the requested project (sprint 06 R3).
+
+    Every roots/ingest route resolves its brain here rather than reaching for the global vault.
+    Once this instance has projects, an unscoped call is refused — a root silently landing in
+    whichever brain happened to be default is the failure this prevents."""
+    try:
+        settings, _ = resolve_scope(load_settings(), project)
+    except ProjectError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return settings
+
+
 @router.post("/ingest")
-def ingest() -> dict:
+def ingest(project: str | None = None) -> dict:
     """SYNC the vault to the enabled roots (add/update/prune). Returns the honest report.
     Serialized against concurrent writers (git-hook syncs) by the vault lock."""
     from app.core.roots import asset_root_paths
     from app.core.vault_lock import vault_write_lock
-    settings = load_settings()
+    settings = scoped(project)
     service = IngestService(settings.vault_path, settings.ignore_dirs,
                             settings.companion_media_dir, settings.interactive_prefix)
     managed = {Path(e["path"]).name for e in load_roots(settings)}
@@ -35,16 +49,21 @@ def ingest() -> dict:
 class RootRequest(BaseModel):
     path: str
     toggle: str = "enabled"    # PATCH: which flag to flip — "enabled" | "assets"
+    # sprint 06 R3, founder ruling: a root write MUST name its project scope. On the body, not
+    # the query string — a scope you can forget to send is a scope that lands in the wrong brain.
+    project: str | None = None
+    project_name: str | None = None   # create-and-attach in one act ("or create a new scope")
 
 
 class BulkRequest(BaseModel):
     enabled: bool
+    project: str | None = None
 
 
 @router.post("/roots/bulk")
 def bulk_toggle(req: BulkRequest) -> list[dict]:
     """Select all / deselect all."""
-    settings = load_settings()
+    settings = scoped(req.project)
     entries = load_roots(settings)
     for e in entries:
         e["enabled"] = req.enabled
@@ -107,13 +126,26 @@ def complete_path(q: str = "", base: str | None = None) -> dict:
 
 
 @router.get("/roots")
-def get_roots() -> list[dict]:
-    return load_roots(load_settings())
+def get_roots(project: str | None = None) -> list[dict]:
+    return load_roots(scoped(project))
 
 
 @router.post("/roots")
 def add_root(req: RootRequest) -> list[dict]:
-    settings = load_settings()
+    """Attach a root to a project — or create the project in the same act.
+
+    Founder ruling 2026-08-06: *"NEXT ROOTs MUST add a project scope when updating, or create a
+    new scope."* `project` attaches to an existing one; `project_name` creates and attaches."""
+    from app.core.projects import ProjectError as _PE, create_project
+    settings_root = load_settings()
+    if req.project_name:
+        try:
+            created = create_project(settings_root, req.project_name)
+        except _PE as e:
+            raise HTTPException(status_code=409, detail=str(e)) from e
+        settings = scoped(created.slug)
+    else:
+        settings = scoped(req.project)
     p = Path(req.path).expanduser()
     if not p.is_dir():
         raise HTTPException(status_code=400, detail=f"Not a directory on this machine: {p}")
@@ -132,7 +164,7 @@ def toggle_root(req: RootRequest) -> list[dict]:
     sync this root's images/PDFs as sidecar notes on the next ingest)."""
     if req.toggle not in ("enabled", "assets"):
         raise HTTPException(status_code=422, detail="toggle must be 'enabled' or 'assets'.")
-    settings = load_settings()
+    settings = scoped(req.project)
     entries = load_roots(settings)
     hit = next((e for e in entries if e["path"] == req.path), None)
     if hit is None:
@@ -145,7 +177,7 @@ def toggle_root(req: RootRequest) -> list[dict]:
 @router.delete("/roots")
 def remove_root(req: RootRequest) -> dict:
     """Remove a root AND prune its notes from the vault (no ghost nodes), then report."""
-    settings = load_settings()
+    settings = scoped(req.project)
     entries = load_roots(settings)
     if not any(e["path"] == req.path for e in entries):
         raise HTTPException(status_code=404, detail="No such root.")

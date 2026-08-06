@@ -219,6 +219,90 @@ def rename_project(settings: Settings, slug: str, name: str) -> Project:
     return projects[idx]
 
 
+def resolve_scope(settings: Settings, slug: str | None) -> tuple[Settings, Project | None]:
+    """Which brain does this request act on? (sprint 06 R3 — the project scope.)
+
+    Founder ruling 2026-08-06: *"NEXT ROOTs MUST add a project scope when updating, or create a
+    new scope."* So once this instance has projects, an unscoped write is a bug, not a default —
+    guessing which brain the caller meant is how a root lands in the wrong one.
+
+    The legacy branch exists for exactly one window: after R3 ships and before R4's INIT runs,
+    an installation still has its single pre-project vault and zero projects. Serving it keeps
+    every commit shippable instead of stranding the app between two tasks. Once one project
+    exists the branch is unreachable — INIT is what closes it, permanently.
+    """
+    projects = load_projects(settings)
+    if slug is not None:
+        project = get_project(settings, validate_slug(slug))
+        if project is None:
+            raise ProjectError(f"no such project: {slug}")
+        return settings_for(settings, project.slug), project
+    if projects:
+        names = ", ".join(p.slug for p in projects)
+        raise ProjectError(
+            f"this instance has projects, so a project scope is required — pass one of: {names}"
+        )
+    return settings, None       # pre-INIT: the legacy single vault
+
+
+# ── the active project (sprint 06 R3/R5) ─────────────────────────────────────
+#
+# WRITES must name their scope — the founder ruling is explicit and guessing is how a root lands
+# in the wrong brain. READS are different: the explorer has to open on *something*, and asking
+# the user to pick before showing them anything is a worse product. So reads fall back to an
+# ACTIVE project, persisted server-side so it survives a reload and is shared by the UI, the CLI
+# and the MCP server rather than living in one client's localStorage.
+
+def active_file(settings: Settings) -> Path:
+    return settings.data_dir / "active-project"
+
+
+def get_active(settings: Settings) -> str | None:
+    """The active project slug, or None. Self-healing: a slug that no longer exists (deleted
+    project, hand-edited file) is treated as unset rather than raising at every read."""
+    f = active_file(settings)
+    if not f.is_file():
+        projects = load_projects(settings)
+        return projects[0].slug if len(projects) == 1 else None
+    slug = f.read_text(encoding="utf-8").strip()
+    try:
+        validate_slug(slug)
+    except ProjectError:
+        return None
+    return slug if get_project(settings, slug) else None
+
+
+def set_active(settings: Settings, slug: str) -> str:
+    if get_project(settings, validate_slug(slug)) is None:
+        raise ProjectError(f"no such project: {slug}")
+    f = active_file(settings)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.parent / (f.name + ".tmp")
+    tmp.write_text(slug, encoding="utf-8")
+    os.replace(tmp, f)
+    return slug
+
+
+def resolve_read_scope(settings: Settings, slug: str | None) -> tuple[Settings, str | None]:
+    """Scope for a READ. Explicit slug > active project > (pre-INIT) the legacy vault."""
+    if slug is not None:
+        project = get_project(settings, validate_slug(slug))
+        if project is None:
+            raise ProjectError(f"no such project: {slug}")
+        return settings_for(settings, project.slug), project.slug
+    active = get_active(settings)
+    if active:
+        return settings_for(settings, active), active
+    if load_projects(settings):
+        raise ProjectError("this instance has projects but none is active — pick one")
+    return settings, None
+
+
+def legacy_vault_path(settings: Settings) -> Path:
+    """The pre-project vault (`data/vault`) — INIT's source, and nothing else's."""
+    return settings.data_dir / "vault"
+
+
 def delete_project(settings: Settings, slug: str, *, cascade: bool = False) -> None:
     """Remove a project. Refuses while roots are attached unless `cascade=True`.
 

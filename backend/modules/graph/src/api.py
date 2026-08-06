@@ -5,6 +5,18 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.core.config import load_settings
+from app.core.projects import ProjectError, resolve_read_scope
+
+
+def _read_scope():
+    """Reads resolve to the ACTIVE project (sprint 06 R3) — explicit scope, else active,
+    else the pre-INIT legacy vault. Writes never take this path; they must name a scope."""
+    from fastapi import HTTPException
+    try:
+        settings, _ = resolve_read_scope(load_settings(), None)
+    except ProjectError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return settings
 
 from .services import GraphService
 
@@ -12,7 +24,7 @@ router = APIRouter(prefix="/api/v1", tags=["graph"])
 
 
 def _service() -> GraphService:
-    return GraphService(load_settings().vault_path)
+    return GraphService(_read_scope().vault_path)
 
 
 @router.get("/node-classes")
@@ -21,7 +33,7 @@ def get_node_classes() -> list[dict]:
     Client-side matching against each node's own source_path, so editing a class is a page
     reload — never an ingest or a graph rebuild."""
     from app.core.node_classes import load_classes
-    return load_classes(load_settings())
+    return load_classes(_read_scope())
 
 
 @router.get("/conventions")
@@ -30,7 +42,7 @@ def get_conventions() -> dict:
     ingest did. Both used to hard-code the same two literals; when one vault's layout differs,
     two independent copies of a convention drift and the reader shows a bundle the graph has
     no edge for (or the reverse). One definition, served."""
-    s = load_settings()
+    s = _read_scope()
     return {"companion_media_dir": s.companion_media_dir, "interactive_prefix": s.interactive_prefix}
 
 
@@ -94,7 +106,7 @@ def unresolved_report() -> dict:
     from app.core.roots import load_roots
 
     graph = _loaded_graph()
-    root_by_repo = {Path(e["path"]).name: Path(e["path"]) for e in load_roots(load_settings())}
+    root_by_repo = {Path(e["path"]).name: Path(e["path"]) for e in load_roots(_read_scope())}
     targets: dict[str, dict] = {}
     for n in graph.get("nodes", []):
         for raw in n.get("unresolved", []):
@@ -150,7 +162,7 @@ def rebuild(fresh: bool = False) -> dict:
     Serialized against concurrent writers (git-hook syncs) by the vault lock."""
     from app.core.vault_lock import vault_write_lock
     service = _service()
-    with vault_write_lock(load_settings().vault_path):
+    with vault_write_lock(_read_scope().vault_path):
         if fresh and service.graph_file.is_file():
             service.graph_file.unlink()
         return service.rebuild().stats()
@@ -178,7 +190,7 @@ def get_asset(note_id: str):
     note = _service().read_note(note_id)
     if note is None or note.get("kind") != "asset":
         raise HTTPException(status_code=404, detail=f"No asset note '{note_id}' in the vault.")
-    root = next((e["path"] for e in load_roots(load_settings())
+    root = next((e["path"] for e in load_roots(_read_scope())
                  if Path(e["path"]).name == note["repo"]), None)
     if root is None:
         raise HTTPException(status_code=404, detail=(
