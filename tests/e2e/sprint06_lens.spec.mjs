@@ -42,6 +42,21 @@ const pick = async (id) => {
   await page.waitForTimeout(400);
 };
 
+// ── the reported bug: a lens with an EMPTY search box must DO something visible ──────
+// It previously did nothing at all — renderResults() returns early without a query, so there
+// was no list to reorder and the graph was never touched.
+await page.fill('#filter', '');
+await page.click('#lensBtn');
+await page.click('#lensMenu .lens-opt[data-lens="links"]');
+await page.waitForTimeout(900);
+const emptyQueryRows = await page.locator('#sresults .r').count();
+const highlighted = await page.evaluate(() => window.__synapse.graph().hasMatch);
+console.log(`  empty-query lens → ${emptyQueryRows} rows listed, graph highlight = ${highlighted}`);
+if (emptyQueryRows < 2) fail('picking a lens with an empty search box listed nothing');
+if (!highlighted) fail('picking a lens did not highlight anything on the graph');
+if (emptyQueryRows >= 2 && highlighted) console.log('  ✔ lens is visible without a search query');
+await page.screenshot({ path: `${SHOTS}/sprint06_lens_top.png` });
+
 const Q = process.env.E2E_LENS_QUERY ?? 'a';   // broad, so there is a real list to reorder
 
 // ── T2: most connections — verify against the actual degrees ────────────────

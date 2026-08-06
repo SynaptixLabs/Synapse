@@ -1,8 +1,19 @@
-"""FastAPI surface for the graph — thin: routes → service."""
+"""FastAPI surface for the graph — thin: routes → service.
+
+Conditional GET (sprint 06, founder ask 2026-08-06 "no cache — I highly advise adding"):
+the graph is a FILE, so `(st_mtime_ns, st_size)` is an exact, free validator — no hashing of a
+half-megabyte payload to discover it has not changed. Measured before adding this: 252 KB for
+website, 535 KB for nexus, re-sent in full on every page load AND on every project switch
+(the switcher reloads the page by design). A 304 sends none of it.
+
+`no-cache` rather than a max-age: the graph must never be served stale from a browser cache —
+an ingest can land at any moment, and the daemon makes that likely — but revalidation is cheap
+and returns 304 when nothing moved. Correctness first, bytes second.
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from app.core.config import load_settings
 from app.core.projects import ProjectError, resolve_read_scope
@@ -46,8 +57,37 @@ def get_conventions() -> dict:
     return {"companion_media_dir": s.companion_media_dir, "interactive_prefix": s.interactive_prefix}
 
 
+def _validator(settings) -> str | None:
+    """A strong ETag from the graph file's own stat. Changes iff the file changes."""
+    try:
+        st = settings.graph_file.stat()
+    except OSError:
+        return None
+    return f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+
+
+def _conditional(request: Request, response: Response, settings) -> Response | None:
+    """Return a 304 when the client already holds this exact graph, else set the validator.
+
+    Deliberately compares the whole If-None-Match value rather than parsing a list: this API is
+    single-origin and single-client, and a partial parser that quietly mismatches would serve
+    stale-looking 200s that are hard to notice."""
+    etag = _validator(settings)
+    if not etag:
+        return None
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["ETag"] = etag
+    if (request.headers.get("if-none-match") or "").strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+    return None
+
+
 @router.get("/graph")
-def get_graph() -> dict:
+def get_graph(request: Request, response: Response):
+    settings = _read_scope()
+    not_modified = _conditional(request, response, settings)
+    if not_modified is not None:
+        return not_modified
     graph = _service().load()
     if graph is None:
         raise HTTPException(

@@ -1170,6 +1170,10 @@ function lensCoverage(field) {
   return notes.length ? `${have.toLocaleString()} of ${notes.length.toLocaleString()} notes` : '';
 }
 
+/** How many nodes a lens highlights when there is no search query. Enough to be a useful
+ *  "show me the top of this brain", few enough that the highlight still means something. */
+const LENS_TOP_N = 12;
+
 /** Apply the active lens. Dateless notes sort LAST under a date lens — never silently as "old". */
 function applyLens(list) {
   const L = LENSES.find((x) => x.id === lens);
@@ -1238,12 +1242,50 @@ document.addEventListener('click', (ev) => {
     localStorage.setItem(SORT_LENS_KEY, lens);
     renderLensMenu();
     document.getElementById('lensMenu')?.setAttribute('hidden', '');
-    renderResults();
-    setMsg(`sorting by ${LENSES.find((x) => x.id === lens)?.name}`);
+    showLensTop();
     return;
   }
   if (!ev.target.closest?.('.lens')) document.getElementById('lensMenu')?.setAttribute('hidden', '');
 });
 
-window.__synapseLens = { get: () => lens, apply: applyLens, isNew };
+/** Show the lens's top N and HIGHLIGHT them on the canvas.
+ *
+ * The first version of this shipped as sort-only, and with an empty search box it did nothing
+ * whatsoever — `renderResults()` returns early without a query, so there was no list to reorder
+ * and the graph was never touched. A control that appears inert is a broken control.
+ *
+ * This reuses `graph.setMatch()`, the same transient highlight search already uses (it also fits
+ * the view to the set). That is NOT the "no restyling" rule being broken: the rule is about
+ * permanent node appearance — colour, shape, size — which still encodes repo and class only. A
+ * selection highlight is transient and is exactly what "show me these" should look like. */
+function showLensTop() {
+  const box = $('sresults');
+  if (lens === 'match') {                    // relevance has no meaning without a query
+    graph.setMatch(null);
+    if (!$('filter').value.trim()) { box.classList.remove('open'); box.innerHTML = ''; }
+    return;
+  }
+  if ($('filter').value.trim()) { renderResults(); return; }   // a query wins; it is more specific
+
+  const L = LENSES.find((x) => x.id === lens);
+  const pool = applyLens(nodes.filter((n) => n.kind === 'note')).slice(0, LENS_TOP_N);
+  if (!pool.length) { graph.setMatch(null); return; }
+
+  const colors = graph.repoColors();
+  const grpOf = vRepoOf();
+  box.innerHTML =
+    `<div class="r" style="color:var(--dim);cursor:default">top ${pool.length} by ${esc(L.name)}</div>`
+    + pool.map((n) => `
+      <div class="r" data-open="${esc(n.id)}">
+        <span class="dot" style="background:${colors.get(grpOf.get(n.id) ?? n.repo)}"></span>
+        ${newMark(n)}
+        <span>${n.repo === '✦ summaries' ? '✦ ' : ''}${esc(n.title)}</span>
+        <small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links${lensMeta(n)}</small>
+      </div>`).join('');
+  box.classList.add('open');
+  graph.setMatch(new Set(pool.map((n) => n.id)));    // highlight + fit — the visible answer
+  setMsg(`${pool.length} highlighted — top by ${L.name}`);
+}
+
+window.__synapseLens = { get: () => lens, apply: applyLens, isNew, showTop: showLensTop };
 renderLensMenu();
