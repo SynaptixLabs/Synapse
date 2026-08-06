@@ -68,6 +68,22 @@ git clone https://github.com/SynaptixLabs/Synapse.git && cd Synapse
 ./start.sh           # dev stack: backend :8000 (/docs, /health) + explorer :5173
 ```
 
+Want it to keep running after you close the terminal?
+
+```bash
+./start.sh service install     # supervised: restarts on crash, survives a closed terminal
+./start.sh service status      # …logs | restart | stop
+./start.sh service uninstall   # disarm — nothing starts on its own again
+```
+
+Several repos to keep apart? Give each its own brain:
+
+```bash
+synapse projects                       # list them
+synapse --project nexus ingest         # index one project's roots into its own vault
+synapse --project nexus watch          # …and keep it up to date automatically
+```
+
 Windows: `.\start.cmd -Setup` then `.\start.cmd` (same flags: `-Test`, `-Status`, `-Stop`).
 
 **WSL tip:** clone inside the WSL filesystem (`cd ~ && git clone …`), not under `/mnt/c/…` —
@@ -375,12 +391,27 @@ No gate closes on assertion):
 | [04](project-management/sprints/sprint_04/index.md) | **The Open Brain** | deterministic query/path/explain (CLI · API · UI path-mode + connections footer) · `.gitignore`/`.synapseignore` + git-hook/watch auto-sync · **MCP server** (Claude Code & Desktop) · edge-confidence schema v3 | ✅ closed 2026-07-17 · close GBU 4.7 |
 | [05](project-management/sprints/sprint_05/index.md) | **Everything In** | images + PDFs as first-class sidecar notes (📷 per-root) · 👁 AI descriptions with grounded links (first INFERRED edges) · 👻 ghost nodes · type lens + asset regrouping · the brain published as [this repo's wiki](https://github.com/SynaptixLabs/Synapse/wiki) · coding-agent workflow (dormant) | ✅ closed 2026-07-17 · founder PASS · close GBU 4.6 |
 
-**Next — [Sprint 06 "Many Brains, Always On"](project-management/sprints/sprint_06/index.md)**
-(🟡 proposed 2026-08-06, not open): run as a supervised app that survives a closed terminal ·
-**projects as a first-class entity**, each owning its own database, every root attached to one ·
-file-date + first-seen timestamps so new notes can be marked · sort/filter lenses by connections,
-recency and use · an ingest daemon so the brain feeds itself. Two founder decisions outstanding —
-what *"most used"* counts, and the bind-scope question below.
+**In flight — [Sprint 06 "Many Brains, Always On"](project-management/sprints/sprint_06/index.md)**
+(🔵 open 2026-08-06 · 16 of 26 tasks done). Shipped so far:
+
+- **Projects are first-class.** A project owns its own vault and graph; every root belongs to one,
+  and adding a root names a project or creates it. Switch brains from the topbar, the CLI
+  (`synapse --project <slug> …`) or the API — the active project lives server-side, so all three
+  agree. Migration is `attach + re-ingest`: the graph is derived, so it is regenerated per project
+  rather than split.
+- **It runs as a service.** `./start.sh service install` puts backend and explorer under systemd
+  `--user`: restarts on crash, survives a closed terminal. Proven by killing it.
+  `./start.sh service uninstall` disarms it in one command.
+- **Notes carry dates.** `file_mtime` (when the file changed) and `first_seen` (when it joined the
+  brain) — two fields, because Linux has no creation time and the two answer different questions.
+  Graph schema v4; a pre-v4 graph loads with them absent, never back-dated.
+- **Sort lenses** in the explorer: most connections · recently changed · new to the brain. Each
+  states its own coverage, dateless notes sort last and say so, and picking one highlights its top
+  results on the canvas.
+- **Conditional GET on `/graph`** — a half-megabyte payload becomes a 304 when nothing changed.
+
+Still open: the ingest daemon's polish (per-root ignores, an errors ledger), and two founder
+decisions — what *"most used"* counts, and the bind-scope question below.
 
 **Unreleased, on `main`** — the graph learned to say what a node *is*, and the reader learned
 to show media inline:
