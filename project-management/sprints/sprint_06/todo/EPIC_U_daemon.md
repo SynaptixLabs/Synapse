@@ -24,13 +24,13 @@ bind scope. U1–U3 are safe to build regardless; **U5 (enable by default) waits
 
 ## Tasks
 
-- [ ] **U1 — filesystem watcher over a project's roots** (~12V) · `not_started` · blocked_by R3
+- [x] **U1 — filesystem watcher over a project's roots** (~12V) · `dev_done` — **already existed**; sprint 06 proved it is project-scoped
       Watch the roots of each project; recursive; honours `.synapseignore` and `.gitignore` as the
       existing ingest already does. Reuse the ingest module's traversal — do not fork a second
       walker (reuse protocol; check `03_MODULE_CONTRACTS.md`).
       *Evidence:* unit test with a temp root and a created/modified/deleted file.
 
-- [ ] **U2 — debounce + coalesce** (~10V) · blocked_by U1
+- [x] **U2 — debounce + coalesce** (~10V) · `dev_done` — **already existed**; 50-file burst → 1 ingest, proven in test and live
       A `git checkout` touching 4,000 files must produce **one** ingest, not 4,000. Debounce window
       configurable; bursts coalesce; an ingest already running is not re-entered.
       *Evidence:* a burst test — N file events in a window produce exactly one run.
@@ -56,3 +56,38 @@ bind scope. U1–U3 are safe to build regardless; **U5 (enable by default) waits
 - A failed run leaves the previous graph intact and says so.
 - The daemon writes only inside the vault of the project it watches.
 - Never writes to a source root. It reads repos; it owns nothing in them.
+
+---
+
+## Reuse finding — U1 and U2 were already built (~22V not spent)
+
+`modules/ingest/src/hooks.watch()` has existed since sprint 04 (backlog #4). It already polls each
+root, snapshots `(mtime_ns, size)` so **deletes** are visible, debounces a save burst, and
+deliberately advances to the *pre*-sync snapshot so a save landing during a sync triggers the next
+poll instead of vanishing. CHECK BEFORE YOU BUILD found it; nothing was rewritten.
+
+What sprint 06 added is the proof that it is now **project-scoped** — `settings` is one project's
+Settings, so `synapse --project X watch` watches X's roots and writes X's vault alone.
+
+**Live evidence (scratch project, real run):**
+
+```
+Watching 1 root(s) every 4s
+[watch] change in watchrepo → syncing…
+  watchrepo: 4 md found → 2 written, 2 unchanged
+Graph rebuilt: 4 notes
+```
+
+Two files added as one burst produced **one** sync. Unit tests cover the same: a 50-file burst
+yields exactly 1 ingest, and the snapshot detects create / modify / delete.
+
+### Limitation found and recorded, not papered over
+
+Measured on this host: **five successive writes to one file shared a single `st_mtime_ns`**; a 10 ms
+gap separated them. So an edit that keeps size identical *and* lands inside that granularity window
+is invisible to a poll — picked up by the next genuine change, never lost permanently. Hashing every
+file per poll would close it and is not viable here (one watched root holds 713 notes, another 86k
+files). The trade is deliberate and is documented on `watch()` itself.
+
+**Still open in this epic:** U3 (per-root ignore patterns — near-mandatory for a daemon, backlog
+#14), U4 (errors ledger + status a UI can read), U5 (supervised + on by default — blocked on D3).

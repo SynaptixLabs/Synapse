@@ -145,7 +145,20 @@ def _snapshot(root: Path, ignore_dirs: set[str]) -> dict[str, tuple[int, int]]:
 
 def watch(settings, interval: int, run_ingest) -> int:
     """Poll roots every `interval`s; one sync per detected change burst (debounce = one
-    interval of quiet). Honest console line per sync."""
+    interval of quiet). Honest console line per sync.
+
+    Project-scoped since sprint 06: `settings` is one project's Settings, so `source_repos` is
+    that project's roots and the sync writes only that project's vault. `synapse --project X
+    watch` watches X alone.
+
+    KNOWN LIMITATION (measured 2026-08-06, not theoretical). The snapshot is `(st_mtime_ns,
+    st_size)` per file, and this filesystem's timestamp granularity is coarse — five successive
+    writes to one file shared a single `st_mtime_ns`; a 10 ms gap separated them. So an edit
+    that keeps the file's size identical AND lands within that window of the previous change is
+    invisible to a poll. It is picked up by the NEXT genuine change, never lost permanently.
+    Hashing every file each poll would close it and is not viable at this scale (one watched
+    root here holds 713 notes, another 86k files), so the trade is deliberate: cheap polling
+    plus an honest note, not a silent claim of perfect fidelity."""
     roots = [Path(r) for r in settings.source_repos]
     ignore = set(settings.ignore_dirs)
     print(f"Watching {len(roots)} root(s) every {interval}s — Ctrl+C to stop.")
