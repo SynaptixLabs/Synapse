@@ -23,17 +23,17 @@ independent filter systems in one picker is how a UI becomes unusable.
 
 ## Tasks
 
-- [ ] **T1 — lens scaffold in the picker** (~7V) · `not_started` · **UI — kit first (Epic V)**
+- [x] **T1 — lens scaffold in the picker** (~7V) · `dev_done` · composes with the type lens; choice persists
       One lens control that composes with the existing type lens; active lens visible in the
       statusbar; selection persists across reloads.
       *Evidence:* real-Chromium E2E; screenshots.
 
-- [ ] **T2 — most-connections lens** (~5V) · blocked_by T1
+- [x] **T2 — most-connections lens** (~5V) · `dev_done` · E2E reads rendered degrees: 33,28,27,24,20,18,18,17
       Sort by `in_degree + out_degree`, descending, ties broken stably so the order does not shuffle
       between renders.
       *Evidence:* E2E asserting the top result is the highest-degree node in the fixture.
 
-- [ ] **T3 — latest lens** (~8V) · blocked_by "T1 + S3"
+- [x] **T3 — latest lens** (~8V) · `dev_done` · two orderings, each stating its own coverage
       Two orderings, honestly labelled: *last modified* (`file_mtime`) and *newest to the brain*
       (`first_seen`). Nodes lacking `first_seen` sort last and say why, rather than sorting as old.
       *Evidence:* E2E over a fixture with mixed dates and at least one date-less node.

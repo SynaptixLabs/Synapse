@@ -39,7 +39,7 @@ June against 86,146 dated July.
       notes — absent is honest, "today" is a lie, and a guessed old date is worse than both.
       *Evidence:* a fixture graph at the old version loads green.
 
-- [ ] **S3 — the UI mark** (~10V) · blocked_by S2 · **UI — kit first (Epic V)**
+- [x] **S3 — the UI mark** (~10V) · `dev_done` · list-only ▸ glyph; dateless says so
       New-today and new-since-last-visit marks on the node and in the list. Where `first_seen` is
       absent the UI says so ("indexed before dates were recorded") instead of showing a blank that
       reads as old.

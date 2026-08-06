@@ -23,7 +23,7 @@ The surfaces:
 
 ## Tasks
 
-- [~] **V1 — kit screens for the three surfaces** (~8V) · switcher screen done (`ui_kit/explorer/project-switcher.html`); the new-note mark + lens control still to come
+- [x] **V1 — kit screens for the three surfaces** (~8V) · `dev_done` · `project-switcher.html` + `lens-and-new-mark.html`
       HTML/CSS screens + tokens under `ui_kit/<version>/`, consistent with the existing `explorer/`
       kit. Covers the multi-project statusbar and the date-less-node case from S3 — the awkward
       states, not only the happy one.
