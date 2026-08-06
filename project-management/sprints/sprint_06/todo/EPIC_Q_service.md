@@ -25,19 +25,19 @@ start before D3**, because that ruling decides what they are.
 
 ## Tasks
 
-- [ ] **Q1 — supervised units for backend + frontend** (~15V) · `not_started`
+- [x] **Q1 — supervised units for backend + frontend** (~15V) · `dev_done` · evidence: [`reports/Q1-Q3_service_kill_tests.md`](../reports/Q1-Q3_service_kill_tests.md)
       systemd `--user` units on WSL2: health-checked, `Restart=on-failure`, surviving a closed
       terminal. `./start.sh` keeps working unchanged for dev — the service is **additive**, not a
       replacement, so the existing dev loop is never held hostage to the service working.
       *Evidence:* unit files committed; `systemctl --user` status captured.
 
-- [ ] **Q2 — reserved, configured ports** (~8V) · blocked_by Q1
+- [x] **Q2 — reserved, configured ports** (~8V) · `dev_done` · refusal proven with a real squatter
       Ports come from config, not from `kill_port` grabbing whatever holds them. Starting when the
       port is genuinely occupied by something else **fails loudly** rather than killing the
       occupant — today's behaviour would happily kill an unrelated process on 8000.
       *Evidence:* unit test / manual run showing a refusal, not a kill.
 
-- [ ] **Q3 — the kill-test** (~12V) · blocked_by Q2
+- [x] **Q3 — the kill-test** (~12V) · `dev_done` · SIGKILL → restarted; no controlling terminal
       A service that has not been killed on purpose has not been tested. Prove all three: kill the
       backend → it comes back; close the terminal → still serving; restart WSL → still serving.
       *Evidence:* `command_result` transcripts for each of the three, in `reports/`.
