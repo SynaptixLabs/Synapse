@@ -30,6 +30,7 @@
          Chrome only: adds no colour to the canvas, which already spends colour on repo, shape on
          node class and dashed/hollow on ghosts. The active brain is named in text, not hued. */
       .proj { position:relative; }
+      .proj[hidden] { display:none; }
       .proj-btn { display:flex; align-items:center; gap:0.45rem; background:var(--panel2);
                   border:1px solid var(--border); border-radius:8px; color:var(--text);
                   padding:0.35rem 0.7rem; cursor:pointer; font:inherit; white-space:nowrap; }
@@ -237,7 +238,7 @@
     <div class="topbar">
       <button class="mi mobile-menu" onclick="toggleLhs()">☰</button>
       <b>SYNAPSE<i>.</i></b>
-      <div class="proj">
+      <div class="proj" id="projWrap" hidden>
         <button class="proj-btn" id="projBtn" onclick="toggleProjects()" title="switch project (brain)"
                 aria-haspopup="listbox" aria-expanded="false">
           <span class="dot"></span><span id="projName">…</span><span class="chev">▾</span>

@@ -1080,12 +1080,19 @@ async function loadProjects() {
     _projects = await api('/projects');
     const { active } = await api('/projects/active');
     const cur = _projects.find((p) => p.slug === active);
+    // A fresh install has ONE brain and no projects, and that is a perfectly good way to use
+    // SYNAPSE. Showing a switcher that says "no projects" tells a new user something is missing
+    // when nothing is — so the control simply is not there until there is something to switch
+    // between. It appears the moment a second brain exists.
+    const wrap = document.getElementById('projWrap');
+    if (wrap) wrap.hidden = _projects.length < 2;
     const btn = document.getElementById('projName');
-    if (btn) btn.textContent = cur ? cur.name : (_projects.length ? 'pick a project' : 'no projects');
+    if (btn) btn.textContent = cur ? cur.name : 'pick a project';
     renderProjects(active);
   } catch {
+    // Backend down: say so rather than show a stale name — but only if the control is visible.
     const btn = document.getElementById('projName');
-    if (btn) btn.textContent = 'unavailable';   // backend down — say so, don't show a stale name
+    if (btn) btn.textContent = 'unavailable';
   }
 }
 
