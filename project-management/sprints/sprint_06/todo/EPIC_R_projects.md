@@ -27,14 +27,14 @@ counted evidence rather than a shrug.
 
 ## Tasks
 
-- [ ] **R1 — project model + storage layout** (~15V) · `not_started`
+- [x] **R1 — project model + storage layout** (~15V) · `dev_done` · `5097db2`
       A `Project` record (slug, name, created, roots[]) persisted under `data/projects/`; per-project
       vault + `graph.json` paths derived from the slug, never from user input concatenation (path
       traversal). Reuse the existing vault writer rather than forking it — check
       `03_MODULE_CONTRACTS.md` first per the reuse protocol.
       *Evidence:* unit tests for slug derivation incl. hostile names (`../`, absolute paths, unicode).
 
-- [ ] **R2 — project CRUD API** (~15V) · blocked_by R1
+- [x] **R2 — project CRUD API** (~15V) · `dev_done` · `e7eb7e6` · blocked_by R1
       `GET/POST/PATCH/DELETE /api/v1/projects`. Delete is the dangerous one: it must refuse while
       roots are attached, or require explicit cascade, and must never remove anything outside its
       own `data/projects/<slug>/`. The vault is derived data — deleting a project must not touch a
@@ -71,3 +71,18 @@ counted evidence rather than a shrug.
 - R4's numbers on file before the real migration runs.
 - No project operation writes outside `data/projects/<slug>/`.
 - E2E for R5/R6 is real Chromium, never `request.get()`.
+
+---
+
+## Progress
+
+| Task | Status | Evidence |
+|---|---|---|
+| R1 | `dev_done` | `5097db2` · 47 unit tests incl. traversal, hostile registry, rmtree-safety · full suite 282 pass |
+| R2 | `dev_done` | `e7eb7e6` · 13 API tests incl. delete-refusal + cascade-spares-the-repo · full suite 295 pass · drift guard clean |
+| R3–R6 | `not_started` | — |
+
+**Design note recorded during R1** (belongs in `0l_DECISIONS.md` at epic close): a project is a
+`Settings` with a different `vault_path`. Because `roots.py` already stores `roots.json` at
+`vault_path.parent`, per-project roots came free — `roots.py` was not modified at all. `Settings`
+gained only `data_dir_override`, so the registry does not travel with the vault.
