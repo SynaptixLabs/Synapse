@@ -63,6 +63,17 @@ class Settings:
     vault_path: Path
     env_source_repos: tuple[Path, ...] = ()
     ignore_dirs: frozenset[str] = field(default_factory=lambda: frozenset(DEFAULT_IGNORE_DIRS))
+    # Sprint 06 R1: a PROJECT is a Settings with a different vault_path — that is the whole
+    # per-project seam, and it is why ingest/graph/roots need no per-project awareness. But
+    # `data_dir` (where the project registry lives) must NOT move with the vault, or each
+    # project would look for the registry inside its own folder. Root settings leave this
+    # None and derive it; per-project settings carry the root's value forward.
+    data_dir_override: Path | None = None
+
+    @property
+    def data_dir(self) -> Path:
+        """The app's data root — registry, projects/, and (legacy) the single vault live here."""
+        return self.data_dir_override or self.vault_path.parent
 
     @property
     def source_repos(self) -> tuple[Path, ...]:
