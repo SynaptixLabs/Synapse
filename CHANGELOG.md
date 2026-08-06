@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-The graph learned to say what a node **is**, the reader learned to show media inline — and an
-external security review found that an ingested repo was not being treated as untrusted input.
+## [0.2.0] — 2026-08-06 · "the open, secured, movable brain"
+
+The graph learned to say what a node **is**, the reader learned to show media inline, a security
+review closed the gap where an ingested repo was trusted input, the vault became portable, and a
+guided tour now shows all of it end to end.
 
 ### Added
 - **Node classes** — colour · shape · size assigned by matching a node's own path/name/tag, so a
@@ -30,6 +33,16 @@ external security review found that an ingested repo was not being treated as un
 - Regression suite for all of the above (`backend/tests/test_security_and_classes.py`) and a
   real-Chromium spec asserting both halves of the security fix — the boundary holds *and* the
   content still renders (`tests/e2e/security_active_content.spec.mjs`).
+- **Vault export/import** (`synapse export` / `synapse import`, issue #1) — one verifiable zip:
+  every file's sha256 in a `MANIFEST.json`, import verifies EVERY hash before writing anything
+  (all-or-nothing), refuses zip-slip entries (absolute/`..`/backslash/drive paths), and refuses
+  an existing target vault without `--force`. Stdlib only, 12 tests, zero network. External
+  contribution ([@Nitjsefnie](https://github.com/Nitjsefnie), PR #19), reviewed and merged.
+- **Guided tour generator** (`docs/tour/`) — drives the real explorer in Chromium end to end
+  (search → open → inspect → follow → trace → expose gaps) and packages a narrated master,
+  a 60-second social cut, WebVTT captions, hero/thumbnail/end-cards, and a real-Chromium capture
+  of the live public GitHub repo as its opening (`build-narrated.mjs`, `capture-github-intro.mjs`).
+  The README now leads with the animated result instead of a static screenshot.
 
 ### Security
 See [`SECURITY.md`](SECURITY.md) for the threat model. A repo you ingest is untrusted input:
@@ -76,11 +89,10 @@ A second review round, on the fixes themselves, closed:
   the same folder name collide in the vault and cross-delete each other's notes. The invariant now
   lives in one place and both callers use it.
 
-## [0.2.0-dev] — sprints 04 "The Open Brain" + 05 "Everything In" (both closed, founder PASS)
+### Also in this release — sprints 04 "The Open Brain" + 05 "Everything In" (both closed, founder PASS)
 
-The brain becomes infrastructure — queryable, always fresh, reachable from your AI assistant:
+The brain became infrastructure — queryable, always fresh, reachable from your AI assistant:
 
-### Added
 - **The query trio** (deterministic retrieval — no embeddings, no model calls, <100ms warm on
   a 21k-note brain): `synapse query "…"` (scoped subgraph), `synapse path A B` (shortest chain,
   hop by hop), `synapse explain ID` (connections grouped) — also as `GET /api/v1/{query,path,explain}`.

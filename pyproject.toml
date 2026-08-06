@@ -3,7 +3,7 @@
 
 [tool.poetry]
 name = "synapse"
-version = "0.1.0"
+version = "0.2.0"
 description = "SYNAPSE — a second brain for your repos: index scattered markdown into a wikilinked knowledge graph; distill any node/subtree with an LLM and render the idea as an image"
 authors = ["Avidor Rabinovich <avidor@synaptixlabs.ai>"]
 license = "MIT"
