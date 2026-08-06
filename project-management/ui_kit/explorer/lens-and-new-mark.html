@@ -1,0 +1,114 @@
+<!doctype html>
+<!--
+  KIT — the sort lens + the new-note mark (sprint 06, Epic V task V1)
+  Companion to project-switcher.html. Together these are the three surfaces sprint 06 adds.
+
+  THE VISUAL BUDGET IS THE WHOLE PROBLEM (V2's concern, designed for here rather than after).
+  The canvas already spends: colour on repo · shape+size on node class · dashed/hollow on ghosts ·
+  the 📝📷📄🎬🎧✦ pills on type. There is no room left on the NODE, so:
+
+    · the sort lens is CHROME — it changes ORDER and HIGHLIGHTS its top N, never permanent
+      appearance. Colour/shape/size still encode repo and node class only.
+      (REVISED 2026-08-06 after founder feedback: the first version highlighted nothing, and with
+      an empty search box did nothing at all — a control that appears inert is a broken control.
+      The transient match highlight search already uses is exactly what "show me these" looks
+      like; the no-restyling rule is about permanent node appearance, not selection.)
+    · the new-note mark is a single ▸ glyph in the LIST only, never on the graph. A brain where
+      275 of 352 notes changed this month would otherwise light up almost entirely and say
+      nothing at all.
+
+  HONEST STATES ARE THE POINT (both surfaces):
+    · "latest" offers TWO orderings because the filesystem forces it — `changed` (file_mtime,
+      known for 1,652 of 1,653 notes) and `new to the brain` (first_seen, which only accrues
+      forward and is absent for everything indexed before 2026-08-06). The menu says which.
+    · A note with no date sorts LAST under a date lens and says "no date" — it must never be
+      silently rendered as old.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" /><title>KIT · sort lens + new mark</title>
+<style>
+  :root{--bg:#0d1117;--panel:#131a23;--panel2:#1b2430;--border:#26303c;--text:#e6edf3;
+        --dim:#8b98a5;--accent:#4dd6c1;--new:#e0a458;}
+  body{background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif;padding:2rem;max-width:900px}
+  h2{font-weight:600;font-size:.95rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:2.2rem 0 .6rem}
+  p.note{color:var(--dim);max-width:66ch}
+
+  /* ── the lens control — lives with the type pills, same vocabulary ── */
+  .bar{display:flex;gap:.35rem;align-items:center;padding:.5rem;background:var(--panel);
+       border:1px solid var(--border);border-radius:10px;flex-wrap:wrap}
+  .pill{background:var(--panel2);border:1px solid var(--border);border-radius:999px;color:var(--text);
+        padding:.25rem .6rem;font:inherit;font-size:.85em;cursor:pointer}
+  .pill.off{opacity:.4}
+  .sep{width:1px;align-self:stretch;background:var(--border);margin:0 .3rem}
+  .lens{position:relative}
+  .lens-btn{background:var(--panel2);border:1px solid var(--border);border-radius:999px;color:var(--text);
+            padding:.25rem .7rem;font:inherit;font-size:.85em;cursor:pointer;display:flex;gap:.35rem;align-items:center}
+  .lens-btn b{font-weight:600;color:var(--accent)}
+  .lens-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:250px;background:var(--panel);
+             border:1px solid var(--border);border-radius:10px;padding:.3rem;z-index:20;
+             box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .lens-opt{padding:.45rem .6rem;border-radius:7px;cursor:pointer}
+  .lens-opt:hover,.lens-opt[aria-selected=true]{background:var(--panel2)}
+  .lens-opt[aria-selected=true] .t{color:var(--accent)}
+  .lens-opt .t{display:block}
+  .lens-opt .d{display:block;color:var(--dim);font-size:.8em}
+
+  /* ── the result list, where the mark lives ── */
+  .list{margin-top:1rem;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.3rem}
+  .r{display:flex;gap:.5rem;align-items:baseline;padding:.4rem .6rem;border-radius:7px}
+  .r:hover{background:var(--panel2)}
+  .r .dot{width:8px;height:8px;border-radius:50%;background:#6ea8fe;flex:none;align-self:center}
+  .r .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .r small{color:var(--dim);white-space:nowrap}
+  .new{color:var(--new);font-weight:700;flex:none}      /* the ONLY new-note affordance */
+  .nodate{color:var(--dim);font-style:italic}
+</style>
+</head>
+<body>
+
+<h2>1 · The lens, closed — sits after the type pills, same pill vocabulary</h2>
+<div class="bar">
+  <button class="pill">📝 148</button><button class="pill">📷 201</button>
+  <button class="pill off">📄 3</button><button class="pill">✦ 1</button>
+  <span class="sep"></span>
+  <div class="lens"><button class="lens-btn">sort <b>most connections</b> ▾</button></div>
+</div>
+<p class="note">The lens changes <em>order only</em>. It never recolours, resizes or hides a node —
+the canvas has no budget left, and a sort that also restyles is two features wearing one control.</p>
+
+<h2>2 · The lens, open — every option says what it sorts by</h2>
+<div class="bar" style="padding-bottom:11rem">
+  <button class="pill">📝 148</button><button class="pill">📷 201</button>
+  <span class="sep"></span>
+  <div class="lens">
+    <button class="lens-btn">sort <b>most connections</b> ▴</button>
+    <div class="lens-menu">
+      <div class="lens-opt"><span class="t">best match</span><span class="d">search relevance — the default</span></div>
+      <div class="lens-opt" aria-selected="true"><span class="t">most connections</span><span class="d">in + out links</span></div>
+      <div class="lens-opt"><span class="t">recently changed</span><span class="d">when the file last changed · 1,652 of 1,653 notes</span></div>
+      <div class="lens-opt"><span class="t">new to the brain</span><span class="d">first indexed · only since 2026-08-06</span></div>
+    </div>
+  </div>
+</div>
+<p class="note"><b>Two date orderings, not one.</b> Linux has no creation time, so "when the file
+changed" and "when it joined the brain" are different questions with different coverage. Each option
+states its own coverage rather than letting the user assume it is complete.</p>
+
+<h2>3 · The list — the new mark is one glyph, and dateless is said out loud</h2>
+<div class="list">
+  <div class="r"><span class="dot"></span><span class="new" title="new to the brain">▸</span>
+    <span class="nm">Vigil — caught to closed</span><small>KB · 27 links · 2h ago</small></div>
+  <div class="r"><span class="dot"></span><span class="new" title="new to the brain">▸</span>
+    <span class="nm">Media — vigil</span><small>KB · 27 links · 5h ago</small></div>
+  <div class="r"><span class="dot"></span><span style="width:.6em"></span>
+    <span class="nm">The AI Operating System</span><small>KB · 41 links · Jul 22</small></div>
+  <div class="r"><span class="dot"></span><span style="width:.6em"></span>
+    <span class="nm">S — Website Local Knowledge Base</span><small>✦ summaries · 5 links · <span class="nodate">no date</span></small></div>
+</div>
+<p class="note">Row 4 is the state that matters. That note has no source file, so it has no date —
+it sorts <em>last</em> under a date lens and says <b>no date</b>. Rendering it as blank would read as
+"old", which is a different and false claim.</p>
+
+</body>
+</html>

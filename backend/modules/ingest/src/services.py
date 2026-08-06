@@ -22,6 +22,15 @@ from typing import Iterable
 from .models import IngestReport, RepoReport, SourceFile
 
 _HASH_RE = re.compile(r"^synapse\.content_hash:\s*([0-9a-f]{64})\s*$", re.MULTILINE)
+# Sprint 06 S1 — the two time fields, and why there are two.
+# `first_seen` is when a note JOINED THE BRAIN; `file_mtime` is when the FILE last changed.
+# They answer different questions and neither substitutes for the other: a note last edited in
+# June but indexed today is a new addition wearing an old date, and a note touched by a
+# formatting sweep today is an old note wearing a new one. Linux has no creation time
+# (`st_birthtime` is absent on ext4; `st_ctime` is inode-change time), so mtime cannot be
+# made to mean "added" no matter how it is squinted at.
+_FIRST_SEEN_RE = re.compile(r"^synapse\.first_seen:\s*(\S+)\s*$", re.MULTILINE)
+_FILE_MTIME_RE = re.compile(r"^synapse\.file_mtime:\s*(\S+)\s*$", re.MULTILINE)
 _REFS_RE = re.compile(r"^synapse\.asset_refs:\s*(.*?)\s*$", re.MULTILINE)
 _REPO_RE = re.compile(r"^synapse\.source_repo:\s*(.+?)\s*$", re.MULTILINE)
 _FM_KEY_RE = re.compile(r"^synapse\.[a-z_]+:", re.MULTILINE)
@@ -187,7 +196,10 @@ class IngestService:
             # silently corrupted paid AI artifacts (GBU sprint-05 P2)
             head = existing.split("\n---\n", 1)[0]
             m = self._STAT_RE.search(head)
-            if m and m.group(1) == stat_token:
+            # sprint 06 S1: same rule as notes — a sidecar that predates the time fields is
+            # not "unchanged"; it needs one rewrite to gain them, or media stays dateless
+            # forever and the "latest" lens covers markdown only.
+            if m and m.group(1) == stat_token and _FILE_MTIME_RE.search(head):
                 # NOTE: an edit that restores mtime AND size (exiftool -P, rsync -t) is
                 # invisible to this fast path by design — disclosed in the README
                 return "unchanged"
@@ -207,6 +219,14 @@ class IngestService:
         links_line = f"synapse.inferred_links: {links_m.group(1)}\n" if links_m else ""
         body = self._asset_body(asset, raw, errors)
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            asset_mtime = datetime.fromtimestamp(
+                asset.path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
+        except OSError:
+            asset_mtime = ""
+        # same rule as notes: a sidecar that predates the field is not stamped as new
+        _prior_fs = _FIRST_SEEN_RE.search(head)
+        asset_first_seen = _prior_fs.group(1) if _prior_fs else ("" if existing else now)
         content = (
             "---\n"
             f"synapse.source_repo: {asset.repo_name}\n"
@@ -216,7 +236,12 @@ class IngestService:
             f"synapse.asset_stat: {stat_token}\n"
             f"synapse.content_hash: {digest}\n"
             f"synapse.ingested_at: {now}\n"
-            f"{links_line}"
+            # sprint 06 S1 — assets are notes in the graph, so they carry the same two time
+            # fields. Without this the "latest" lens would silently cover only markdown, which
+            # in a media-heavy brain is a minority of the nodes (website: 148 of 352).
+            + (f"synapse.file_mtime: {asset_mtime}\n" if asset_mtime else "")
+            + (f"synapse.first_seen: {asset_first_seen}\n" if asset_first_seen != "" else "")
+            + f"{links_line}"
             "---\n"
             f"{body}{ai_section}"
         )
@@ -275,14 +300,23 @@ class IngestService:
     def content_hash(data: bytes) -> str:
         return hashlib.sha256(data).hexdigest()
 
-    def _frontmatter(self, src: SourceFile, digest: str, asset_refs: str = "") -> str:
+    def _frontmatter(self, src: SourceFile, digest: str, asset_refs: str = "",
+                     first_seen: str | None = None) -> str:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            mtime = datetime.fromtimestamp(src.path.stat().st_mtime, timezone.utc)
+            file_mtime = mtime.isoformat(timespec="seconds")
+        except OSError:
+            file_mtime = ""          # unreadable stat is not fatal — the note still indexes
         return (
             "---\n"
             f"synapse.source_repo: {src.repo_name}\n"
             f"synapse.source_path: {src.rel_path}\n"
             f"synapse.ingested_at: {now}\n"
-            f"synapse.content_hash: {digest}\n"
+            + (f"synapse.first_seen: {first_seen if first_seen else now}\n"
+               if first_seen != "" else "")
+            + (f"synapse.file_mtime: {file_mtime}\n" if file_mtime else "")
+            + f"synapse.content_hash: {digest}\n"
             + (f"synapse.asset_refs: {asset_refs}\n" if asset_refs else "")
             + "---\n"
         )
@@ -388,6 +422,16 @@ class IngestService:
         m = _REFS_RE.search(self._frontmatter_text(note_path))
         return m.group(1).strip() if m else ""
 
+    def existing_first_seen(self, note_path: Path) -> str | None:
+        """The `first_seen` already on disk, so a rewrite never resets it.
+
+        Every re-ingest rewrites the note; without this the field would silently become
+        "last ingested" — the exact meaninglessness it exists to avoid."""
+        if not note_path.is_file():
+            return None
+        m = _FIRST_SEEN_RE.search(self._frontmatter_text(note_path))
+        return m.group(1) if m else None
+
     def existing_hash(self, note_path: Path) -> str | None:
         if not note_path.is_file():
             return None
@@ -406,6 +450,7 @@ class IngestService:
             return "skipped"
         digest = self.content_hash(raw)
         note_path = self.notes_dir / src.note_id
+        pre_existing = note_path.is_file()
         try:
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -416,7 +461,13 @@ class IngestService:
         # the article was last ingested, the body hash still matches and the note would
         # keep its stale (empty) asset_refs forever — the media would sit in the vault
         # unlinked. So the refs are part of the freshness check, not just the digest.
-        if self.existing_hash(note_path) == digest and self._existing_refs(note_path) == refs:
+        # Sprint 06 S1: a note whose BODY is unchanged but which predates the time fields must
+        # still be rewritten once to gain them — otherwise existing notes never acquire a date
+        # and the "latest" lens silently covers only whatever happened to change since. Same
+        # reasoning as the asset_refs check above: freshness is not only about the body.
+        has_times = _FILE_MTIME_RE.search(self._frontmatter_text(note_path)) is not None
+        if (self.existing_hash(note_path) == digest
+                and self._existing_refs(note_path) == refs and has_times):
             return "unchanged"
         try:
             self.notes_dir.mkdir(parents=True, exist_ok=True)
@@ -424,7 +475,14 @@ class IngestService:
             # unique temp name: concurrent writers must never share an intermediate
             # (the vault lock serializes entry points; this is belt-and-braces)
             tmp = note_path.parent / f"{note_path.name}.{os.getpid()}.tmp"
-            tmp.write_text(self._frontmatter(src, digest, refs) + body, encoding="utf-8")
+            # first_seen means "joined the brain". A note already on disk from before the
+            # field existed did NOT join today, so it is left WITHOUT one rather than stamped
+            # with a date that would mark the whole corpus as new. Only genuinely new notes
+            # get one. `file_mtime` is real either way — it comes from the filesystem.
+            prior = self.existing_first_seen(note_path)
+            first_seen = prior if prior else ("" if pre_existing else None)
+            tmp.write_text(self._frontmatter(src, digest, refs, first_seen) + body,
+                           encoding="utf-8")
             os.replace(tmp, note_path)
         except OSError as e:
             if errors is not None:

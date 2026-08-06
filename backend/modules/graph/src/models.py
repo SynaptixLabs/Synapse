@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-SCHEMA_VERSION = 3   # v3 (Epic J): + edge `confidence` — EXTRACTED (parsed, 1.0) | INFERRED
+SCHEMA_VERSION = 4   # v4 (sprint 06 S1/S2): + node `first_seen` / `file_mtime` (both optional —
+                     #     a graph written before v4 loads with them ABSENT, never back-dated)
+                     # v3 (Epic J): + edge `confidence` — EXTRACTED (parsed, 1.0) | INFERRED
 #                      (AI-derived, discrete score 0.55–0.95) | AMBIGUOUS (flagged for review).
 #                      Adopted BEFORE the first AI-derived edge ships (honest-status doctrine).
 #                      v2 (D-5): + `pathref` edges — backticked `*.md` pointers.
@@ -22,14 +24,25 @@ class Node:
     in_degree: int = 0
     out_degree: int = 0
     unresolved: list[str] = field(default_factory=list)
+    # Sprint 06 S1/S2. Empty string = genuinely unknown, and the UI must SAY so rather than
+    # render a blank that reads as "old". Notes indexed before v4 have no first_seen and are
+    # never back-dated — an invented date is worse than an absent one.
+    first_seen: str = ""
+    file_mtime: str = ""
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "id": self.id, "kind": self.kind, "title": self.title, "repo": self.repo,
             "source_path": self.source_path, "tags": self.tags,
             "in_degree": self.in_degree, "out_degree": self.out_degree,
             "unresolved": sorted(self.unresolved),
         }
+        # Omitted entirely when unknown — a present-but-empty key invites `?? "old"` downstream.
+        if self.first_seen:
+            d["first_seen"] = self.first_seen
+        if self.file_mtime:
+            d["file_mtime"] = self.file_mtime
+        return d
 
 
 CONFIDENCE_TAGS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")

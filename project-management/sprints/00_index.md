@@ -19,11 +19,15 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 
 ## Active sprint
 
-- **None — sprint 05 CLOSED 2026-07-17 on founder acceptance PASS**
+- **Sprint 06 "Many Brains, Always On" — OPEN 2026-08-06** ([node](sprint_06/index.md) ·
+  [epic cards](sprint_06/todo/)). Gate 1 passed by HELM (`vp-rnd`) the same day: 6 epics,
+  26 tasks, 3 goals, acceptance plan, kit epic. **22 tasks executable; 4 blocked** — `Q4`/`Q5`
+  (bind scope, host autostart) and `U5` (daemon default-on) on decision **D3**, `T4` (most-used)
+  on **D2**. Critical path: `R1 → R2 → R3`.
+- Previous: sprint 05 CLOSED 2026-07-17 on founder acceptance PASS
   ([report](sprint_05/reports/SPRINT_05_REPORT.md) ·
-  [acceptance](sprint_05/acceptance/00_founder_acceptance_script.md)). Same-day open→close:
-  all six epics (K–P) delivered; Epic P shipped dormant (activation declined).
-- Next gate: v0.2 backlog ([`../0m_BACKLOG.md`](../0m_BACKLOG.md)) — WebGL engine (#5),
+  [acceptance](sprint_05/acceptance/00_founder_acceptance_script.md)).
+- Still parked in the v0.2 backlog ([`../0m_BACKLOG.md`](../0m_BACKLOG.md)): WebGL engine (#5),
   semantic re-rank (#16), entity extraction (#8), chat (#10); Codex re-pass post-Jul-23.
 
 ## All sprints
@@ -35,6 +39,7 @@ No gate closes on assertion — see [`../../.claude/policies/commandments.md`](.
 | 03 | ✅ Closed 2026-07-15 · PASS · **POC closed (v0.1.0)** | **The Twist** | Two models end-to-end: summarize node/subtree (Anthropic) + render summary as image (gpt-image-1); POC close | D — Distill · E — Render · F — POC close | `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` | [`sprint_03/index.md`](sprint_03/index.md) |
 | 04 | ✅ Closed 2026-07-17 · founder order · 4.7 | **The Open Brain** | The brain becomes infrastructure: deterministic query/path/explain, `.synapseignore` + git-hook freshness, MCP server (your brain as an assistant tool), edge-confidence schema | G — Query trio · H — Freshness · I — MCP · J — Confidence schema | none | [`sprint_04/index.md`](sprint_04/index.md) |
 | 05 | ✅ Closed 2026-07-17 · founder PASS | **Everything In** | Multimedia stage 1: images + PDFs as sidecar-note first-class citizens; vision pass behind the seams (cost-guarded); extras packaging + Obsidian interop | K Assets · L Seeing pass · M Extras/Obsidian · N Ghosts · O Wiki · P Agents×MCP | optional (vision) | [`sprint_05/index.md`](sprint_05/index.md) |
+| 06 | 🔵 **OPEN** 2026-08-06 · Gate 1 passed (HELM) | **Many Brains, Always On** | Founder wave 2026-08-06: run as a supervised app that survives a closed terminal; **projects as a first-class entity** owning a DB, every root attached to one; file-date + first-seen timestamps so "new today" is markable; sort/filter lenses; an ingest daemon so the brain feeds itself | Q Service · R Projects · S Time · T Lenses · U Daemon · V Kit | none | [`sprint_06/index.md`](sprint_06/index.md) |
 
 ## Sprint anatomy (each `sprint_<N>/` node)
 

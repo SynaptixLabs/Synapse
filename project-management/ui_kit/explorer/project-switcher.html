@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  KIT — the project switcher (sprint 06, Epic V task V1 · founder ask: "Switch should be in GUI also")
+
+  Placement: the topbar, immediately after the SYNAPSE wordmark. That slot answers "where am I?"
+  before the user reads anything else — and a brain switcher is the strongest possible statement
+  of context. It is deliberately NOT in the left menu: everything there is a VERB (View Index,
+  Run ingest, Rebuild) and this is a NOUN.
+
+  Visual budget (V2's real concern): the graph already spends colour on repo, shape and size on
+  node class, and dashed/hollow on ghosts. The switcher therefore adds NO colour to the canvas —
+  it is chrome, in the existing --panel2/--border vocabulary, with the accent used only on the
+  active row. The brain you are in is named in text, not encoded in a hue nobody can decode.
+
+  Honest states are the point. Each option carries its note count, and a brain with no graph says
+  "not ingested" rather than silently rendering as empty — an empty graph and a missing graph are
+  indistinguishable otherwise, which is exactly the confusion this control would create.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" /><title>KIT · project switcher</title>
+<style>
+  :root{--bg:#0d1117;--panel:#131a23;--panel2:#1b2430;--border:#26303c;--text:#e6edf3;
+        --dim:#8b98a5;--accent:#4dd6c1;}
+  body{background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-serif,system-ui,sans-serif;padding:2rem;}
+  h2{font-weight:600;font-size:0.95rem;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin:2rem 0 .6rem}
+  .topbar{display:flex;align-items:center;gap:.9rem;padding:.55rem 1rem;border-bottom:1px solid var(--border);
+          background:var(--panel);border-radius:8px 8px 0 0;}
+  .topbar b{letter-spacing:.05em} .topbar b i{color:var(--accent);font-style:normal}
+
+  /* the control */
+  .proj{position:relative}
+  .proj-btn{display:flex;align-items:center;gap:.45rem;background:var(--panel2);border:1px solid var(--border);
+            border-radius:8px;color:var(--text);padding:.35rem .7rem;cursor:pointer;font:inherit}
+  .proj-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .proj-btn .chev{color:var(--dim);font-size:.8em}
+  .proj-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:230px;background:var(--panel);
+             border:1px solid var(--border);border-radius:10px;padding:.3rem;z-index:20;
+             box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .proj-opt{display:flex;align-items:baseline;gap:.5rem;padding:.45rem .6rem;border-radius:7px;cursor:pointer}
+  .proj-opt:hover{background:var(--panel2)}
+  .proj-opt[aria-selected="true"]{background:var(--panel2)}
+  .proj-opt[aria-selected="true"] .nm{color:var(--accent)}
+  .proj-opt .nm{flex:1}
+  .proj-opt .ct{color:var(--dim);font-size:.82em;white-space:nowrap}
+  .proj-opt .ct.warn{color:#e0a458}
+  .note{color:var(--dim);max-width:60ch;margin:.5rem 0 0}
+</style>
+</head>
+<body>
+
+<h2>Closed — in the topbar, after the wordmark</h2>
+<div class="topbar">
+  <b>SYNAPSE<i>.</i></b>
+  <div class="proj">
+    <button class="proj-btn"><span class="dot"></span> Website <span class="chev">▾</span></button>
+  </div>
+  <div style="flex:1"></div><span style="color:var(--dim);font-size:.85em">backend: ok</span>
+</div>
+
+<h2>Open — every option states its size</h2>
+<div class="topbar" style="padding-bottom:12rem">
+  <b>SYNAPSE<i>.</i></b>
+  <div class="proj">
+    <button class="proj-btn"><span class="dot"></span> Website <span class="chev">▴</span></button>
+    <div class="proj-menu">
+      <div class="proj-opt" aria-selected="true"><span class="nm">Website</span><span class="ct">350 notes</span></div>
+      <div class="proj-opt"><span class="nm">Nexus</span><span class="ct">713 notes</span></div>
+      <div class="proj-opt"><span class="nm">HappySeniors</span><span class="ct">588 notes</span></div>
+      <div class="proj-opt"><span class="nm">Archive</span><span class="ct warn">not ingested</span></div>
+    </div>
+  </div>
+</div>
+<p class="note">The fourth row is the state that matters: a project with roots attached but never
+ingested says so. Rendering it as an empty graph would look identical to a working brain that
+happens to be empty.</p>
+
+</body>
+</html>

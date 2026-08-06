@@ -167,12 +167,15 @@ function renderResults() {
   if (!q) { box.classList.remove('open'); box.innerHTML = ''; selIdx = -1; return; }
   const colors = graph.repoColors();
   const grpOf = vRepoOf();
-  const hits = matchList(q).slice(0, 12);
+  // sprint 06 T1: the lens reorders BEFORE the cut to 12, or it would only sort the 12 that
+  // relevance already picked — a sort of a pre-filtered slice is not the sort the user asked for.
+  const hits = (typeof applyLens === 'function' ? applyLens(matchList(q)) : matchList(q)).slice(0, 12);
   box.innerHTML = hits.length
     ? hits.map((n, i) =>
         `<div class="r ${i === selIdx ? 'sel' : ''}" data-open="${esc(n.id)}">
            <span class="dot" style="background:${colors.get(grpOf.get(n.id) ?? n.repo)}"></span>
-           <span>${n.repo === '✦ summaries' ? '✦ ' : ''}${esc(n.title)}</span><small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links</small></div>`).join('')
+           ${typeof newMark === 'function' ? newMark(n) : ''}
+           <span>${n.repo === '✦ summaries' ? '✦ ' : ''}${esc(n.title)}</span><small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links${typeof lensMeta === 'function' ? lensMeta(n) : ''}</small></div>`).join('')
     : `<div class="r" style="color:var(--dim)">no notes match “${esc(q)}”</div>`;
   box.classList.add('open');
 }
@@ -279,7 +282,15 @@ const GROUP_SPLIT = 1500;
 // ── Type lens (founder ask): filter the view by node type + regroup assets ───
 // Display-only, like everything in this pipeline: search/reader/ids never change.
 const LENS_KEY = 'synapse.lens';
-const _lens = JSON.parse(localStorage.getItem(LENS_KEY) ?? '{}');
+// Defensive: localStorage is user-editable and survives across versions, so a malformed or
+// stale value must degrade to defaults, never throw at module load — an exception here happens
+// BEFORE the app boots and leaves a blank page with no way to recover but clearing site data.
+const _lens = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(LENS_KEY) ?? '{}');
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  } catch { return {}; }
+})();
 const hiddenTypes = new Set(_lens.hidden ?? []);
 let assetsGrouped = _lens.assetsGrouped ?? true;   // 📷 assets as their own hull, default ON
 function lensSave() {
@@ -1052,3 +1063,236 @@ $('typebar').addEventListener('click', (ev) => {
   if (pill.dataset.type) toggleType(pill.dataset.type);
   else if (pill.dataset.regroup) toggleAssetsGroup();
 });
+
+// ── Project switcher (sprint 06 R5 · founder ask: "Switch should be in GUI also") ────────────
+//
+// Kit: project-management/ui_kit/explorer/project-switcher.html
+//
+// The active project lives SERVER-side (data/active-project), not in localStorage, so the UI,
+// the CLI (`synapse --project`) and the MCP server all agree about which brain is open. A switch
+// here is a switch everywhere. That also means the correct thing after a switch is a full reload:
+// the whole page — graph, index, reader, search, glossary — is derived from one brain, and
+// hand-patching each surface would leave one of them showing the previous one.
+let _projects = [];
+
+async function loadProjects() {
+  try {
+    _projects = await api('/projects');
+    const { active } = await api('/projects/active');
+    const cur = _projects.find((p) => p.slug === active);
+    // A fresh install has ONE brain and no projects, and that is a perfectly good way to use
+    // SYNAPSE. Showing a switcher that says "no projects" tells a new user something is missing
+    // when nothing is — so the control simply is not there until there is something to switch
+    // between. It appears the moment a second brain exists.
+    const wrap = document.getElementById('projWrap');
+    if (wrap) wrap.hidden = _projects.length < 2;
+    const btn = document.getElementById('projName');
+    if (btn) btn.textContent = cur ? cur.name : 'pick a project';
+    renderProjects(active);
+  } catch {
+    // Backend down: say so rather than show a stale name — but only if the control is visible.
+    const btn = document.getElementById('projName');
+    if (btn) btn.textContent = 'unavailable';
+  }
+}
+
+function renderProjects(active) {
+  const menu = document.getElementById('projMenu');
+  if (!menu) return;
+  if (!_projects.length) {
+    menu.innerHTML = '<div class="proj-opt"><span class="nm muted">No projects yet</span></div>';
+    return;
+  }
+  menu.innerHTML = _projects.map((p) => {
+    // An un-ingested brain says so. Rendering it as an empty graph is indistinguishable from a
+    // working brain that happens to be empty — the one confusion this control could create.
+    const ct = p.has_graph
+      ? `${p.roots} root${p.roots === 1 ? '' : 's'}`
+      : '<span class="warn">not ingested</span>';
+    return `<div class="proj-opt" role="option" data-proj="${esc(p.slug)}"
+                 aria-selected="${p.slug === active}">
+              <span class="nm">${esc(p.name)}</span><span class="ct">${ct}</span>
+            </div>`;
+  }).join('');
+}
+
+window.toggleProjects = () => {
+  const menu = document.getElementById('projMenu');
+  const btn = document.getElementById('projBtn');
+  if (!menu) return;
+  const open = menu.hasAttribute('hidden');
+  menu.toggleAttribute('hidden', !open);
+  btn?.setAttribute('aria-expanded', String(open));
+};
+
+window.switchProject = async (slug) => {
+  const cur = document.getElementById('projName')?.textContent;
+  try {
+    const p = await api(`/projects/${encodeURIComponent(slug)}/activate`, { method: 'POST' });
+    setMsg(`switched to ${p.name} — reloading`);
+    location.reload();          // one brain per page; see the note above
+  } catch (e) {
+    setMsg(`could not switch to ${slug}: ${e?.message || e}`);
+    const n = document.getElementById('projName');
+    if (n && cur) n.textContent = cur;
+  }
+};
+
+document.addEventListener('click', (ev) => {
+  const opt = ev.target.closest?.('.proj-opt[data-proj]');
+  if (opt) { window.switchProject(opt.dataset.proj); return; }
+  if (!ev.target.closest?.('.proj')) document.getElementById('projMenu')?.setAttribute('hidden', '');
+});
+
+loadProjects();
+
+// ── Sort lens (sprint 06 T1/T2/T3) + new-note mark (S3) ──────────────────────
+//
+// Kit: project-management/ui_kit/explorer/lens-and-new-mark.html
+//
+// The lens changes ORDER ONLY. It never recolours, resizes or hides a node — the canvas already
+// spends colour on repo, shape/size on node class and dashed/hollow on ghosts, and a sort control
+// that also restyles is two features wearing one hat.
+//
+// There are TWO date lenses, not one, because the filesystem forces it: Linux has no creation
+// time, so "when the file changed" (file_mtime) and "when it joined the brain" (first_seen) are
+// different questions with different coverage. Each option states its own coverage rather than
+// letting you assume it is complete.
+const LENSES = [
+  { id: 'match',   name: 'best match',        desc: 'search relevance — the default' },
+  { id: 'links',   name: 'most connections',  desc: 'in + out links' },
+  { id: 'changed', name: 'recently changed',  desc: 'when the file last changed', field: 'file_mtime' },
+  { id: 'new',     name: 'new to the brain',  desc: 'first indexed',              field: 'first_seen' },
+];
+// NOT 'synapse.lens' — that key belongs to the TYPE lens above and holds JSON. Writing a bare
+// string there made its JSON.parse throw at module load and took the whole app down on reload.
+const SORT_LENS_KEY = 'synapse.sortLens';
+let lens = localStorage.getItem(SORT_LENS_KEY) || 'match';
+
+/** Coverage for a date lens, stated honestly in its own menu row — a lens that silently covers
+ *  a third of the corpus is worse than one that says so. */
+function lensCoverage(field) {
+  const notes = nodes.filter((n) => n.kind === 'note');
+  const have = notes.filter((n) => n[field]).length;
+  return notes.length ? `${have.toLocaleString()} of ${notes.length.toLocaleString()} notes` : '';
+}
+
+/** How many nodes a lens highlights when there is no search query. Enough to be a useful
+ *  "show me the top of this brain", few enough that the highlight still means something. */
+const LENS_TOP_N = 12;
+
+/** Apply the active lens. Dateless notes sort LAST under a date lens — never silently as "old". */
+function applyLens(list) {
+  const L = LENSES.find((x) => x.id === lens);
+  if (!L || L.id === 'match') return list;
+  if (L.id === 'links') {
+    return [...list].sort((a, b) =>
+      (b.in_degree + b.out_degree) - (a.in_degree + a.out_degree)
+      || a.title.localeCompare(b.title));          // stable: equal degree must not reshuffle
+  }
+  return [...list].sort((a, b) => {
+    const av = a[L.field] || '', bv = b[L.field] || '';
+    if (!av && !bv) return a.title.localeCompare(b.title);
+    if (!av) return 1;                              // no date → last, always
+    if (!bv) return -1;
+    return bv.localeCompare(av);                    // ISO-8601 sorts lexically
+  });
+}
+
+/** The new-note mark + the date a row is being sorted by. List only — never the canvas. */
+function lensMeta(n) {
+  const L = LENSES.find((x) => x.id === lens);
+  if (!L?.field) return '';
+  const v = n[L.field];
+  if (!v) return ' · <span class="nodate">no date</span>';
+  const d = new Date(v);
+  const days = (Date.now() - d.getTime()) / 86400000;
+  const label = days < 1 ? `${Math.max(1, Math.round(days * 24))}h ago`
+              : days < 7 ? `${Math.round(days)}d ago`
+              : d.toISOString().slice(0, 10);
+  return ` · ${label}`;
+}
+function isNew(n) {
+  // "New" means new TO THE BRAIN — first_seen, not a recent file edit. A formatting sweep must
+  // not mark 275 notes as new; that would make the mark meaningless on its first day.
+  if (!n.first_seen) return false;
+  return (Date.now() - new Date(n.first_seen).getTime()) < 86400000;
+}
+const newMark = (n) => isNew(n) ? '<span class="newmark" title="new to the brain">▸</span>' : '';
+
+function renderLensMenu() {
+  const menu = document.getElementById('lensMenu'); if (!menu) return;
+  menu.innerHTML = LENSES.map((L) => {
+    const cov = L.field ? ` · ${lensCoverage(L.field)}` : '';
+    return `<div class="lens-opt" role="option" data-lens="${L.id}" aria-selected="${L.id === lens}">
+              <span class="t">${esc(L.name)}</span><span class="d">${esc(L.desc)}${esc(cov)}</span>
+            </div>`;
+  }).join('');
+  const cur = LENSES.find((x) => x.id === lens) || LENSES[0];
+  const nm = document.getElementById('lensName');
+  if (nm) nm.textContent = cur.name;
+}
+
+window.toggleLens = () => {
+  const m = document.getElementById('lensMenu'), b = document.getElementById('lensBtn');
+  if (!m) return;
+  const open = m.hasAttribute('hidden');
+  if (open) renderLensMenu();
+  m.toggleAttribute('hidden', !open);
+  b?.setAttribute('aria-expanded', String(open));
+};
+
+document.addEventListener('click', (ev) => {
+  const opt = ev.target.closest?.('.lens-opt[data-lens]');
+  if (opt) {
+    lens = opt.dataset.lens;
+    localStorage.setItem(SORT_LENS_KEY, lens);
+    renderLensMenu();
+    document.getElementById('lensMenu')?.setAttribute('hidden', '');
+    showLensTop();
+    return;
+  }
+  if (!ev.target.closest?.('.lens')) document.getElementById('lensMenu')?.setAttribute('hidden', '');
+});
+
+/** Show the lens's top N and HIGHLIGHT them on the canvas.
+ *
+ * The first version of this shipped as sort-only, and with an empty search box it did nothing
+ * whatsoever — `renderResults()` returns early without a query, so there was no list to reorder
+ * and the graph was never touched. A control that appears inert is a broken control.
+ *
+ * This reuses `graph.setMatch()`, the same transient highlight search already uses (it also fits
+ * the view to the set). That is NOT the "no restyling" rule being broken: the rule is about
+ * permanent node appearance — colour, shape, size — which still encodes repo and class only. A
+ * selection highlight is transient and is exactly what "show me these" should look like. */
+function showLensTop() {
+  const box = $('sresults');
+  if (lens === 'match') {                    // relevance has no meaning without a query
+    graph.setMatch(null);
+    if (!$('filter').value.trim()) { box.classList.remove('open'); box.innerHTML = ''; }
+    return;
+  }
+  if ($('filter').value.trim()) { renderResults(); return; }   // a query wins; it is more specific
+
+  const L = LENSES.find((x) => x.id === lens);
+  const pool = applyLens(nodes.filter((n) => n.kind === 'note')).slice(0, LENS_TOP_N);
+  if (!pool.length) { graph.setMatch(null); return; }
+
+  const colors = graph.repoColors();
+  const grpOf = vRepoOf();
+  box.innerHTML =
+    `<div class="r" style="color:var(--dim);cursor:default">top ${pool.length} by ${esc(L.name)}</div>`
+    + pool.map((n) => `
+      <div class="r" data-open="${esc(n.id)}">
+        <span class="dot" style="background:${colors.get(grpOf.get(n.id) ?? n.repo)}"></span>
+        ${newMark(n)}
+        <span>${n.repo === '✦ summaries' ? '✦ ' : ''}${esc(n.title)}</span>
+        <small>${esc(grpOf.get(n.id) ?? n.repo)} · ${n.in_degree + n.out_degree} links${lensMeta(n)}</small>
+      </div>`).join('');
+  box.classList.add('open');
+  graph.setMatch(new Set(pool.map((n) => n.id)));    // highlight + fit — the visible answer
+  setMsg(`${pool.length} highlighted — top by ${L.name}`);
+}
+
+window.__synapseLens = { get: () => lens, apply: applyLens, isNew, showTop: showLensTop };
+renderLensMenu();

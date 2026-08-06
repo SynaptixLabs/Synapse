@@ -312,7 +312,12 @@ def cmd_roots(settings, args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="synapse", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    # sprint 06 R3 — the project scope. Global, because EVERY brain-touching command needs it:
+    # ingest, rebuild, stats, query, roots… all act on one project's vault.
+    parser.add_argument("--project", "-P", default=None, metavar="SLUG",
+                        help="which project's brain to act on (required once projects exist)")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("projects", help="list the projects on this instance")
     for name in ("ingest", "rebuild", "stats"):
         sub.add_parser(name)
     p = sub.add_parser("query", help="plain-language question → scoped subgraph")
@@ -363,6 +368,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = load_settings()
+
+    # Resolve the project scope BEFORE dispatch: every command below operates on whatever
+    # `settings.vault_path` points at, so scoping here scopes all of them at once. Guessing a
+    # default once projects exist is how a root lands in the wrong brain (founder ruling
+    # 2026-08-06: a root add must name a scope or create one).
+    from app.core.projects import ProjectError, load_projects, resolve_scope
+    if args.command == "projects":
+        for pr in load_projects(settings):
+            print(f"{pr.slug}\t{pr.name}")
+        return 0
+    try:
+        settings, project = resolve_scope(settings, getattr(args, "project", None))
+    except ProjectError as e:
+        print(f"error: {e}")
+        return 2
+    if project is not None:
+        print(f"[project: {project.slug}]")
+
     simple = {"ingest": cmd_ingest, "rebuild": cmd_rebuild, "stats": cmd_stats}
     if args.command in simple:
         return simple[args.command](settings)

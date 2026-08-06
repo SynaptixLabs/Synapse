@@ -1,10 +1,33 @@
-"""FastAPI surface for the graph — thin: routes → service."""
+"""FastAPI surface for the graph — thin: routes → service.
+
+Conditional GET (sprint 06, founder ask 2026-08-06 "no cache — I highly advise adding"):
+the graph is a FILE, so `(st_mtime_ns, st_size)` is an exact, free validator — no hashing of a
+half-megabyte payload to discover it has not changed. Measured before adding this: 252 KB for
+website, 535 KB for nexus, re-sent in full on every page load AND on every project switch
+(the switcher reloads the page by design). A 304 sends none of it.
+
+`no-cache` rather than a max-age: the graph must never be served stale from a browser cache —
+an ingest can land at any moment, and the daemon makes that likely — but revalidation is cheap
+and returns 304 when nothing moved. Correctness first, bytes second.
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from app.core.config import load_settings
+from app.core.projects import ProjectError, resolve_read_scope
+
+
+def _read_scope():
+    """Reads resolve to the ACTIVE project (sprint 06 R3) — explicit scope, else active,
+    else the pre-INIT legacy vault. Writes never take this path; they must name a scope."""
+    from fastapi import HTTPException
+    try:
+        settings, _ = resolve_read_scope(load_settings(), None)
+    except ProjectError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return settings
 
 from .services import GraphService
 
@@ -12,7 +35,7 @@ router = APIRouter(prefix="/api/v1", tags=["graph"])
 
 
 def _service() -> GraphService:
-    return GraphService(load_settings().vault_path)
+    return GraphService(_read_scope().vault_path)
 
 
 @router.get("/node-classes")
@@ -21,7 +44,7 @@ def get_node_classes() -> list[dict]:
     Client-side matching against each node's own source_path, so editing a class is a page
     reload — never an ingest or a graph rebuild."""
     from app.core.node_classes import load_classes
-    return load_classes(load_settings())
+    return load_classes(_read_scope())
 
 
 @router.get("/conventions")
@@ -30,12 +53,41 @@ def get_conventions() -> dict:
     ingest did. Both used to hard-code the same two literals; when one vault's layout differs,
     two independent copies of a convention drift and the reader shows a bundle the graph has
     no edge for (or the reverse). One definition, served."""
-    s = load_settings()
+    s = _read_scope()
     return {"companion_media_dir": s.companion_media_dir, "interactive_prefix": s.interactive_prefix}
 
 
+def _validator(settings) -> str | None:
+    """A strong ETag from the graph file's own stat. Changes iff the file changes."""
+    try:
+        st = settings.graph_file.stat()
+    except OSError:
+        return None
+    return f'"{st.st_mtime_ns:x}-{st.st_size:x}"'
+
+
+def _conditional(request: Request, response: Response, settings) -> Response | None:
+    """Return a 304 when the client already holds this exact graph, else set the validator.
+
+    Deliberately compares the whole If-None-Match value rather than parsing a list: this API is
+    single-origin and single-client, and a partial parser that quietly mismatches would serve
+    stale-looking 200s that are hard to notice."""
+    etag = _validator(settings)
+    if not etag:
+        return None
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["ETag"] = etag
+    if (request.headers.get("if-none-match") or "").strip() == etag:
+        return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+    return None
+
+
 @router.get("/graph")
-def get_graph() -> dict:
+def get_graph(request: Request, response: Response):
+    settings = _read_scope()
+    not_modified = _conditional(request, response, settings)
+    if not_modified is not None:
+        return not_modified
     graph = _service().load()
     if graph is None:
         raise HTTPException(
@@ -94,7 +146,7 @@ def unresolved_report() -> dict:
     from app.core.roots import load_roots
 
     graph = _loaded_graph()
-    root_by_repo = {Path(e["path"]).name: Path(e["path"]) for e in load_roots(load_settings())}
+    root_by_repo = {Path(e["path"]).name: Path(e["path"]) for e in load_roots(_read_scope())}
     targets: dict[str, dict] = {}
     for n in graph.get("nodes", []):
         for raw in n.get("unresolved", []):
@@ -150,7 +202,7 @@ def rebuild(fresh: bool = False) -> dict:
     Serialized against concurrent writers (git-hook syncs) by the vault lock."""
     from app.core.vault_lock import vault_write_lock
     service = _service()
-    with vault_write_lock(load_settings().vault_path):
+    with vault_write_lock(_read_scope().vault_path):
         if fresh and service.graph_file.is_file():
             service.graph_file.unlink()
         return service.rebuild().stats()
@@ -178,7 +230,7 @@ def get_asset(note_id: str):
     note = _service().read_note(note_id)
     if note is None or note.get("kind") != "asset":
         raise HTTPException(status_code=404, detail=f"No asset note '{note_id}' in the vault.")
-    root = next((e["path"] for e in load_roots(load_settings())
+    root = next((e["path"] for e in load_roots(_read_scope())
                  if Path(e["path"]).name == note["repo"]), None)
     if root is None:
         raise HTTPException(status_code=404, detail=(

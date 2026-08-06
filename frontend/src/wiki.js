@@ -392,11 +392,36 @@ export function createReader({ crumbEl, bodyEl, backBtn, getNodes, getNs, onShow
     const wl = ev.target.closest('a[data-wl]');
     if (wl) { ev.preventDefault(); openNote(wl.dataset.wl); return; }
     const a = ev.target.closest('a[href]');
-    if (a && /\.md(#.*)?$/i.test(a.getAttribute('href')) && currentNote) {
+    if (!a || !currentNote) return;
+    const raw = a.getAttribute('href') || '';
+
+    // Leave the browser alone for links that are genuinely elsewhere.
+    if (/^(https?:|mailto:|tel:|data:|#)/i.test(raw)) return;
+
+    if (/\.md(#.*)?$/i.test(raw)) {
       ev.preventDefault();
-      const dst = resolveRelative(currentNote, a.getAttribute('href').replace(/#.*$/, ''));
+      const dst = resolveRelative(currentNote, raw.replace(/#.*$/, ''));
       if (dst) openNote(dst);
+      return;
     }
+
+    // A relative link to a NON-markdown sibling — every entry in a MEDIA.md "Files on disk"
+    // block is one of these. These used to fall through to the browser, which resolved them
+    // against the dev-server origin (http://localhost:5173/<filename>), served nothing, and
+    // threw away the whole SPA state: the click looked like it "led nowhere".
+    //
+    // Ingest already wrote an asset sidecar note for each of these files, so the destination
+    // exists in the graph — resolve to it with the same id convention the images use.
+    ev.preventDefault();
+    const clean = raw.replace(/[#?].*$/, '');
+    const assetId = sourceAssetId(currentNote, clean);
+    if (assetId && (getNodes() || []).some((n) => n.id === assetId)) { openNote(assetId); return; }
+
+    // No sidecar: say so instead of navigating away. A file present on disk but absent from the
+    // brain is exactly the case the reader must not hide (assets are opt-in per root).
+    const name = clean.split('/').pop();
+    onError?.(`"${name}" is not in this brain — its root may have assets turned off, `
+            + 'or it has not been ingested yet.');
   });
 
   return {

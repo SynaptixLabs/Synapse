@@ -26,6 +26,50 @@
       #sresults .r small { color:var(--dim); margin-left:auto; white-space:nowrap; }
       .mi { color:var(--dim); font-size:0.85rem; cursor:pointer; padding:0.3rem 0.6rem; border-radius:6px; background:none; border:none; font-family:inherit; }
       .mi:hover, .mi.open { background:var(--panel2); color:var(--text); }
+      /* sprint 06 R5 — the project switcher. Kit: project-management/ui_kit/explorer/project-switcher.html
+         Chrome only: adds no colour to the canvas, which already spends colour on repo, shape on
+         node class and dashed/hollow on ghosts. The active brain is named in text, not hued. */
+      .proj { position:relative; }
+      .proj[hidden] { display:none; }
+      .proj-btn { display:flex; align-items:center; gap:0.45rem; background:var(--panel2);
+                  border:1px solid var(--border); border-radius:8px; color:var(--text);
+                  padding:0.35rem 0.7rem; cursor:pointer; font:inherit; white-space:nowrap; }
+      .proj-btn .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); }
+      .proj-btn .chev { color:var(--dim); font-size:0.8em; }
+      .proj-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:230px;
+                   background:var(--panel); border:1px solid var(--border); border-radius:10px;
+                   padding:0.3rem; z-index:30; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+      .proj-menu[hidden] { display:none; }
+      .proj-opt { display:flex; align-items:baseline; gap:0.5rem; padding:0.45rem 0.6rem;
+                  border-radius:7px; cursor:pointer; }
+      .proj-opt:hover { background:var(--panel2); }
+      .proj-opt[aria-selected="true"] { background:var(--panel2); }
+      .proj-opt[aria-selected="true"] .nm { color:var(--accent); }
+      .proj-opt .nm { flex:1; }
+      .proj-opt .ct { color:var(--dim); font-size:0.82em; white-space:nowrap; }
+      .proj-opt .ct.warn { color:#e0a458; }
+      /* sprint 06 T1/S3 — sort lens + new-note mark.
+         Kit: project-management/ui_kit/explorer/lens-and-new-mark.html
+         The lens changes ORDER only; it never recolours or resizes a node. The canvas already
+         spends colour on repo, shape/size on node class and dashed/hollow on ghosts — there is
+         no budget left, and a sort that also restyles is two features in one control. */
+      .lens { position:relative; }
+      .lens-btn { background:var(--panel2); border:1px solid var(--border); border-radius:999px;
+                  color:var(--text); padding:0.25rem 0.7rem; font:inherit; font-size:0.85em;
+                  cursor:pointer; display:flex; gap:0.35rem; align-items:center; white-space:nowrap; }
+      .lens-btn b { font-weight:600; color:var(--accent); }
+      .lens-menu { position:absolute; top:calc(100% + 6px); left:0; min-width:250px;
+                   background:var(--panel); border:1px solid var(--border); border-radius:10px;
+                   padding:0.3rem; z-index:30; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+      .lens-menu[hidden] { display:none; }
+      .lens-opt { padding:0.45rem 0.6rem; border-radius:7px; cursor:pointer; }
+      .lens-opt:hover, .lens-opt[aria-selected="true"] { background:var(--panel2); }
+      .lens-opt[aria-selected="true"] .t { color:var(--accent); }
+      .lens-opt .t { display:block; }
+      .lens-opt .d { display:block; color:var(--dim); font-size:0.8em; }
+      /* the ONLY new-note affordance — list-only, never on the canvas */
+      .newmark { color:#e0a458; font-weight:700; flex:none; }
+      .nodate { color:var(--dim); font-style:italic; }
       .topbar .right { margin-left:auto; display:flex; gap:0.3rem; align-items:center; font-size:0.85rem; color:var(--dim); }
       #health[data-ok="true"] { color:var(--ok); } #health[data-ok="false"] { color:var(--bad); }
 
@@ -67,7 +111,9 @@
       .hint { position:absolute; bottom:8px; left:12px; color:var(--dim); font-size:0.74rem; pointer-events:none; }
       .edgeBtn { position:absolute; top:8px; font-size:0.8rem; color:var(--dim); background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; z-index:3; }
       #pathBtn[data-on="1"] { color:#ffd479; border-color:#ffd479; }
-      #typebar { position:absolute; top:8px; left:52px; display:flex; gap:4px; z-index:3; }
+      #canvasTools { position:absolute; top:8px; left:52px; display:flex; gap:8px;
+                     align-items:center; z-index:3; flex-wrap:wrap; }
+      #typebar { display:flex; gap:4px; }
       #typebar .pill { font-size:0.74rem; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:999px; padding:2px 9px; cursor:pointer; }
       #typebar .pill:hover { border-color:var(--accent); }
       #typebar .pill.off { opacity:0.4; text-decoration:line-through; }
@@ -192,6 +238,13 @@
     <div class="topbar">
       <button class="mi mobile-menu" onclick="toggleLhs()">☰</button>
       <b>SYNAPSE<i>.</i></b>
+      <div class="proj" id="projWrap" hidden>
+        <button class="proj-btn" id="projBtn" onclick="toggleProjects()" title="switch project (brain)"
+                aria-haspopup="listbox" aria-expanded="false">
+          <span class="dot"></span><span id="projName">…</span><span class="chev">▾</span>
+        </button>
+        <div class="proj-menu" id="projMenu" role="listbox" hidden></div>
+      </div>
       <div class="searchwrap">
         <input id="filter" placeholder="/  search notes… (results open here; Enter = top hit)" autocomplete="off" />
         <div id="sresults"></div>
@@ -242,7 +295,14 @@
         <button class="edgeBtn" style="right:8px" onclick="toggleReader()" title="hide/show reader">⟩</button>
         <button class="edgeBtn" style="left:50%; transform:translateX(-50%)" onclick="resetLayout()" title="release all pins, fresh layout">⟲ reset layout</button>
         <button class="edgeBtn" id="pathBtn" style="left:calc(50% + 78px)" onclick="togglePathMode()" title="trace the shortest path: click this, then two notes">⇢ path</button>
+        <div id="canvasTools">
         <div id="typebar" title="type lens — click to hide/show node types"></div>
+        <div class="lens" id="lensWrap">
+          <button class="lens-btn" id="lensBtn" onclick="toggleLens()"
+                  aria-haspopup="listbox" aria-expanded="false">sort <b id="lensName">best match</b> ▾</button>
+          <div class="lens-menu" id="lensMenu" role="listbox" hidden></div>
+        </div>
+        </div>
         <span class="hint">drag = place &amp; pin (right-click releases) · click = focus + read · click empty = defocus · wheel zooms · <b>/</b> filters</span>
         <div class="empty" id="empty" style="display:none">
           <div class="card">
