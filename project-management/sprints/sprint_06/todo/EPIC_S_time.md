@@ -19,7 +19,7 @@ nothing and it is the difference between a lens that feels right and one that qu
 
 | Field | Source | Retroactive? | Means |
 |---|---|---|---|
-| `file_mtime` | `os.stat().st_mtime` | **yes** — lights up all 1,649 existing nodes on first re-ingest | when the *file* last changed |
+| `file_mtime` | `os.stat().st_mtime` | **yes** — lights up all 351 existing nodes on first re-ingest | when the *file* last changed |
 | `first_seen` | the ingest run that first indexed it (Epic U's daemon) | no — accrues forward only | when it *joined the brain* |
 
 mtime is genuinely informative here, not all-one-day: nexus alone shows 3,444 `.md` files dated

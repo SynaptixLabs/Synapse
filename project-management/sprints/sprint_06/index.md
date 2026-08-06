@@ -28,7 +28,7 @@ Verified against the live tree, not assumed.
 | Ask | Reality on disk | True size |
 |---|---|---|
 | **(i) doesn't die** | `start.sh` runs uvicorn in the **foreground** with `trap cleanup EXIT`, Vite as a **background job of the same shell** (`start.sh:376,404,431`). Close the terminal and both die. No service unit, no supervisor, no restart. `kill_port` *grabs* 8000/5173 rather than reserving them. Backend binds `0.0.0.0`. | **Epic-sized, gated on D3.** Hit live twice on 2026-08-06 — once from a dead backend under a day-old frontend, once when a wrapper's timeout tripped the script's own EXIT trap and took both down. |
-| **(ii) a DB per project** | `data/roots.json` is a **flat list of 3 roots** — website/KB, nexus, nexus-hs-aaas — feeding **one** vault (`data/vault/`) and **one** `graph.json` (1,649 nodes · 3,292 edges). There is no project entity at all. Node ids are `<repo>__<path>`. | **The largest piece.** The ruling settles the model; see Epic R. |
+| **(ii) a DB per project** | `data/roots.json` is a **flat list of 3 roots** — website/KB, nexus, nexus-hs-aaas — feeding **one** vault (`data/vault/`) and **one** `graph.json` (351 nodes · 809 edges). There is no project entity at all. Node ids are `<repo>__<path>`. | **The largest piece.** The ruling settles the model; see Epic R. |
 | **(iii) mark today's additions** | Node schema is `id · kind · title · repo · source_path · tags · in_degree · out_degree · unresolved` — **no timestamp of any kind**. | **Made much cheaper by the ruling** — file dates already exist on disk, so no invented backfill. But see the constraint below. |
 | **(iv) filtering lenses** | `in_degree`/`out_degree` are already on every node and already rendered as `N links` (`explorer.js:175,198`). A type lens and text filter already ship. | **Split three ways:** *most connections* is nearly free; *latest* rides on Epic S; *most used* needs D2. |
 
@@ -43,7 +43,7 @@ edited in June but first indexed today is a genuinely new addition wearing an ol
 touched by a formatting pass today is an old note wearing a new one.
 
 **Resolution (taken, not escalated — it costs nothing to have both):** record **two** fields.
-`file_mtime` from disk — free, retroactive, and it lights up all 1,649 existing nodes on the first
+`file_mtime` from disk — free, retroactive, and it lights up all 351 existing nodes on the first
 re-ingest with real dates (mtime spread is genuinely meaningful here: nexus alone shows 3,444 files
 in June against 86,146 in July). And `first_seen` — when the daemon first indexed the note, the only
 value that actually means *added to the brain*. It accrues going forward only, and the UI says so
@@ -72,14 +72,14 @@ attaches to an existing project or creates one in the same act.
 - Project CRUD (create · rename · delete · list) with its own vault + `graph.json` per project.
 - Root CRUD re-parented under projects; the existing `POST/DELETE /roots` contract changes shape.
 - **Migration for the three live roots** — create projects, attach, and split the current single
-  1,649-node graph into per-project graphs without losing the vault as source of truth. Carries
+  351-node graph into per-project graphs without losing the vault as source of truth. Carries
   backlog **#7**: node ids are root-name-dependent, and splitting storage is exactly when that bites.
   Backlog **#10** (export/import) is the natural migration mechanism.
 - A selector so you choose what you see.
 
 **Assumption stated, not asked:** *"I can choose which to see"* is read as **multi-select** — one or
 several projects at once, union view. It subsumes single-select at nearly no extra cost, and it
-preserves the cross-repo edge, which is what SYNAPSE is *for* (3,292 edges currently cross roots).
+preserves the cross-repo edge, which is what SYNAPSE is *for* (cross-root edges measured: ZERO — see the correction note).
 Say the word if you meant strictly one at a time and R gets ~15V cheaper.
 
 ### Epic S — The graph learns what time it is (~25V)
@@ -120,7 +120,7 @@ closes on assertion.
 |---|---|---|---|
 | 1 — runs unattended | Q3's three kill-tests (kill · close terminal · restart WSL) with transcripts; U2's burst test producing exactly one ingest | `lab-qa` re-runs the kill-tests from a cold session | `acceptance/00_founder_acceptance_script.md` — close the terminal, come back later, it is still serving |
 | 2 — a brain per project | R4's before/after node/edge counts incl. cross-project edges, on a **copy** first; unit tests for CRUD, delete-refusal, traversal | `lab-qa` verifies each project's graph rebuilds from its own vault alone | founder creates a project, attaches a root, sees only that brain — then selects two and sees both |
-| 3 — the brain knows when | S1–S2 unit tests incl. `first_seen` immutability and old-schema load; T2/T3 E2E; V2 legibility screenshots on the live 1,649-node graph | `lab-qa` confirms no back-dating and that date-less nodes say so | founder edits a file, sees it marked new, sorts by latest and by connections |
+| 3 — the brain knows when | S1–S2 unit tests incl. `first_seen` immutability and old-schema load; T2/T3 E2E; V2 legibility screenshots on the live 351-node graph | `lab-qa` confirms no back-dating and that date-less nodes say so | founder edits a file, sees it marked new, sorts by latest and by connections |
 
 **Grading is not mine.** GBU and sprint close belong to `cpto`/JANUS; this class holds Gates 1 and 4
 only and does not clear its own work.
@@ -182,7 +182,7 @@ not needed.
 - Epic Q proves itself the only way a service can: **kill the backend and show it come back**, close
   the terminal and show it still serving, restart WSL and show it still serving. A service that has
   not been killed on purpose has not been tested.
-- Epic R proves the migration on a **copy** of the live 1,649-node graph before touching the real
+- Epic R proves the migration on a **copy** of the live 351-node graph before touching the real
   one, and shows edge counts before and after — including how many cross-project edges existed and
   what became of them.
 - Epic S shows real dates on existing notes, and shows `first_seen` honestly empty for anything

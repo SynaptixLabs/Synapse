@@ -33,7 +33,7 @@ The surfaces:
       The graph already encodes repo colour, node class shape/size, ghost styling and the type lens.
       Prove the new-note mark and project identity are legible **on top of** all of it, on a real
       brain — not on a three-node mock.
-      *Evidence:* screenshots over the live 1,649-node graph with every existing lens active.
+      *Evidence:* screenshots over the live 351-node graph with every existing lens active.
 
 - [ ] **V3 — fidelity gate on the built surfaces** (~3V) · blocked_by "R5 + S3 + T1"
       The shipped UI matches the kit. Divergence is either fixed or recorded as a deliberate kit

@@ -8,7 +8,7 @@
 ## Design (from the ruling)
 
 Today `data/roots.json` is a **flat list of 3 roots** feeding **one** vault and **one**
-`graph.json` (1,649 nodes · 3,292 edges). The ruling inverts that:
+`graph.json` (351 nodes · 809 edges). The ruling inverts that:
 
 - **Project is the parent entity and owns a database.** `data/projects/<slug>/vault/graph.json`,
   one vault per project, each independently rebuildable from its own markdown — the architecture
@@ -24,6 +24,51 @@ Today `data/roots.json` is a **flat list of 3 roots** feeding **one** vault and 
 (`KB__00_INDEX.md`). Splitting one graph into N is exactly when backlog #7 bites: a wikilink that
 resolved across roots yesterday may resolve to nothing tomorrow. R4 exists to answer that with
 counted evidence rather than a shrug.
+
+## Founder ruling 2026-08-06 (second) — INIT is an attach, not a split
+
+> *"This is INIT only — taking the current state and attaching to projects — and a root can be in
+> any project. NEXT ROOTs MUST add a project scope when updating, or create a new scope."*
+
+**The three projects are named: Website · Nexus · HappySeniors.** Current roots and their
+wrinkles, recorded because two of them are not clean:
+
+| Project | Current root | Note |
+|---|---|---|
+| Website | `projects/website/KB` | the **KB subfolder**, not the whole website repo — founder to confirm |
+| Nexus | `projects/nexus` | currently `enabled: false` |
+| HappySeniors | `projects/nexus-hs-aaas` | **folder name ≠ project name** — note ids will read `nexus-hs-aaas__…` (backlog #7 in miniature) |
+
+**This collapses R4 from ~20V to ~8V.** INIT is *attach the current roots to projects, then
+re-ingest per project* — not a surgical split of the existing graph. The graph is **derived**; you
+do not split a derived artifact, you regenerate it. That is the architecture non-negotiable doing
+its job.
+
+### ⚠ But re-ingest is NOT lossless — the one thing that must survive it
+
+The vault holds notes generated from source repos **and** `✦ summaries` — distilled model output
+that no re-ingest can regenerate, because it was paid for. Live count today: **1 summary note,
+2 nodes, 5 edges into KB**. Cheap to protect now; expensive the first time it isn't.
+
+R4 therefore carries summaries across explicitly rather than assuming a rebuild restores them.
+A summary may also cite notes from more than one root — which project it lands in is a real
+question once more than one root is enabled.
+
+## ✏ Correction to this card's earlier numbers (2026-08-06)
+
+Two figures I wrote were wrong and one of them was load-bearing:
+
+- **Graph size.** Measured at session start as 1,649 nodes / 3,292 edges; that was true then, but a
+  re-ingest since (with Nexus and HappySeniors `enabled: false`) leaves the live graph at
+  **351 nodes / 809 edges**. All references corrected.
+- **The multi-select justification was unfounded.** This card claimed "3,292 edges currently cross
+  roots." That number was the *total* edge count, and I never verified that any of it crossed a
+  root boundary. Measured properly: **5 cross-repo edges, and all 5 are `✦ summaries → KB`** —
+  summary-to-source, not root-to-root. **Zero edges currently join two source roots.**
+
+  The multi-select recommendation may still be right — two of three roots are disabled, so
+  cross-root links cannot exist yet — but it rests on expectation, not evidence, and R6 (~10V plus
+  view complexity) should be re-decided on that honest footing rather than on a number I asserted.
 
 ## Tasks
 
@@ -47,13 +92,15 @@ counted evidence rather than a shrug.
       every caller found and updated, including the Sources UI and the MCP server.
       *Evidence:* `rg` sweep showing zero callers left on the old shape; unit tests.
 
-- [ ] **R4 — migrate the live brain, on a copy first** (~20V) · blocked_by R3
-      Split the current 1,649-node / 3,292-edge graph into per-project graphs. **Run against a copy
-      before the real vault.** Report, as numbers, not prose: nodes per project, edges per project,
-      **how many edges crossed projects**, and what became of each. Cross-project edges are not
-      silently dropped — they become unresolved with a recorded reason, or survive in the union view
-      (R6), and the report says which.
-      *Evidence:* before/after counts committed to `reports/`; the copy run precedes the real run.
+- [ ] **R4 — INIT: attach the current roots, then re-ingest per project** (~8V, was ~20V) · blocked_by R3
+      Per the ruling, a one-shot INIT: create Website · Nexus · HappySeniors, attach today's three
+      roots, re-ingest each project. The graph is derived, so it is regenerated per project, not
+      split. **Carry `✦ summaries` across explicitly** — they are paid model output that no
+      re-ingest restores. **Run against a copy of `data/` before the real one.** Report as numbers:
+      nodes and edges per project before and after, summaries preserved, and any link that stopped
+      resolving once its target moved to another brain.
+      *Evidence:* before/after counts in `reports/`; the copy run precedes the real run; summary
+      count identical after.
 
 - [ ] **R5 — project selector in the explorer** (~10V) · blocked_by R2 · **UI — kit first (Epic V)**
       Choose which project(s) are in view; selection persists across reloads; the statusbar names
