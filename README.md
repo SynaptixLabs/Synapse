@@ -375,6 +375,13 @@ No gate closes on assertion):
 | [04](project-management/sprints/sprint_04/index.md) | **The Open Brain** | deterministic query/path/explain (CLI · API · UI path-mode + connections footer) · `.gitignore`/`.synapseignore` + git-hook/watch auto-sync · **MCP server** (Claude Code & Desktop) · edge-confidence schema v3 | ✅ closed 2026-07-17 · close GBU 4.7 |
 | [05](project-management/sprints/sprint_05/index.md) | **Everything In** | images + PDFs as first-class sidecar notes (📷 per-root) · 👁 AI descriptions with grounded links (first INFERRED edges) · 👻 ghost nodes · type lens + asset regrouping · the brain published as [this repo's wiki](https://github.com/SynaptixLabs/Synapse/wiki) · coding-agent workflow (dormant) | ✅ closed 2026-07-17 · founder PASS · close GBU 4.6 |
 
+**Next — [Sprint 06 "Many Brains, Always On"](project-management/sprints/sprint_06/index.md)**
+(🟡 proposed 2026-08-06, not open): run as a supervised app that survives a closed terminal ·
+**projects as a first-class entity**, each owning its own database, every root attached to one ·
+file-date + first-seen timestamps so new notes can be marked · sort/filter lenses by connections,
+recency and use · an ingest daemon so the brain feeds itself. Two founder decisions outstanding —
+what *"most used"* counts, and the bind-scope question below.
+
 **Unreleased, on `main`** — the graph learned to say what a node *is*, and the reader learned
 to show media inline:
 
@@ -394,7 +401,10 @@ to show media inline:
   holds the entry file, not the whole bundle directory.
 - The e2e specs assert **fixture-vault** counts, so a few report failures against a different
   brain; they are vault-shape assertions, not product defects (`E2E_FILTER` picks the note used).
-- The API stays **unauthenticated by design** (local, single-user). Do not expose it.
+- The API stays **unauthenticated by design** (local, single-user). Do not expose it — note that
+  the backend nonetheless binds `0.0.0.0`, so "do not expose it" is currently advice rather than a
+  default. Backlog [#12](project-management/0m_BACKLOG.md); it becomes a blocking decision the
+  moment Sprint 06 makes the service always-on.
 
 The wider v0.2 backlog (WebGL engine, entity extraction, ripple maintenance, chat,
 semantic re-rank): [`project-management/0m_BACKLOG.md`](project-management/0m_BACKLOG.md).
