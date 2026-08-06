@@ -19,7 +19,7 @@ nothing and it is the difference between a lens that feels right and one that qu
 
 | Field | Source | Retroactive? | Means |
 |---|---|---|---|
-| `file_mtime` | `os.stat().st_mtime` | **yes** — lights up all 351 existing nodes on first re-ingest | when the *file* last changed |
+| `file_mtime` | `os.stat().st_mtime` | **yes, but only via a rewrite** — see the correction below | when the *file* last changed |
 | `first_seen` | the ingest run that first indexed it (Epic U's daemon) | no — accrues forward only | when it *joined the brain* |
 
 mtime is genuinely informative here, not all-one-day: nexus alone shows 3,444 `.md` files dated
@@ -27,13 +27,13 @@ June against 86,146 dated July.
 
 ## Tasks
 
-- [ ] **S1 — write both fields at ingest** (~8V) · `not_started`
+- [x] **S1 — write both fields at ingest** (~8V) · `dev_done` · 1,652/1,653 notes dated
       `file_mtime` from `os.stat`; `first_seen` set once, on the run that first sees a note id, and
       never overwritten afterwards. Assets take the *source asset's* mtime, not their generated
       sidecar's.
       *Evidence:* unit tests incl. re-ingest leaving `first_seen` unchanged.
 
-- [ ] **S2 — schema bump + backward-compatible read** (~7V) · blocked_by S1
+- [x] **S2 — schema bump + backward-compatible read** (~7V) · `dev_done` · schema v4
       `schema_version` incremented; a graph written before the bump loads without crashing, with the
       new fields absent rather than fabricated. **Never back-date `first_seen`** for pre-existing
       notes — absent is honest, "today" is a lie, and a guessed old date is worse than both.
@@ -51,3 +51,30 @@ June against 86,146 dated July.
 - Existing notes show real dates on first re-ingest — not all "today".
 - `first_seen` is honestly empty for anything indexed before the field existed.
 - The vault stays the source of truth; both fields are derived and rebuildable.
+
+---
+
+## ✏ Correction — "retroactive" needed a rewrite, and I had claimed otherwise
+
+This card originally said `file_mtime` "lights up all existing nodes on first re-ingest." **It did
+not.** Both writers have an *unchanged* fast path — notes on `content_hash`, asset sidecars on
+`(mtime_ns, size)` — so a note whose body had not changed was skipped entirely and never gained a
+date. The first real run proved it: **3 of 352** notes got fields.
+
+Fixed by making the time fields part of the freshness check in both writers, exactly as
+`asset_refs` already was: a note missing them is not "unchanged". One rewrite per note, then
+`unchanged` resumes.
+
+**And the honest half:** an existing note is given `file_mtime` (real, from the filesystem) but
+**not** `first_seen` — it did not join the brain today, and stamping it would have marked the entire
+corpus as new. Only genuinely new notes get one. That is why `first_seen` is 3 / 0 / 0 across the
+three brains while `file_mtime` is 351 / 713 / 588.
+
+**Coverage after the fix** — `1,652` of `1,653` notes dated. The single undated node is the
+`✦ summaries` note, which has no source file on disk; it is correctly dateless rather than invented.
+
+| Brain | schema | notes | dated | first_seen | mtime spread |
+|---|---|---|---|---|---|
+| website | v4 | 352 | 351 | 3 | Jun 2 · Jul 74 · Aug 275 |
+| nexus | v4 | 713 | 713 | 0 | Jun 519 · Jul 193 · Aug 1 |
+| happyseniors | v4 | 588 | 588 | 0 | Jul 569 · Aug 19 |

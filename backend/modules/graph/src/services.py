@@ -20,7 +20,8 @@ from .models import Edge, Graph, Node
 
 _FM_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _FM_FIELD_RE = re.compile(
-    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links|asset_refs):\s*(.+?)\s*$",
+    r"^synapse\.(source_repo|source_path|kind|asset_type|inferred_links|asset_refs"
+    r"|first_seen|file_mtime):\s*(.+?)\s*$",
     re.MULTILINE)
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
@@ -68,6 +69,9 @@ class GraphService:
                 "title": (title_m.group(1) if title_m else Path(fields.get("source_path", path.stem)).stem),
                 "body": body,
                 "asset_type": fields.get("asset_type", "") if fields.get("kind") == "asset" else "",
+                # sprint 06 S2 — absent stays absent; never defaulted to now or to the epoch
+                "first_seen": fields.get("first_seen", ""),
+                "file_mtime": fields.get("file_mtime", ""),
                 "inferred_links": fields.get("inferred_links", ""),
                 "asset_refs": fields.get("asset_refs", ""),
             })
@@ -117,6 +121,7 @@ class GraphService:
                 # assets stay kind:note in the graph (windowing/search unchanged) and carry
                 # their nature as a tag — the explorer draws the 📷/📄 glyph from it
                 tags=[f"asset:{n['asset_type']}"] if n["asset_type"] else [],
+                first_seen=n.get("first_seen", ""), file_mtime=n.get("file_mtime", ""),
             )
         for repo in sorted({n["repo"] for n in notes if n["repo"]}):
             g.nodes[f"repo:{repo}"] = Node(id=f"repo:{repo}", kind="repo", title=repo, repo=repo)
