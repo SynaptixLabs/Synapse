@@ -4,6 +4,39 @@
 > Generated from the epic cards — `sprints/sprint_06/todo/`. Estimates are the ORIGINAL
 > ones; delivered tasks ran under, so remaining V is a guess, not a forecast.
 
+## Context — what this sprint is
+
+SYNAPSE indexes the markdown scattered across your repos into a wikilinked knowledge graph you can
+explore. Sprint 06 answers four founder asks made on 2026-08-06:
+
+| Ask | Epic | Where it stands |
+|---|---|---|
+| "run as an APP and not die" | **Q** Service | ✅ supervised; survives a closed terminal and a `kill -9` |
+| "each project its own DB; I choose which to see" | **R** Projects | ✅ three brains — Website · Nexus · HappySeniors — with a GUI switcher |
+| "latest DB additions are marked" | **S** Time | ⬜ not started (nodes carry no timestamp at all today) |
+| "filtering — latest, most used, most connections" | **T** Lenses | ⬜ not started |
+| *(added by ruling)* "use a daemon to add data" | **U** Daemon | ⬜ not started — brains are static until you run the CLI |
+| *(required by Gate 1)* kit before code for UI work | **V** Kit | 🟡 switcher screen done, two to go |
+
+Roughly: **the plumbing is in, the daily-feel features are not.** You can switch brains today; they
+do not update themselves, and nothing is marked as new.
+
+## What the statuses mean
+
+| Status | Meaning |
+|---|---|
+| ✅ **done** | Merged with evidence — tests, or a real run recorded in `reports/`. |
+| ⬜ **ready** | **Nothing is in the way.** Not done, not waiting on a decision from you, and every task it depends on is already finished. Work can start this minute. |
+| ⏳ **queued** | Blocked only by another task in this sprint. It becomes `ready` the moment that one lands. |
+| ⛔ **blocked** | Waiting on a founder decision (D2/D3). No amount of engineering clears it. |
+
+Two things `ready` deliberately does **not** mean:
+
+- **Not "fully specified."** It means unblocked. Each ready task still carries open design choices —
+  its epic card states the intent and the evidence required, not a line-by-line recipe.
+- **Not "worth doing."** `R6` is ready and I recommend dropping it. Ready is about dependencies,
+  not about value.
+
 ## Bottom line
 
 | | Tasks | V |
