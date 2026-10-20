@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Explorer reset/path controls share a wrapping layout with the type and sort tools, so they
+  remain clickable when the canvas narrows instead of overlapping each other; toolbar
+  whitespace still passes graph gestures through to the canvas (#22).
+
 ## [0.2.0] — 2026-08-06 · "the open, secured, movable brain"
 
 The graph learned to say what a node **is**, the reader learned to show media inline, a security
